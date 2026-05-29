@@ -440,7 +440,7 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
           <div className="w-full h-auto overflow-x-auto overflow-y-hidden select-none touch-pan-x">
             {/* SVG STAGE */}
             <svg 
-              className="w-full mix-blend-screen min-w-[860px]" 
+              className="w-full min-w-[860px]" 
               viewBox="0 0 920 410" 
               fill="none" 
               xmlns="http://www.w3.org/2000/svg"
@@ -592,7 +592,7 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
 
                 // Double accent glow for selected or hovered targets
                 if (isHovered) {
-                  circleBorderClass += ' stroke-[3] scale-110';
+                  circleBorderClass += ' stroke-[3.5]';
                 }
 
                 return (
@@ -603,8 +603,16 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
                     onClick={() => {
                       if (device && !isNoScan) onSelectDevice(device);
                     }}
-                    className="cursor-pointer transition-transform duration-200"
+                    className="cursor-pointer"
                   >
+                    {/* INVISIBLE STABLE HOVER TARGET AREA */}
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r="28"
+                      fill="transparent"
+                      className="cursor-pointer pointer-events-auto"
+                    />
                     
                     {/* Pulse glow background circle for warnings/active alarms */}
                     {(isWarning || isHovered) && isNodeActive && (
@@ -684,101 +692,121 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
                       </g>
                     )}
 
-                    {/* === DETAILED TOPOLOGY GRAPH POPUP TOOLTIP === */}
-                    {isHovered && (
-                      <foreignObject
-                        x={node.x + 22 > 700 ? node.x - 200 : node.x + 22}
-                        y={node.y - 45}
-                        width="180"
-                        height="135"
-                        className="overflow-visible select-none pointer-events-none z-50 transition-all"
-                      >
-                        <div className="bg-[#0B1120]/95 border border-slate-800 text-slate-250 text-[10.5px] p-2 rounded shadow-2xl backdrop-blur-xs font-sans text-left space-y-1">
-                          <div className="font-semibold text-cyan-400 border-b border-slate-850 pb-1 flex items-center justify-between">
-                            <span className="truncate max-w-[125px]">{node.label}</span>
-                            <span className="text-[8.5px] bg-[#1e293b] px-1 rounded text-slate-400 font-mono">
-                              {device ? `IPv4` : 'INFRA'}
-                            </span>
-                          </div>
-
-                          <div className="space-y-0.75 leading-tight">
-                            {/* Connection Link Port Info */}
-                            {node.interfaceName && (
-                              <div>
-                                <span className="text-slate-500 font-medium">Conexión:</span>{' '}
-                                <span className="text-slate-300 font-mono text-[9px]">{node.interfaceName}</span>
-                              </div>
-                            )}
-
-                            {/* Standard link interfaces */}
-                            {node.linkType && (
-                              <div>
-                                <span className="text-slate-500 font-medium">Tecnología:</span>{' '}
-                                <span className="text-slate-400 uppercase text-[9px] font-semibold">
-                                  {node.linkType === 'fiber' ? '✦ Fibra SFP+' : 
-                                   node.linkType === 'wifi' ? '📶 WIFI Wireless' : 
-                                   node.linkType === 'virtual' ? '⚡ Veth Bridge' : '🖧 ethernet RJ45'}
-                                </span>
-                              </div>
-                            )}
-
-                            {/* IP address if device */}
-                            {device && (
-                              <div>
-                                <span className="text-slate-500 font-medium">IP Local:</span>{' '}
-                                <span className="text-cyan-400 font-mono font-medium">{device.ip}</span>
-                              </div>
-                            )}
-
-                            {/* Physical MAC ID */}
-                            {device && device.mac !== '—' && (
-                              <div>
-                                <span className="text-slate-500 font-medium">Dirección MAC:</span>{' '}
-                                <span className="text-slate-400 font-mono text-[8.5px]">{device.mac}</span>
-                              </div>
-                            )}
-
-                            {/* Latency Rating */}
-                            <div>
-                              <span className="text-slate-500 font-medium">Estado:</span>{' '}
-                              <span className={`font-bold ${
-                                isNoScan ? 'text-slate-550' :
-                                isDown ? 'text-rose-500' :
-                                isWarning ? 'text-amber-500' : 'text-emerald-500'
-                              }`}>
-                                {isNoScan ? 'No Escaneado' : isDown ? 'ALTA CAÍDA' : isWarning ? 'Advertencia' : 'Operativo (OK)'}
-                              </span>
-                            </div>
-
-                            {/* Diagnostics Ping Info */}
-                            {pingVal !== null && (
-                              <div>
-                                <span className="text-slate-500 font-medium">Latencia (Ping):</span>{' '}
-                                <span className="text-slate-300 font-mono">{pingVal} ms</span>
-                              </div>
-                            )}
-
-                            {/* Flow traffic stats */}
-                            {device && isNodeActive && device.consumoDownload !== undefined && (
-                              <div className="pt-1 border-t border-slate-850 flex justify-between font-mono text-[8.5px] mt-1 text-slate-400">
-                                <span className="text-cyan-400">Baj: {device.consumoDownload} Mbps</span>
-                                <span className="text-amber-500">Sub: {device.consumoUpload} Mbps</span>
-                              </div>
-                            )}
-                          </div>
-                          
-                          {device && isNodeActive && (
-                            <div className="text-[8.5px] italic text-[#38bdf8] border-t border-slate-850/60 pt-1 mt-0.5 text-center">
-                              * Haz clic para Diagnóstico Físico & Puertos
-                            </div>
-                          )}
-                        </div>
-                      </foreignObject>
-                    )}
-
                   </g>
                 );
               })}
+
+              {/* === SECTION C: HOVERED NODE TOOLTIP (RENDERED ON TOP) === */}
+              {hoveredNodeId && (() => {
+                const node = topologyNodes.find(n => n.id === hoveredNodeId);
+                if (!node) return null;
+                
+                const device = getDeviceForNode(node.ip);
+                let isNoScan = false;
+                let isDown = false;
+                let isWarning = false;
+                let pingVal: number | null = null;
+
+                if (device) {
+                  isNoScan = device.estado === 'No_Escaneado';
+                  isDown = device.estado === 'Caído';
+                  isWarning = device.estado === 'Advertencia';
+                  pingVal = device.ping;
+                }
+
+                const isNodeActive = !isNoScan && !isDown;
+
+                return (
+                  <foreignObject
+                    x={node.x + 22 > 700 ? node.x - 200 : node.x + 22}
+                    y={node.y - 45}
+                    width="180"
+                    height="138"
+                    className="overflow-visible select-none pointer-events-none z-50 transition-all"
+                  >
+                    <div className="bg-[#0B1120] border border-slate-600 text-slate-200 text-[10.5px] p-2 rounded shadow-2xl font-sans text-left space-y-1 select-none pointer-events-none">
+                      <div className="font-semibold text-cyan-400 border-b border-slate-800 pb-1 flex items-center justify-between">
+                        <span className="truncate max-w-[125px] font-sans">{node.label}</span>
+                        <span className="text-[8.5px] bg-[#1e293b] px-1 rounded text-slate-400 font-mono">
+                          {device ? `IPv4` : 'INFRA'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-0.75 leading-tight">
+                        {/* Connection Link Port Info */}
+                        {node.interfaceName && (
+                          <div>
+                            <span className="text-slate-500 font-medium font-sans">Conexión:</span>{' '}
+                            <span className="text-slate-300 font-mono text-[9px]">{node.interfaceName}</span>
+                          </div>
+                        )}
+
+                        {/* Standard link interfaces */}
+                        {node.linkType && (
+                          <div>
+                            <span className="text-slate-500 font-medium font-sans">Tecnología:</span>{' '}
+                            <span className="text-slate-400 uppercase text-[9px] font-semibold font-sans">
+                              {node.linkType === 'fiber' ? '✦ Fibra SFP+' : 
+                               node.linkType === 'wifi' ? '📶 WIFI Wireless' : 
+                               node.linkType === 'virtual' ? '⚡ Veth Bridge' : '🖧 ethernet RJ45'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* IP address if device */}
+                        {device && (
+                          <div>
+                            <span className="text-slate-500 font-medium font-sans">IP Local:</span>{' '}
+                            <span className="text-cyan-400 font-mono font-medium">{device.ip}</span>
+                          </div>
+                        )}
+
+                        {/* Physical MAC ID */}
+                        {device && device.mac !== '—' && (
+                          <div>
+                            <span className="text-slate-500 font-medium font-sans">Dirección MAC:</span>{' '}
+                            <span className="text-slate-400 font-mono text-[8.5px]">{device.mac}</span>
+                          </div>
+                        )}
+
+                        {/* Latency Rating */}
+                        <div>
+                          <span className="text-slate-500 font-medium font-sans">Estado:</span>{' '}
+                          <span className={`font-bold font-sans ${
+                            isNoScan ? 'text-slate-550' :
+                            isDown ? 'text-rose-500' :
+                            isWarning ? 'text-amber-500' : 'text-emerald-500'
+                          }`}>
+                            {isNoScan ? 'No Escaneado' : isDown ? 'ALTA CAÍDA' : isWarning ? 'Advertencia' : 'Operativo (OK)'}
+                          </span>
+                        </div>
+
+                        {/* Diagnostics Ping Info */}
+                        {pingVal !== null && (
+                          <div>
+                            <span className="text-slate-500 font-medium font-sans">Latencia:</span>{' '}
+                            <span className="text-slate-300 font-mono">{pingVal} ms</span>
+                          </div>
+                        )}
+
+                        {/* Flow traffic stats */}
+                        {device && isNodeActive && device.consumoDownload !== undefined && (
+                          <div className="pt-1 border-t border-slate-850 flex justify-between font-mono text-[8.5px] mt-1 text-slate-400">
+                            <span className="text-cyan-400 font-sans">Baj:</span> <span className="text-cyan-400 font-mono">{device.consumoDownload} Mbps</span>
+                            <span className="text-amber-500 font-sans">Sub:</span> <span className="text-amber-500 font-mono">{device.consumoUpload} Mbps</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {device && isNodeActive && (
+                        <div className="text-[8.5px] italic text-[#38bdf8] border-t border-slate-850/60 pt-1 mt-0.5 text-center font-sans">
+                          * Haz clic para Diagnóstico Físico & Puertos
+                        </div>
+                      )}
+                    </div>
+                  </foreignObject>
+                );
+              })()}
 
             </svg>
           </div>
