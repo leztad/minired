@@ -19,8 +19,39 @@ if errorlevel 1 goto NoNode
 if not exist node_modules goto NoModules
 
 :StartDev
+:: Detectar la IP local IPv4 del computador para la conexion movil
+set "LOCAL_IP=localhost"
+for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /i "IPv4"') do (
+    set "LOCAL_IP=%%i"
+    goto :FoundIP
+)
+:FoundIP
+:: Limpiar espacios en blanco de la IP
+if defined LOCAL_IP (
+    set "LOCAL_IP=%LOCAL_IP: =%"
+)
+
+echo.
+echo ==========================================================
+echo   COMO ACCEDER DESDE TU CELULAR:
+echo ==========================================================
+echo   1. Aseguramiento de red:
+echo      Tanto tu computadora como tu celular DEBEN estar
+echo      conectados a la misma red Wi-Fi.
+echo.
+echo   2. Abre este enlace en el navegador de tu celular:
+echo      http://%LOCAL_IP%:3000
+echo.
+echo   * NOTA SOBRE SEGURIDAD (Firewall):
+echo     Si la pagina se queda cargando en el movil, es probable
+echo     que el Cortafuegos/Firewall de Windows este bloqueando la
+echo     conexion entrante. Asegurate de darle permisos "Privados"
+echo     o permitir el trafico en el puerto 3000.
+echo ==========================================================
+echo.
 echo [+] Iniciando el servidor de desarrollo...
-echo [+] Abriendo navegador automaticamente...
+echo [+] Abriendo navegador en esta computadora...
+
 start "" "http://localhost:3000"
 call npm run dev
 if errorlevel 1 goto DevError
