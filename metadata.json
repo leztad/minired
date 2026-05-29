@@ -1,0 +1,6 @@
+{
+  "name": "RedMonitor",
+  "description": "Sistema de monitoreo de red LAN interactivo inspirado en PRTG, que permite escanear segmentos IP, ver sensores y listar dispositivos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
