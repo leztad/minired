@@ -61,6 +61,37 @@ export default function App() {
   // Selected device for modal diagnostic popup
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [copiedSuccess, setCopiedSuccess] = useState<boolean>(false);
+  const [isEditingName, setIsEditingName] = useState<boolean>(false);
+  const [tempName, setTempName] = useState<string>('');
+
+  // Synchronize renaming fields on selecting a device or state change
+  useEffect(() => {
+    if (!selectedDevice) {
+      setIsEditingName(false);
+      setTempName('');
+    } else {
+      const activeDevice = devices.find(d => d.id === selectedDevice.id);
+      if (activeDevice) {
+        setTempName(activeDevice.host !== '—' ? activeDevice.host : '');
+      }
+    }
+  }, [selectedDevice, devices]);
+
+  const handleRenameDevice = (id: string, newName: string) => {
+    const finalName = newName.trim() || '—';
+    setDevices(prev => {
+      const targetDevice = prev.find(d => d.id === id);
+      if (targetDevice) {
+        setSensors(sPrev => sPrev.map(s => {
+          if (s.ip === targetDevice.ip) {
+            return { ...s, dispositivo: finalName };
+          }
+          return s;
+        }));
+      }
+      return prev.map(d => d.id === id ? { ...d, host: finalName } : d);
+    });
+  };
 
   // Update clock
   useEffect(() => {

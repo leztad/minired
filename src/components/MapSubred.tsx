@@ -29,163 +29,178 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [hoveredGridId, setHoveredGridId] = useState<string | null>(null);
 
+  // Find current subnet base (e.g. "192.168.1" or "10.0.0")
+  const currentSubnetBase = useMemo(() => {
+    const sampleDevice = devices.find(d => d.ip && d.ip !== '—');
+    if (sampleDevice) {
+      const parts = sampleDevice.ip.split('.');
+      if (parts.length >= 3) {
+        return parts.slice(0, 3).join('.');
+      }
+    }
+    return '192.168.1';
+  }, [devices]);
+
   // Define static coordinates for symmetrical hierarchical tree
   // Width: 920, Height: 410. Symmetrical pivot points.
-  const topologyNodes: TopologyNode[] = useMemo(() => [
-    // Layer 0: Public Connection
-    { id: 'wan', label: 'Internet Público (WAN)', type: 'cloud', x: 430, y: 35 },
-    // Layer 1: Core Router
-    { 
-      id: '192.168.1.1', 
-      label: 'Router Gateway', 
-      ip: '192.168.1.1', 
-      type: 'router', 
-      x: 430, 
-      y: 100, 
-      parent: 'wan', 
-      linkType: 'fiber', 
-      interfaceName: 'WAN SFP+ GPON' 
-    },
-    
-    // Layer 2: Distributors / Access Points
-    { 
-      id: 'ap', 
-      label: 'WiFi AP Central', 
-      type: 'ap', 
-      x: 190, 
-      y: 195, 
-      parent: '192.168.1.1', 
-      linkType: 'ethernet', 
-      interfaceName: 'ETH Port 2 (PoE)' 
-    },
-    { 
-      id: 'switch', 
-      label: 'Switch Principal LAN', 
-      type: 'switch', 
-      x: 430, 
-      y: 195, 
-      parent: '192.168.1.1', 
-      linkType: 'ethernet', 
-      interfaceName: 'ETH Port 1 (10G)' 
-    },
-    { 
-      id: '192.168.1.55', 
-      label: 'DESKTOP-FS211HD (Este PC)', 
-      ip: '192.168.1.55', 
-      type: 'desktop', 
-      x: 710, 
-      y: 195, 
-      parent: 'switch', 
-      linkType: 'ethernet', 
-      interfaceName: 'Port LAN 4' 
-    },
+  const topologyNodes: TopologyNode[] = useMemo(() => {
+    const base = currentSubnetBase;
+    return [
+      // Layer 0: Public Connection
+      { id: 'wan', label: 'Internet Público (WAN)', type: 'cloud', x: 430, y: 35 },
+      // Layer 1: Core Router
+      { 
+        id: `${base}.1`, 
+        label: 'Router Gateway', 
+        ip: `${base}.1`, 
+        type: 'router', 
+        x: 430, 
+        y: 100, 
+        parent: 'wan', 
+        linkType: 'fiber', 
+        interfaceName: 'WAN SFP+ GPON' 
+      },
+      
+      // Layer 2: Distributors / Access Points
+      { 
+        id: 'ap', 
+        label: 'WiFi AP Central', 
+        type: 'ap', 
+        x: 190, 
+        y: 195, 
+        parent: `${base}.1`, 
+        linkType: 'ethernet', 
+        interfaceName: 'ETH Port 2 (PoE)' 
+      },
+      { 
+        id: 'switch', 
+        label: 'Switch Principal LAN', 
+        type: 'switch', 
+        x: 430, 
+        y: 195, 
+        parent: `${base}.1`, 
+        linkType: 'ethernet', 
+        interfaceName: 'ETH Port 1 (10G)' 
+      },
+      { 
+        id: `${base}.55`, 
+        label: 'DESKTOP-FS211HD (Este PC)', 
+        ip: `${base}.55`, 
+        type: 'desktop', 
+        x: 710, 
+        y: 195, 
+        parent: 'switch', 
+        linkType: 'ethernet', 
+        interfaceName: 'Port LAN 4' 
+      },
 
-    // Layer 3: Endpoints
-    // WiFi clients connected via central AP (centered around AP: 190)
-    { 
-      id: '192.168.1.70', 
-      label: 'Alexa-LivingRoom', 
-      ip: '192.168.1.70', 
-      type: 'iot', 
-      x: 110, 
-      y: 330, 
-      parent: 'ap', 
-      linkType: 'wifi', 
-      interfaceName: 'WLAN Living 5G' 
-    },
-    { 
-      id: '192.168.1.102', 
-      label: 'Hacienda-IOT-Hub', 
-      ip: '192.168.1.102', 
-      type: 'iot', 
-      x: 230, 
-      y: 330, 
-      parent: 'ap', 
-      linkType: 'wifi', 
-      interfaceName: 'WLAN IOT 2.4G' 
-    },
+      // Layer 3: Endpoints
+      // WiFi clients connected via central AP (centered around AP: 190)
+      { 
+        id: `${base}.70`, 
+        label: 'Alexa-LivingRoom', 
+        ip: `${base}.70`, 
+        type: 'iot', 
+        x: 110, 
+        y: 330, 
+        parent: 'ap', 
+        linkType: 'wifi', 
+        interfaceName: 'WLAN Living 5G' 
+      },
+      { 
+        id: `${base}.102`, 
+        label: 'Hacienda-IOT-Hub', 
+        ip: `${base}.102`, 
+        type: 'iot', 
+        x: 230, 
+        y: 330, 
+        parent: 'ap', 
+        linkType: 'wifi', 
+        interfaceName: 'WLAN IOT 2.4G' 
+      },
 
-    // Physical LAN devices connected to Switch (symmetrical centered around Switch: 430)
-    { 
-      id: '192.168.1.38', 
-      label: 'Smart-TV LAN', 
-      ip: '192.168.1.38', 
-      type: 'tv', 
-      x: 310, 
-      y: 330, 
-      parent: 'switch', 
-      linkType: 'ethernet', 
-      interfaceName: 'Port LAN 3' 
-    },
-    { 
-      id: '192.168.1.40', 
-      label: 'Console-PS5', 
-      ip: '192.168.1.40', 
-      type: 'gaming', 
-      x: 395, 
-      y: 330, 
-      parent: 'switch', 
-      linkType: 'ethernet', 
-      interfaceName: 'Port LAN 5' 
-    },
-    { 
-      id: '192.168.1.15', 
-      label: 'NAS-Backup', 
-      ip: '192.168.1.15', 
-      type: 'nas', 
-      x: 480, 
-      y: 330, 
-      parent: 'switch', 
-      linkType: 'ethernet', 
-      interfaceName: 'Port LAN 6' 
-    },
-    { 
-      id: '192.168.1.22', 
-      label: 'HP-LaserJet-MFP', 
-      ip: '192.168.1.22', 
-      type: 'printer', 
-      x: 565, 
-      y: 330, 
-      parent: 'switch', 
-      linkType: 'ethernet', 
-      interfaceName: 'Port LAN 8' 
-    },
+      // Physical LAN devices connected to Switch (symmetrical centered around Switch: 430)
+      { 
+        id: `${base}.38`, 
+        label: 'Smart-TV LAN', 
+        ip: `${base}.38`, 
+        type: 'tv', 
+        x: 310, 
+        y: 330, 
+        parent: 'switch', 
+        linkType: 'ethernet', 
+        interfaceName: 'Port LAN 3' 
+      },
+      { 
+        id: `${base}.40`, 
+        label: 'Console-PS5', 
+        ip: `${base}.40`, 
+        type: 'gaming', 
+        x: 395, 
+        y: 330, 
+        parent: 'switch', 
+        linkType: 'ethernet', 
+        interfaceName: 'Port LAN 5' 
+      },
+      { 
+        id: `${base}.15`, 
+        label: 'NAS-Backup', 
+        ip: `${base}.15`, 
+        type: 'nas', 
+        x: 480, 
+        y: 330, 
+        parent: 'switch', 
+        linkType: 'ethernet', 
+        interfaceName: 'Port LAN 6' 
+      },
+      { 
+        id: `${base}.22`, 
+        label: 'HP-LaserJet-MFP', 
+        ip: `${base}.22`, 
+        type: 'printer', 
+        x: 565, 
+        y: 330, 
+        parent: 'switch', 
+        linkType: 'ethernet', 
+        interfaceName: 'Port LAN 8' 
+      },
 
-    // Virtual services hosts inside Desktop PC (symmetrical centered around Desktop: 710)
-    { 
-      id: '192.168.1.10', 
-      label: 'DATABASE-PROD (Docker)', 
-      ip: '192.168.1.10', 
-      type: 'server', 
-      x: 650, 
-      y: 330, 
-      parent: '192.168.1.55', 
-      linkType: 'virtual', 
-      interfaceName: 'docker-veth0' 
-    },
-    { 
-      id: '192.168.1.11', 
-      label: 'WEB-SERVER-01 (Docker)', 
-      ip: '192.168.1.11', 
-      type: 'server', 
-      x: 730, 
-      y: 330, 
-      parent: '192.168.1.55', 
-      linkType: 'virtual', 
-      interfaceName: 'docker-veth1' 
-    },
-    { 
-      id: '192.168.1.200', 
-      label: 'VM-Ubuntu-Devel', 
-      ip: '192.168.1.200', 
-      type: 'server', 
-      x: 810, 
-      y: 330, 
-      parent: '192.168.1.55', 
-      linkType: 'virtual', 
-      interfaceName: 'vboxnet0' 
-    }
-  ], []);
+      // Virtual services hosts inside Desktop PC (symmetrical centered around Desktop: 710)
+      { 
+        id: `${base}.10`, 
+        label: 'DATABASE-PROD (Docker)', 
+        ip: `${base}.10`, 
+        type: 'server', 
+        x: 650, 
+        y: 330, 
+        parent: `${base}.55`, 
+        linkType: 'virtual', 
+        interfaceName: 'docker-veth0' 
+      },
+      { 
+        id: `${base}.11`, 
+        label: 'WEB-SERVER-01 (Docker)', 
+        ip: `${base}.11`, 
+        type: 'server', 
+        x: 730, 
+        y: 330, 
+        parent: `${base}.55`, 
+        linkType: 'virtual', 
+        interfaceName: 'docker-veth1' 
+      },
+      { 
+        id: `${base}.200`, 
+        label: 'VM-Ubuntu-Devel', 
+        ip: `${base}.200`, 
+        type: 'server', 
+        x: 810, 
+        y: 330, 
+        parent: `${base}.55`, 
+        linkType: 'virtual', 
+        interfaceName: 'vboxnet0' 
+      }
+    ];
+  }, [currentSubnetBase]);
 
   // Compute upstream diagnostic path to highlight route to server
   const activeUpstreamPath = useMemo(() => {
@@ -666,7 +681,13 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
                         isHovered ? 'fill-cyan-400 font-semibold' : 'fill-slate-300'
                       }`}
                     >
-                      {node.label}
+                      {device && device.host !== '—' 
+                        ? device.host 
+                        : (isDown 
+                            ? 'Segmento Inactivo' 
+                            : node.label
+                          )
+                      }
                     </text>
 
                     {/* Host Sub-metric or IP details centered below label */}
@@ -726,7 +747,15 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
                   >
                     <div className="bg-[#0B1120] border border-slate-600 text-slate-200 text-[10.5px] p-2 rounded shadow-2xl font-sans text-left space-y-1 select-none pointer-events-none">
                       <div className="font-semibold text-cyan-400 border-b border-slate-800 pb-1 flex items-center justify-between">
-                        <span className="truncate max-w-[125px] font-sans">{node.label}</span>
+                        <span className="truncate max-w-[125px] font-sans">
+                          {device && device.host !== '—' 
+                            ? device.host 
+                            : (isDown 
+                                ? 'Segmento Inactivo' 
+                                : node.label
+                              )
+                          }
+                        </span>
                         <span className="text-[8.5px] bg-[#1e293b] px-1 rounded text-slate-400 font-mono">
                           {device ? `IPv4` : 'INFRA'}
                         </span>
