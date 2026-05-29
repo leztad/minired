@@ -13,6 +13,7 @@ import HistorialHosts from './components/HistorialHosts';
 import DeviceTable from './components/DeviceTable';
 import SensorTable from './components/SensorTable';
 import TestingCenter from './components/TestingCenter';
+import BandwidthMonitor from './components/BandwidthMonitor';
 
 export default function App() {
   // General simulator state
@@ -23,7 +24,7 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState<string>('');
   
   // Navigation
-  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'testeo'>('vista_general');
+  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo'>('vista_general');
   const [sidebarSearch, setSidebarSearch] = useState<string>('');
   const [isLanTreeOpen, setIsLanTreeOpen] = useState<boolean>(true);
 
@@ -45,6 +46,16 @@ export default function App() {
     { timeLabels: '09:25:00', hostsActivos: 4, latenciaMedia: 52 },
     { timeLabels: '09:30:00', hostsActivos: 4, latenciaMedia: 51 },
     { timeLabels: '09:35:00', hostsActivos: 4, latenciaMedia: 55 },
+  ]);
+
+  // Bandwidth simulation states & initial history records
+  const [trafficGeneratorActive, setTrafficGeneratorActive] = useState<{ ip: string; profileName: string; durationLeft: number } | null>(null);
+  const [bandwidthHistory, setBandwidthHistory] = useState<{ timeLabels: string; downTotal: number; upTotal: number }[]>([
+    { timeLabels: '16:01:00', downTotal: 65.2, upTotal: 15.4 },
+    { timeLabels: '16:02:00', downTotal: 68.1, upTotal: 16.2 },
+    { timeLabels: '16:03:00', downTotal: 72.4, upTotal: 14.8 },
+    { timeLabels: '16:04:00', downTotal: 66.0, upTotal: 50.8 },
+    { timeLabels: '16:05:00', downTotal: 68.3, upTotal: 51.2 },
   ]);
 
   // Selected device for modal diagnostic popup
@@ -89,6 +100,164 @@ export default function App() {
   // Handle active states if Virtuales changes, ask to scan again
   const handleVirtualsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setIncludeVirtuals(e.target.checked);
+  };
+
+  // Bandwidth Traffic Simulation and Fluctuation loop
+  useEffect(() => {
+    // Only fluctuate traffic if a scan has been completed
+    if (!lastScanDone || isScanning) return;
+
+    const interval = setInterval(() => {
+      // 1. Decrement simulation countdown if active
+      let activeSim = trafficGeneratorActive;
+      if (activeSim) {
+        if (activeSim.durationLeft <= 1) {
+          activeSim = null;
+          setTrafficGeneratorActive(null);
+        } else {
+          activeSim = {
+            ...activeSim,
+            durationLeft: activeSim.durationLeft - 4
+          };
+          setTrafficGeneratorActive(activeSim);
+        }
+      }
+
+      // Profiles metadata
+      const profileData: Record<string, { down: number; up: number; latency: number; name: string }> = {
+        streaming_4k: { down: 25.0, up: 1.5, latency: 15, name: 'Streaming 4K' },
+        game_download: { down: 88.0, up: 4.2, latency: 85, name: 'Descarga Masiva' },
+        nas_backup: { down: 1.5, up: 45.0, latency: 40, name: 'Copia Certificada/NAS' },
+        ddos_test: { down: 120.0, up: 110.0, latency: 280, name: 'Stress DDoS' }
+      };
+
+      // 2. Fluctuate devices traffic
+      let totalDown = 0;
+      let totalUp = 0;
+
+      setDevices(prevDevices => {
+        return prevDevices.map(d => {
+          if (d.estado === 'Caído' || d.estado === 'No_Escaneado') {
+            return d;
+          }
+
+          let down = d.consumoDownload || 0;
+          let up = d.consumoUpload || 0;
+          let ping = d.ping;
+          let estado = d.estado;
+
+          // Check if this device is being targeted by active speed/stress test
+          if (activeSim && d.ip === activeSim.ip) {
+            const prof = profileData[activeSim.profileName];
+            if (prof) {
+              // Simulated values with tiny fluctuation
+              down = Number((prof.down * (0.95 + Math.random() * 0.1)).toFixed(1));
+              up = Number((prof.up * (0.95 + Math.random() * 0.1)).toFixed(1));
+              
+              // Heavy traffic affects ping latency and can trigger warnings!
+              ping = Math.round(prof.latency + Math.random() * 8);
+              
+              if (down > 50 || up > 30) {
+                estado = 'Advertencia';
+              } else {
+                estado = 'OK';
+              }
+            }
+          } else {
+            // Normal fluctuation
+            const baseDown = d.host.includes('PS5') ? 42.8 : 
+                             d.host.includes('Smart-TV') ? 18.5 :
+                             d.host.includes('Este PC') ? 5.6 : 
+                             d.host.includes('Docker') ? 2.1 :
+                             d.host.includes('NAS') ? 0.8 : 0.5;
+
+            const baseUp = d.host.includes('NAS') ? 45.3 :
+                           d.host.includes('Docker') ? 3.4 : 0.4;
+
+            // Fluctuate download/upload slightly around bases
+            down = Number((baseDown * (0.85 + Math.random() * 0.3)).toFixed(1));
+            up = Number((baseUp * (0.85 + Math.random() * 0.3)).toFixed(1));
+
+            // Small floor
+            if (down < 0.1) down = 0.1;
+            if (up < 0.05) up = 0.05;
+
+            // Restore original presets' status
+            if (d.host.includes('PS5')) {
+              ping = 120;
+              estado = 'Advertencia';
+            } else if (d.host.includes('Smart-TV')) {
+              ping = 85;
+              estado = 'Advertencia';
+            } else if (d.host.includes('NAS-Backup')) {
+              ping = 95;
+              estado = 'Advertencia';
+            } else {
+              ping = d.host.includes('Router') ? 1 : Math.round(3 + Math.random() * 8);
+              estado = 'OK';
+            }
+          }
+
+          // Accumulate consumed MB in real-time
+          const megabits = (down + up) * 4; 
+          const megabytes = megabits / 8;
+          const currentTotal = d.totalConsumido || 0;
+          const newTotal = Number((currentTotal + megabytes).toFixed(1));
+
+          totalDown += down;
+          totalUp += up;
+
+          return {
+            ...d,
+            ping,
+            estado,
+            consumoDownload: down,
+            consumoUpload: up,
+            totalConsumido: newTotal
+          };
+        });
+      });
+
+      // 3. Update bandwidth history line chart
+      setBandwidthHistory(prevHist => {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        const newPoint = {
+          timeLabels: timeStr,
+          downTotal: Number(totalDown.toFixed(1)),
+          upTotal: Number(totalUp.toFixed(1))
+        };
+        return [...prevHist, newPoint].slice(-16); // keep last 16 points
+      });
+
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [lastScanDone, isScanning, trafficGeneratorActive]);
+
+  const handleTriggerTraffic = (ip: string, profile: string) => {
+    setTrafficGeneratorActive({
+      ip,
+      profileName: profile,
+      durationLeft: 20
+    });
+  };
+
+  const handleResetTraffic = () => {
+    setTrafficGeneratorActive(null);
+    setDevices(prev => prev.map(d => {
+      if (d.estado === 'Caído' || d.estado === 'No_Escaneado') return d;
+      const isTv = d.ip.endsWith('.38');
+      const isPs = d.ip.endsWith('.40');
+      const isNas = d.ip.endsWith('.15') || d.host.includes('NAS-Backup');
+      return {
+        ...d,
+        consumoDownload: isPs ? 42.8 : isTv ? 18.5 : 2.5,
+        consumoUpload: isPs ? 3.5 : isTv ? 1.2 : isNas ? 45.3 : 0.5,
+        estado: (isPs || isTv || isNas) ? 'Advertencia' : 'OK',
+        ping: isPs ? 120 : isTv ? 85 : isNas ? 95 : 5
+      };
+    }));
   };
 
   // Perform Network Scan Simulation (taking 3.5 seconds to sweep the grid)
@@ -336,7 +505,7 @@ export default function App() {
           </li>
           <li className="text-slate-600">›</li>
           <li className="bg-slate-800 px-2 py-0.5 rounded-sm text-slate-300 font-bold leading-none text-[10px] uppercase">
-            {activeView === 'vista_general' ? 'Vista general' : activeView === 'sensores' ? 'Sensores' : activeView === 'dispositivos' ? 'Dispositivos' : 'Pruebas y Diagnóstico'}
+            {activeView === 'vista_general' ? 'Vista general' : activeView === 'sensores' ? 'Sensores' : activeView === 'dispositivos' ? 'Dispositivos' : activeView === 'ancho_banda' ? 'Ancho de Banda' : 'Pruebas y Diagnóstico'}
           </li>
         </ul>
 
@@ -447,6 +616,20 @@ export default function App() {
                 >
                   <Server className="h-3.5 w-3.5" />
                   <span>Dispositivos</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => setActiveView('ancho_banda')}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'ancho_banda' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Activity className="h-3.5 w-3.5" />
+                  <span>Ancho de Banda</span>
+                  <span className="ml-auto bg-emerald-500/10 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20">VIVO</span>
                 </button>
               </li>
               <li>
@@ -834,6 +1017,18 @@ export default function App() {
             <DeviceTable devices={devices} onSelectDevice={setSelectedDevice} />
           )}
 
+          {activeView === 'ancho_banda' && (
+            <BandwidthMonitor 
+              devices={devices}
+              isScanning={isScanning}
+              onSelectDevice={setSelectedDevice}
+              onTriggerTraffic={handleTriggerTraffic}
+              onResetTraffic={handleResetTraffic}
+              trafficGeneratorActive={trafficGeneratorActive}
+              bandwidthHistory={bandwidthHistory}
+            />
+          )}
+
           {activeView === 'testeo' && (
             <TestingCenter 
               devices={devices} 
@@ -871,139 +1066,149 @@ export default function App() {
       </footer>
 
       {/* FLOAT MODE DIAGNOSTIC MODAL */}
-      {selectedDevice && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-[#0F172A] rounded-xs border border-slate-800 w-full max-w-sm shadow-2xl overflow-hidden font-sans">
-            <div className="bg-[#0B1120] text-slate-100 border-b border-slate-850 px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Cpu className="h-4 w-4 text-cyan-400" />
-                <h3 className="text-xs font-bold uppercase tracking-wide font-display text-cyan-400">
-                  Diagnóstico de IP: {selectedDevice.ip}
-                </h3>
+      {selectedDevice && (() => {
+        const activeDiagDevice = devices.find(d => d.id === selectedDevice.id) || selectedDevice;
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-[#0F172A] rounded-xs border border-slate-800 w-full max-w-sm shadow-2xl overflow-hidden font-sans">
+              <div className="bg-[#0B1120] text-slate-100 border-b border-slate-850 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-cyan-400" />
+                  <h3 className="text-xs font-bold uppercase tracking-wide font-display text-cyan-400 text-left">
+                    Diagnóstico de IP: {activeDiagDevice.ip}
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => setSelectedDevice(null)}
+                  className="text-slate-500 hover:text-white font-bold text-base cursor-pointer px-1 py-0.5 transition-colors"
+                >
+                  ✕
+                </button>
               </div>
-              <button 
-                onClick={() => setSelectedDevice(null)}
-                className="text-slate-500 hover:text-white font-bold text-base cursor-pointer px-1 py-0.5 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
 
-            <div className="p-4 space-y-4">
-              
-              {/* Core header of the device state */}
-              <div className="bg-slate-950/40 p-3 rounded-xs border border-slate-850/80 flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  selectedDevice.estado === 'OK' ? 'bg-emerald-500/10 text-emerald-400' :
-                  selectedDevice.estado === 'Advertencia' ? 'bg-amber-500/10 text-amber-500' :
-                  selectedDevice.estado === 'Caído' && selectedDevice.lastChecked !== null ? 'bg-rose-500/10 text-rose-400' :
-                  'bg-slate-800 text-slate-500'
-                }`}>
-                  <Activity className="h-5 w-5" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-slate-200 text-xs">
-                    {selectedDevice.host !== '—' ? selectedDevice.host : 'Host Inactivo'}
-                  </h4>
-                  <p className="text-[10px] text-slate-500 font-mono">{selectedDevice.ip}</p>
-                </div>
-                <div className="ml-auto text-right">
-                  <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded-sm ${
-                    selectedDevice.estado === 'OK' ? 'bg-emerald-500/10 text-emerald-400' :
-                    selectedDevice.estado === 'Advertencia' ? 'bg-amber-500/10 text-amber-500' :
-                    selectedDevice.estado === 'Caído' && selectedDevice.lastChecked !== null ? 'bg-rose-500/10 text-rose-400' :
-                    'bg-slate-800 text-slate-400'
+              <div className="p-4 space-y-4">
+                
+                {/* Core header of the device state */}
+                <div className="bg-slate-950/40 p-3 rounded-xs border border-slate-850/80 flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    activeDiagDevice.estado === 'OK' ? 'bg-emerald-500/10 text-emerald-400' :
+                    activeDiagDevice.estado === 'Advertencia' ? 'bg-amber-500/10 text-amber-500' :
+                    activeDiagDevice.estado === 'Caído' && activeDiagDevice.lastChecked !== null ? 'bg-rose-500/10 text-rose-400' :
+                    'bg-slate-800 text-slate-500'
                   }`}>
-                    {selectedDevice.estado === 'No_Escaneado' ? 'Inactivo' : selectedDevice.estado}
-                  </span>
-                </div>
-              </div>
-
-              {/* Diagnostic Parameters Grid */}
-              <div className="space-y-2 text-xs">
-                <h5 className="font-semibold uppercase text-slate-500 text-[10px] tracking-wider font-display">
-                  PARÁMETROS DEL HOST
-                </h5>
-                <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xs border border-slate-850/50 font-mono text-[11px] text-slate-300">
-                  <div>
-                    <span className="text-slate-500 block text-[9px]">MAC ADDRESS</span>
-                    <span className="text-slate-200 font-medium font-mono">{selectedDevice.mac}</span>
+                    <Activity className="h-5 w-5" />
                   </div>
-                  <div>
-                    <span className="text-slate-500 block text-[9px]">PING LATENCIA</span>
-                    <span className={`font-semibold ${selectedDevice.ping ? 'text-cyan-400' : 'text-slate-500'}`}>
-                      {selectedDevice.ping !== null ? `${selectedDevice.ping} ms` : '—'}
+                  <div className="text-left">
+                    <h4 className="font-semibold text-slate-200 text-xs text-left">
+                      {activeDiagDevice.host !== '—' ? activeDiagDevice.host : 'Host Inactivo'}
+                    </h4>
+                    <p className="text-[10px] text-slate-500 font-mono text-left">{activeDiagDevice.ip}</p>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded-sm ${
+                      activeDiagDevice.estado === 'OK' ? 'bg-emerald-500/10 text-emerald-400' :
+                      activeDiagDevice.estado === 'Advertencia' ? 'bg-amber-500/10 text-amber-500' :
+                      activeDiagDevice.estado === 'Caído' && activeDiagDevice.lastChecked !== null ? 'bg-rose-500/10 text-rose-400' :
+                      'bg-slate-800 text-slate-400'
+                    }`}>
+                      {activeDiagDevice.estado === 'No_Escaneado' ? 'Inactivo' : activeDiagDevice.estado}
                     </span>
                   </div>
-                  <div className="mt-2">
-                    <span className="text-slate-500 block text-[9px]">ÚLTIMO INTENTO</span>
-                    <span className="text-slate-300">{selectedDevice.lastChecked || '—'}</span>
-                  </div>
-                  <div className="mt-2">
-                    <span className="text-slate-500 block text-[9px]">INTENTO EXCITACIÓN</span>
-                    <span className="text-slate-300">OK (IPv4)</span>
+                </div>
+
+                {/* Diagnostic Parameters Grid */}
+                <div className="space-y-2 text-xs">
+                  <h5 className="font-semibold uppercase text-slate-500 text-[10px] tracking-wider font-display text-left">
+                    PARÁMETROS DEL HOST
+                  </h5>
+                  <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xs border border-slate-850/50 font-mono text-[11px] text-slate-300">
+                    <div>
+                      <span className="text-slate-500 block text-[9px] text-left">MAC ADDRESS</span>
+                      <span className="text-slate-200 font-medium font-mono text-left block">{activeDiagDevice.mac}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[9px] text-left">PING LATENCIA</span>
+                      <span className={`font-semibold text-left block ${activeDiagDevice.ping ? 'text-cyan-400' : 'text-slate-500'}`}>
+                        {activeDiagDevice.ping !== null ? `${activeDiagDevice.ping} ms` : '—'}
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <span className="text-slate-500 block text-[9px] text-left">BAJADA/SUBIDA</span>
+                      <span className="text-slate-200 block text-left font-semibold">
+                        <span className="text-cyan-400">↓{(activeDiagDevice.consumoDownload || 0).toFixed(1)}</span>
+                        <span className="text-slate-600">/</span>
+                        <span className="text-amber-500">↑{(activeDiagDevice.consumoUpload || 0).toFixed(1)}</span>
+                        <span className="text-slate-500 text-[9px] ml-1 font-normal font-sans">Mbps</span>
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                       <span className="text-slate-500 block text-[9px] text-left">DATO TOTAL</span>
+                       <span className="text-emerald-400 font-semibold block text-left">
+                         {activeDiagDevice.totalConsumido !== undefined ? `${Math.round(activeDiagDevice.totalConsumido)} MB` : '0 MB'}
+                       </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Simulated active checkers/sensors list inside diagnostic popup */}
-              <div className="space-y-2 text-xs text-slate-300">
-                <h5 className="font-semibold uppercase text-slate-500 text-[10px] tracking-wider font-display">
-                  SENSORES INTEGRADOS ({selectedDevice.estado === 'No_Escaneado' ? 0 : selectedDevice.sensorHttp ? 2 : 1})
-                </h5>
-                {selectedDevice.estado === 'No_Escaneado' ? (
-                  <p className="text-slate-500 text-[11px] italic font-sans">(Mapeador sin escanear. Inicie un escaneo para activar sensores).</p>
-                ) : (
-                  <div className="space-y-2">
-                    {/* Ping Sensor row */}
-                    <div className="flex items-center justify-between p-2 rounded-xs bg-slate-950/25 border border-slate-850/60 text-slate-300">
-                      <div>
-                        <div className="font-medium text-slate-300">Sensor Ping ICMP</div>
-                        <span className="text-[10px] text-slate-500 font-mono">Verifica respuesta de eco</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-mono font-semibold text-slate-200">{selectedDevice.ping !== null ? `${selectedDevice.ping} ms` : 'Falla'}</span>
-                        <div className={`text-[9px] uppercase font-bold ${selectedDevice.ping !== null ? 'text-emerald-400' : 'text-rose-500'}`}>
-                          {selectedDevice.ping !== null ? 'Responde' : 'Fuera de red'}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* HTTP Sensor row if applicable */}
-                    {selectedDevice.sensorHttp && (
-                      <div className="flex items-center justify-between p-2 rounded-xs bg-slate-950/25 border border-slate-855/60 text-slate-300">
-                        <div>
-                          <div className="font-medium text-slate-300">Sensor Puerto TCP HTTP</div>
-                          <span className="text-[10px] text-slate-500 font-mono font-mono">Verifica código 200 en puerto 80</span>
+                {/* Simulated active checkers/sensors list inside diagnostic popup */}
+                <div className="space-y-2 text-xs text-slate-300">
+                  <h5 className="font-semibold uppercase text-slate-500 text-[10px] tracking-wider font-display text-left">
+                    SENSORES INTEGRADOS ({activeDiagDevice.estado === 'No_Escaneado' ? 0 : activeDiagDevice.sensorHttp ? 2 : 1})
+                  </h5>
+                  {activeDiagDevice.estado === 'No_Escaneado' ? (
+                    <p className="text-slate-500 text-[11px] italic font-sans text-left">(Mapeador sin escanear. Inicie un escaneo para activar sensores).</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {/* Ping Sensor row */}
+                      <div className="flex items-center justify-between p-2 rounded-xs bg-slate-950/25 border border-slate-850/60 text-slate-300">
+                        <div className="text-left">
+                          <div className="font-medium text-slate-300 text-left">Sensor Ping ICMP</div>
+                          <span className="text-[10px] text-slate-500 font-mono text-left block">Verifica respuesta de eco</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-mono font-semibold text-slate-200">
-                            {selectedDevice.estado === 'OK' ? '200 OK' : 'No responde'}
-                          </span>
-                          <div className={`text-[9px] uppercase font-bold ${selectedDevice.estado === 'OK' ? 'text-emerald-400' : 'text-amber-550'}`}>
-                            {selectedDevice.estado === 'OK' ? 'Activo' : 'Advertencia'}
+                          <span className="font-mono font-semibold text-slate-200">{activeDiagDevice.ping !== null ? `${activeDiagDevice.ping} ms` : 'Falla'}</span>
+                          <div className={`text-[9px] uppercase font-bold ${activeDiagDevice.ping !== null ? 'text-emerald-400' : 'text-rose-500'}`}>
+                            {activeDiagDevice.ping !== null ? 'Responde' : 'Fuera de red'}
                           </div>
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
+
+                      {/* HTTP Sensor row if applicable */}
+                      {activeDiagDevice.sensorHttp && (
+                        <div className="flex items-center justify-between p-2 rounded-xs bg-slate-950/25 border border-slate-855/60 text-slate-300">
+                          <div className="text-left">
+                            <div className="font-medium text-slate-300 text-left">Sensor Puerto TCP HTTP</div>
+                            <span className="text-[10px] text-slate-500 font-mono text-left block">Verifica código 200 en puerto 80</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-mono font-semibold text-slate-200">
+                              {activeDiagDevice.estado === 'OK' ? '200 OK' : 'No responde'}
+                            </span>
+                            <div className={`text-[9px] uppercase font-bold ${activeDiagDevice.estado === 'OK' ? 'text-emerald-400' : 'text-amber-550'}`}>
+                              {activeDiagDevice.estado === 'OK' ? 'Activo' : 'Advertencia'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
               </div>
 
-            </div>
-
-            {/* Modal action Buttons footer */}
-            <div className="bg-slate-900 px-4 py-3 border-t border-slate-850 flex justify-end gap-2">
-              <button 
-                onClick={() => setSelectedDevice(null)}
-                className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 text-xs font-bold font-sans py-1.5 px-6 rounded-xs cursor-pointer transition-colors"
-              >
-                Cerrar
-              </button>
+              {/* Modal action Buttons footer */}
+              <div className="bg-slate-900 px-4 py-3 border-t border-slate-850 flex justify-end gap-2">
+                <button 
+                  onClick={() => setSelectedDevice(null)}
+                  className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 text-xs font-bold font-sans py-1.5 px-6 rounded-xs cursor-pointer transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );

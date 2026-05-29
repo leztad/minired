@@ -8,6 +8,9 @@ export interface Device {
   lastChecked: string | null;
   sensorPing: boolean;
   sensorHttp?: boolean;
+  consumoDownload?: number; // Speed in Mbps
+  consumoUpload?: number;   // Speed in Mbps
+  totalConsumido?: number;   // Accumulated data in MB
 }
 
 export interface Sensor {
