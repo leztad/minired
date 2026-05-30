@@ -23,9 +23,31 @@ interface TopologyNode {
   interfaceName?: string;
 }
 
+const getShortHostName = (name: string): string => {
+  const lower = name.toLowerCase();
+  if (lower.includes('gateway') || lower.includes('router')) return 'Router Gateway';
+  if (lower.includes('internet') || lower.includes('wan') || lower.includes('público')) return 'Internet WAN';
+  if (lower.includes('wifi ap') || lower.includes('ap central')) return 'WIFI AP Central';
+  if (lower.includes('switch')) return 'Switch Principal';
+  
+  if (lower.includes('alexa') || lower.includes('livingroom') || lower.includes('.70')) return 'Alexa IoT';
+  if (lower.includes('módulo') || lower.includes('hub') || lower.includes('.102')) return 'IoT Hub';
+  if (lower.includes('.38') || lower.includes('tv')) return 'Smart TV';
+  if (lower.includes('.40') || lower.includes('ps5') || lower.includes('gaming')) return 'PS5 Consola';
+  if (lower.includes('db') || lower.includes('database') || lower.includes('datos') || lower.includes('.10')) return 'Docker DB';
+  if (lower.includes('servidor web') || lower.includes('web-server') || lower.includes('.11')) return 'Docker Web';
+  if (lower.includes('nas') || lower.includes('almacenamiento') || lower.includes('.15')) return 'NAS Backup';
+  if (lower.includes('impresora') || lower.includes('printer') || lower.includes('.22')) return 'Impresora';
+  if (lower.includes('ubuntu') || lower.includes('vm') || lower.includes('.200')) return 'VM Ubuntu';
+  if (lower.includes('este pc') || lower.includes('estación de trabajo') || lower.includes('.55')) return 'Este PC';
+  
+  return name.length > 18 ? name.substring(0, 15) + '...' : name;
+};
+
 export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
   // Toggle between 'topology' and 'grid'
   const [viewMode, setViewMode] = useState<'topology' | 'grid'>('topology');
+  const [useOwnNames, setUseOwnNames] = useState<boolean>(true);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [hoveredGridId, setHoveredGridId] = useState<string | null>(null);
 
@@ -41,166 +63,156 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
     return '192.168.1';
   }, [devices]);
 
-  // Define static coordinates for symmetrical hierarchical tree
-  // Width: 920, Height: 410. Symmetrical pivot points.
+  // Define active coordinates and layout dynamically
   const topologyNodes: TopologyNode[] = useMemo(() => {
     const base = currentSubnetBase;
-    return [
-      // Layer 0: Public Connection
-      { id: 'wan', label: 'Internet Público (WAN)', type: 'cloud', x: 430, y: 35 },
-      // Layer 1: Core Router
-      { 
-        id: `${base}.1`, 
-        label: 'Router Gateway', 
-        ip: `${base}.1`, 
-        type: 'router', 
-        x: 430, 
-        y: 100, 
-        parent: 'wan', 
-        linkType: 'fiber', 
-        interfaceName: 'WAN SFP+ GPON' 
-      },
-      
-      // Layer 2: Distributors / Access Points
-      { 
-        id: 'ap', 
-        label: 'WiFi AP Central', 
-        type: 'ap', 
-        x: 190, 
-        y: 195, 
-        parent: `${base}.1`, 
-        linkType: 'ethernet', 
-        interfaceName: 'ETH Port 2 (PoE)' 
-      },
-      { 
-        id: 'switch', 
-        label: 'Switch Principal LAN', 
-        type: 'switch', 
-        x: 430, 
-        y: 195, 
-        parent: `${base}.1`, 
-        linkType: 'ethernet', 
-        interfaceName: 'ETH Port 1 (10G)' 
-      },
-      { 
-        id: `${base}.55`, 
-        label: 'DESKTOP-FS211HD (Este PC)', 
-        ip: `${base}.55`, 
-        type: 'desktop', 
-        x: 710, 
-        y: 195, 
-        parent: 'switch', 
-        linkType: 'ethernet', 
-        interfaceName: 'Port LAN 4' 
-      },
 
-      // Layer 3: Endpoints
-      // WiFi clients connected via central AP (centered around AP: 190)
-      { 
-        id: `${base}.70`, 
-        label: 'Alexa-LivingRoom', 
-        ip: `${base}.70`, 
-        type: 'iot', 
-        x: 110, 
-        y: 330, 
-        parent: 'ap', 
-        linkType: 'wifi', 
-        interfaceName: 'WLAN Living 5G' 
-      },
-      { 
-        id: `${base}.102`, 
-        label: 'Hacienda-IOT-Hub', 
-        ip: `${base}.102`, 
-        type: 'iot', 
-        x: 230, 
-        y: 330, 
-        parent: 'ap', 
-        linkType: 'wifi', 
-        interfaceName: 'WLAN IOT 2.4G' 
-      },
+    // Helper to check device state (returns true if active: 'OK' or 'Advertencia')
+    const isActiveDevice = (ip: string) => {
+      const d = devices.find(x => x.ip === ip);
+      return d ? (d.estado === 'OK' || d.estado === 'Advertencia') : false;
+    };
 
-      // Physical LAN devices connected to Switch (symmetrical centered around Switch: 430)
-      { 
-        id: `${base}.38`, 
-        label: 'Smart-TV LAN', 
-        ip: `${base}.38`, 
-        type: 'tv', 
-        x: 310, 
-        y: 330, 
-        parent: 'switch', 
-        linkType: 'ethernet', 
-        interfaceName: 'Port LAN 3' 
-      },
-      { 
-        id: `${base}.40`, 
-        label: 'Console-PS5', 
-        ip: `${base}.40`, 
-        type: 'gaming', 
-        x: 395, 
-        y: 330, 
-        parent: 'switch', 
-        linkType: 'ethernet', 
-        interfaceName: 'Port LAN 5' 
-      },
-      { 
-        id: `${base}.15`, 
-        label: 'NAS-Backup', 
-        ip: `${base}.15`, 
-        type: 'nas', 
-        x: 480, 
-        y: 330, 
-        parent: 'switch', 
-        linkType: 'ethernet', 
-        interfaceName: 'Port LAN 6' 
-      },
-      { 
-        id: `${base}.22`, 
-        label: 'HP-LaserJet-MFP', 
-        ip: `${base}.22`, 
-        type: 'printer', 
-        x: 565, 
-        y: 330, 
-        parent: 'switch', 
-        linkType: 'ethernet', 
-        interfaceName: 'Port LAN 8' 
-      },
+    // 1. Identify active endpoints at Layer 3
+    const activeWifiClients: any[] = [
+      { id: `${base}.70`, label: 'Dispositivo IoT (DHCP .70)', ip: `${base}.70`, type: 'iot' as const, parent: 'ap', linkType: 'wifi' as const, interfaceName: 'WLAN Living 5G' },
+      { id: `${base}.102`, label: 'Módulo IoT (DHCP .102)', ip: `${base}.102`, type: 'iot' as const, parent: 'ap', linkType: 'wifi' as const, interfaceName: 'WLAN IOT 2.4G' }
+    ].filter(n => isActiveDevice(n.ip));
 
-      // Virtual services hosts inside Desktop PC (symmetrical centered around Desktop: 710)
-      { 
-        id: `${base}.10`, 
-        label: 'DATABASE-PROD (Docker)', 
-        ip: `${base}.10`, 
-        type: 'server', 
-        x: 650, 
-        y: 330, 
-        parent: `${base}.55`, 
-        linkType: 'virtual', 
-        interfaceName: 'docker-veth0' 
-      },
-      { 
-        id: `${base}.11`, 
-        label: 'WEB-SERVER-01 (Docker)', 
-        ip: `${base}.11`, 
-        type: 'server', 
-        x: 730, 
-        y: 330, 
-        parent: `${base}.55`, 
-        linkType: 'virtual', 
-        interfaceName: 'docker-veth1' 
-      },
-      { 
-        id: `${base}.200`, 
-        label: 'VM-Ubuntu-Devel', 
-        ip: `${base}.200`, 
-        type: 'server', 
-        x: 810, 
-        y: 330, 
-        parent: `${base}.55`, 
-        linkType: 'virtual', 
-        interfaceName: 'vboxnet0' 
-      }
-    ];
-  }, [currentSubnetBase]);
+    const activeSwitchClients: any[] = [
+      { id: `${base}.38`, label: 'Dispositivo LAN (DHCP .38)', ip: `${base}.38`, type: 'tv' as const, parent: 'switch', linkType: 'ethernet' as const, interfaceName: 'Port LAN 3' },
+      { id: `${base}.40`, label: 'Dispositivo LAN (DHCP .40)', ip: `${base}.40`, type: 'gaming' as const, parent: 'switch', linkType: 'ethernet' as const, interfaceName: 'Port LAN 5' },
+      { id: `${base}.15`, label: 'Almacenamiento de Red (NAS)', ip: `${base}.15`, type: 'nas' as const, parent: 'switch', linkType: 'ethernet' as const, interfaceName: 'Port LAN 6' },
+      { id: `${base}.22`, label: 'Impresora de Red', ip: `${base}.22`, type: 'printer' as const, parent: 'switch', linkType: 'ethernet' as const, interfaceName: 'Port LAN 8' }
+    ].filter(n => isActiveDevice(n.ip));
+
+    const activeVirtualClients: any[] = [
+      { id: `${base}.10`, label: 'Base de Datos (Docker DB)', ip: `${base}.10`, type: 'server' as const, parent: `${base}.55`, linkType: 'virtual' as const, interfaceName: 'docker-veth0' },
+      { id: `${base}.11`, label: 'Servidor Web (Docker)', ip: `${base}.11`, type: 'server' as const, parent: `${base}.55`, linkType: 'virtual' as const, interfaceName: 'docker-veth1' },
+      { id: `${base}.200`, label: 'Máquina Virtual (VM Ubuntu)', ip: `${base}.200`, type: 'server' as const, parent: `${base}.55`, linkType: 'virtual' as const, interfaceName: 'vboxnet0' }
+    ].filter(n => isActiveDevice(n.ip));
+
+    const hasVirtuals = activeVirtualClients.length > 0;
+    const hasWifi = activeWifiClients.length > 0;
+
+    const desktopNodeVal = {
+      id: `${base}.55`,
+      label: 'Estación de Trabajo (Este PC)',
+      ip: `${base}.55`,
+      type: 'desktop' as const,
+      interfaceName: 'Port LAN 4'
+    };
+
+    const nodes: TopologyNode[] = [];
+
+    // WAN Router (Layer 0) - Always present, centered at 460
+    nodes.push({ id: 'wan', label: 'Internet Público (WAN)', type: 'cloud' as const, x: 460, y: 35 });
+
+    // Router Gateway (Layer 1) - Always present, centered at 460
+    nodes.push({
+      id: `${base}.1`,
+      label: 'Router Gateway',
+      ip: `${base}.1`,
+      type: 'router' as const,
+      x: 460,
+      y: 100,
+      parent: 'wan',
+      linkType: 'fiber' as const,
+      interfaceName: 'WAN SFP+ GPON'
+    });
+
+    // --- POD A: WI-FI AP & CLIENTS (Left pod, centered at x = 190) ---
+    if (hasWifi) {
+      nodes.push({
+        id: 'ap',
+        label: 'WiFi AP Central',
+        type: 'ap' as const,
+        x: 190,
+        y: 195,
+        parent: `${base}.1`,
+        linkType: 'ethernet' as const,
+        interfaceName: 'ETH Port 2 (PoE)'
+      });
+
+      const countWifi = activeWifiClients.length;
+      const wifiSpacing = 110; // Increased spacing to spread clients further apart
+      const startXWifi = 190 - (wifiSpacing * (countWifi - 1)) / 2;
+      activeWifiClients.forEach((client, idx) => {
+        // Stagger Y position slightly to prevent horizontal line crowding
+        const staggerY = countWifi > 1 ? (idx % 2 === 0 ? 320 : 348) : 332;
+        nodes.push({
+          ...client,
+          x: startXWifi + idx * wifiSpacing,
+          y: staggerY
+        });
+      });
+    }
+
+    // --- POD C: DESKTOP & VIRTUAL CLIENTS (Right pod, centered at x = 730) ---
+    if (hasVirtuals) {
+      nodes.push({
+        ...desktopNodeVal,
+        id: `${base}.55`,
+        x: 730,
+        y: 195,
+        parent: 'switch',
+        linkType: 'ethernet' as const
+      });
+
+      const countVM = activeVirtualClients.length;
+      const vmSpacing = 95; // Increased spacing to spread VM clients
+      const startXVM = 730 - (vmSpacing * (countVM - 1)) / 2;
+      activeVirtualClients.forEach((client, idx) => {
+        // Stagger Y position for virtual clients (e.g. alternating higher/lower)
+        const staggerY = countVM > 1 ? (idx % 2 === 0 ? 320 : 348) : 332;
+        nodes.push({
+          ...client,
+          x: startXVM + idx * vmSpacing,
+          y: staggerY
+        });
+      });
+    }
+
+    // --- POD B: SWITCH & ITS CLIENTS (Center pod, centered at x = 460) ---
+    nodes.push({
+      id: 'switch',
+      label: 'Switch Principal LAN',
+      type: 'switch' as const,
+      x: 460,
+      y: 195,
+      parent: `${base}.1`,
+      linkType: 'ethernet' as const,
+      interfaceName: 'ETH Port 1 (10G)'
+    });
+
+    const switchEndpoints = [...activeSwitchClients];
+    if (!hasVirtuals) {
+      // If there are no VM active, Desktop PC is just a direct LAN client of the Switch at Layer 3
+      switchEndpoints.push({
+        ...desktopNodeVal,
+        id: `${base}.55`,
+        parent: 'switch',
+        linkType: 'ethernet' as const
+      });
+    }
+
+    const countSwitchClients = switchEndpoints.length;
+    if (countSwitchClients > 0) {
+      const switchSpacing = 95; // Increased spacing to prevent overlapping
+      const startXSwitch = 460 - (switchSpacing * (countSwitchClients - 1)) / 2;
+      switchEndpoints.forEach((client, idx) => {
+        // Alternate stagger switch clients Y coordinate to prevent overlap
+        const staggerY = countSwitchClients > 1 ? (idx % 2 === 0 ? 348 : 320) : 332;
+        nodes.push({
+          ...client,
+          x: startXSwitch + idx * switchSpacing,
+          y: staggerY
+        });
+      });
+    }
+
+    return nodes;
+  }, [currentSubnetBase, devices]);
 
   // Compute upstream diagnostic path to highlight route to server
   const activeUpstreamPath = useMemo(() => {
@@ -271,31 +283,63 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
         </div>
 
         {/* CONTROLS TOGGLE */}
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase font-bold text-slate-500 font-mono hidden md:inline">Vista de Red:</span>
-          <div className="flex bg-slate-950 rounded p-0.5 border border-slate-800 leading-none text-[11px]">
-            <button
-              onClick={() => setViewMode('topology')}
-              className={`px-3 py-1.5 rounded-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
-                viewMode === 'topology' 
-                  ? 'bg-cyan-500 text-slate-950 font-bold' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <Network className="h-3.5 w-3.5" />
-              <span>Topología Interactiva</span>
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`px-3 py-1.5 rounded-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
-                viewMode === 'grid' 
-                  ? 'bg-cyan-500 text-slate-950 font-bold' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-850'
-              }`}
-            >
-              <Grid className="h-3.5 w-3.5" />
-              <span>Grilla Subred IP</span>
-            </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {viewMode === 'topology' && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase font-bold text-slate-500 font-mono hidden lg:inline">Etiquetas Mapa:</span>
+              <div className="flex bg-slate-950 rounded p-0.5 border border-slate-800 leading-none text-[11px]">
+                <button
+                  onClick={() => setUseOwnNames(false)}
+                  className={`px-2.5 py-1.5 rounded-xs font-semibold cursor-pointer transition-all ${
+                    !useOwnNames 
+                      ? 'bg-slate-800 text-cyan-400 font-bold border border-slate-700/80 shadow-md' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Mostrar apodos técnicos sintetizados (Smart TV, PS5, etc.)"
+                >
+                  Nombres Cortos
+                </button>
+                <button
+                  onClick={() => setUseOwnNames(true)}
+                  className={`px-2.5 py-1.5 rounded-xs font-semibold cursor-pointer transition-all ${
+                    useOwnNames 
+                      ? 'bg-slate-800 text-cyan-400 font-bold border border-slate-700/80 shadow-md' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Mostrar los nombres reales de los de dispositivos escaneados o personalizados por ti"
+                >
+                  Nombres Reales
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase font-bold text-slate-500 font-mono hidden md:inline">Vista de Red:</span>
+            <div className="flex bg-slate-950 rounded p-0.5 border border-slate-800 leading-none text-[11px]">
+              <button
+                onClick={() => setViewMode('topology')}
+                className={`px-3 py-1.5 rounded-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
+                  viewMode === 'topology' 
+                    ? 'bg-cyan-500 text-slate-950 font-bold' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-850'
+                }`}
+              >
+                <Network className="h-3.5 w-3.5" />
+                <span>Topología Interactiva</span>
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1.5 rounded-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
+                  viewMode === 'grid' 
+                    ? 'bg-cyan-500 text-slate-950 font-bold' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-850'
+                }`}
+              >
+                <Grid className="h-3.5 w-3.5" />
+                <span>Grilla Subred IP</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -675,25 +719,31 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
                     {/* Host Friendly Name Header Label text block */}
                     <text
                       x={node.x}
-                      y={node.y + 27}
+                      y={node.y + 24}
                       textAnchor="middle"
-                      className={`font-sans font-medium select-none pointer-events-none text-[10px] transition-colors duration-200 ${
+                      className={`font-sans font-medium select-none pointer-events-none text-[9.5px] transition-colors duration-200 ${
                         isHovered ? 'fill-cyan-400 font-semibold' : 'fill-slate-300'
                       }`}
                     >
-                      {device && device.host !== '—' 
-                        ? device.host 
-                        : (isDown 
-                            ? 'Segmento Inactivo' 
-                            : node.label
-                          )
+                      {useOwnNames
+                        ? (device && device.host !== '—'
+                          ? (device.host.length > 18 ? device.host.substring(0, 16) + '...' : device.host)
+                          : (isDown ? 'Segmento Inactivo' : (node.label.length > 18 ? node.label.substring(0, 16) + '...' : node.label))
+                        )
+                        : (device && device.host !== '—' 
+                          ? getShortHostName(device.host) 
+                          : (isDown 
+                              ? 'Segmento Inactivo' 
+                              : getShortHostName(node.label)
+                            )
+                        )
                       }
                     </text>
 
                     {/* Host Sub-metric or IP details centered below label */}
                     <text
                       x={node.x}
-                      y={node.y + 37}
+                      y={node.y + 34}
                       textAnchor="middle"
                       className="font-mono text-[8px] fill-slate-500 font-normal select-none pointer-events-none transition-colors"
                     >

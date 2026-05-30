@@ -1129,10 +1129,62 @@ export default function App() {
                   }`}>
                     <Activity className="h-5 w-5" />
                   </div>
-                  <div className="text-left">
-                    <h4 className="font-semibold text-slate-200 text-xs text-left">
-                      {activeDiagDevice.host !== '—' ? activeDiagDevice.host : 'Host Inactivo'}
-                    </h4>
+                  <div className="text-left flex-1">
+                    {isEditingName ? (
+                      <div className="flex items-center gap-1.5 w-full">
+                        <input
+                          type="text"
+                          value={tempName}
+                          onChange={(e) => setTempName(e.target.value)}
+                          className="bg-slate-900 border border-slate-750 text-slate-200 text-[11px] px-2 py-0.5 rounded focus:outline-hidden focus:border-cyan-500 w-full"
+                          maxLength={32}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleRenameDevice(activeDiagDevice.id, tempName);
+                              setIsEditingName(false);
+                            } else if (e.key === 'Escape') {
+                              setIsEditingName(false);
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => {
+                            handleRenameDevice(activeDiagDevice.id, tempName);
+                            setIsEditingName(false);
+                          }}
+                          className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold px-2 py-0.5 text-[10px] rounded transition-colors cursor-pointer shrink-0"
+                        >
+                          OK
+                        </button>
+                        <button
+                          onClick={() => setIsEditingName(false)}
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-1.5 py-0.5 text-[10px] rounded transition-colors cursor-pointer shrink-0"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 group/title">
+                        <h4 className="font-semibold text-slate-200 text-xs text-left">
+                          {activeDiagDevice.host !== '—' ? activeDiagDevice.host : 'Host Inactivo'}
+                        </h4>
+                        {activeDiagDevice.estado !== 'No_Escaneado' && (
+                          <button
+                            onClick={() => {
+                              setTempName(activeDiagDevice.host !== '—' ? activeDiagDevice.host : '');
+                              setIsEditingName(true);
+                            }}
+                            className="text-slate-500 hover:text-cyan-400 p-0.5 transition-colors cursor-pointer opacity-70 group-hover/title:opacity-100"
+                            title="Editar apodo del host"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <p className="text-[10px] text-slate-500 font-mono text-left">{activeDiagDevice.ip}</p>
                   </div>
                   <div className="ml-auto text-right">
