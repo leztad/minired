@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Network, Activity, Cpu, Server, Search, RefreshCw, Sliders, Globe, Clock, 
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
@@ -37,6 +37,76 @@ export default function App() {
     return localStorage.getItem('netmonitor_manual_ip') || '';
   });
   const [isEditingRealIp, setIsEditingRealIp] = useState<boolean>(false);
+
+  // Real internet / hardware link network status and physical cable simulator toggle
+  const [isBrowserOnline, setIsBrowserOnline] = useState<boolean>(navigator.onLine);
+  const [isCablePhysicallyConnected, setIsCablePhysicallyConnected] = useState<boolean>(true);
+  
+  const isNetworkOffline = !isBrowserOnline || !isCablePhysicallyConnected;
+
+  // Refs to store interval handlers for safe mid-scan interruptions on link down
+  const scanTimerRef = useRef<any>(null);
+  const portScanTimerRef = useRef<any>(null);
+
+  // Synchronize on/off-line state of the client browser
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsBrowserOnline(true);
+      addAlert("🔌 Enlace de red detectado: El adaptador local vuelve a estar ONLINE.", "success");
+    };
+    const handleOffline = () => {
+      setIsBrowserOnline(false);
+      addAlert("🔌 ENLACE FÍSICO CAÍDO: Tu adaptador de red (Cable o Wi-Fi) se ha desconectado físicamente.", "error");
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Monitor offline state and trigger network shutdown if disconnected
+  useEffect(() => {
+    if (isNetworkOffline) {
+      // Direct action: If scanning we abort immediately!
+      setIsScanning(prev => {
+        if (prev) {
+          addAlert("⚠️ Barrido ICMP abortado: El adaptador de red seleccionado perdió el enlace físico.", "error");
+        }
+        return false;
+      });
+
+      if (scanTimerRef.current) {
+        clearInterval(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+
+      // Interrupt Port Scanning if any
+      setPortScanStatus(prev => {
+        if (prev === 'scanning') {
+          addAlert("⚠️ Escaneo de puertos TCP interrumpido: Se requiere enlace de hardware.", "error");
+          return 'idle';
+        }
+        return prev;
+      });
+
+      if (portScanTimerRef.current) {
+        clearInterval(portScanTimerRef.current);
+        portScanTimerRef.current = null;
+      }
+
+      // Force offline/down status across all mapped nodes
+      setDevices(prev => prev.map(d => ({
+        ...d,
+        estado: 'Caído' as const,
+        ping: null,
+        consumoDownload: 0,
+        consumoUpload: 0
+      })));
+    }
+  }, [isNetworkOffline]);
 
   // General simulator state
   const [includeVirtuals, setIncludeVirtuals] = useState<boolean>(false);
@@ -228,6 +298,10 @@ export default function App() {
 
   const handleStartPortScan = (deviceIp: string) => {
     if (portScanStatus === 'scanning') return;
+    if (isNetworkOffline) {
+      addAlert("⚠️ ERROR DE CONEXIÓN: No puedes escanear puertos TCP de un host si el enlace físico está desconectado.", "error");
+      return;
+    }
     setPortScanStatus('scanning');
     setPortScanProgress(0);
     setPortScanResults([]);
@@ -251,6 +325,7 @@ export default function App() {
     const scanInterval = setInterval(() => {
       if (currentIndex >= portsToScan.length) {
         clearInterval(scanInterval);
+        portScanTimerRef.current = null;
         setPortScanStatus('done');
         setActiveScanningPort(null);
         setPortScanProgress(100);
@@ -299,6 +374,8 @@ export default function App() {
 
       currentIndex++;
     }, 280);
+
+    portScanTimerRef.current = scanInterval;
   };
 
   // Update clock
@@ -400,6 +477,30 @@ export default function App() {
     if (!lastScanDone || isScanning) return;
 
     const interval = setInterval(() => {
+      if (isNetworkOffline) {
+        // Force all device listings and rates to 0 while offline is active
+        setDevices(prevDevices => {
+          return prevDevices.map(d => ({
+            ...d,
+            ping: null,
+            estado: 'Caído' as const,
+            consumoDownload: 0,
+            consumoUpload: 0
+          }));
+        });
+        setBandwidthHistory(prevHist => {
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+          const newPoint = {
+            timeLabels: timeStr,
+            downTotal: 0,
+            upTotal: 0
+          };
+          return [...prevHist, newPoint].slice(-16);
+        });
+        return;
+      }
+
       // 1. Decrement simulation countdown if active
       let activeSim = trafficGeneratorActive;
       if (activeSim) {
@@ -525,7 +626,7 @@ export default function App() {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [lastScanDone, isScanning, trafficGeneratorActive]);
+  }, [lastScanDone, isScanning, trafficGeneratorActive, isNetworkOffline]);
 
   const handleTriggerTraffic = (ip: string, profile: string) => {
     setTrafficGeneratorActive({
@@ -555,6 +656,10 @@ export default function App() {
   // Perform Network Scan Simulation (supporting multi-segment sequential scan of all configured subnets)
   const handleStartScan = () => {
     if (isScanning) return;
+    if (isNetworkOffline) {
+      addAlert("⚠️ ERROR DE INTERFAZ FÍSICA: El adaptador de red seleccionado reporta cable desconectado o Wi-Fi apagado. Conecta tu red física para poder realizar barridos.", "error");
+      return;
+    }
     setIsScanning(true);
     setScanProgress(0);
     setScannedIndex(0);
@@ -575,6 +680,7 @@ export default function App() {
       })
       .catch(err => {
         console.warn("ARP real host scanner skipped (sandboxed background controller active):", err);
+        addAlert("🔌 Sonda física offline: No se pudo contactar al router real de la LAN. Operando en modo de simulación segura de hardware.", "warning");
       });
 
     addAlert(`Iniciando escaneo secuencial ICMP en ${segmentsToScan.length} segmento(s) registrado(s) para ${selectedInterface}...`, 'info');
@@ -694,6 +800,7 @@ export default function App() {
 
       if (stepCount >= totalSteps) {
         clearInterval(timer);
+        scanTimerRef.current = null;
 
         // Apply final state to ALL segments scanned
         setDevices(prev => {
@@ -805,6 +912,8 @@ export default function App() {
         });
       }
     }, intervalStep);
+
+    scanTimerRef.current = timer;
   };
 
   // Preset Segment scan autofills
@@ -1044,6 +1153,27 @@ export default function App() {
                 </span>
               )}
             </div>
+
+            {/* Interactive Physical Link status controller (Unplug Wifi/Ethernet) */}
+            <button
+              onClick={() => {
+                setIsCablePhysicallyConnected(prev => {
+                  const nextState = !prev;
+                  addAlert(nextState ? "🔌 Capa física simulada: CABLE DE RED CONECTADO / WIFI ACTIVO." : "🔌 Capa física simulada: CABLE DE RED DESCONECTADO / WIFI DESACTIVADO. Alarma activada.", nextState ? "success" : "error");
+                  return nextState;
+                });
+              }}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[11px] font-mono font-medium transition-all cursor-pointer h-[24px] ${
+                isNetworkOffline 
+                  ? 'bg-rose-500/15 border-rose-500/40 text-rose-300 hover:bg-rose-500/25' 
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+              }`}
+              title="Estatus físico del hardware de red. Haz clic para simular que desconectas el cable Ethernet o apagas la antena Wi-Fi de tu portátil."
+            >
+              <Cable className="h-3.5 w-3.5" />
+              <span>{isNetworkOffline ? 'Enlace: CAÍDO 🔌' : 'Enlace: OK ✔'}</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${isNetworkOffline ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`} />
+            </button>
           </div>
 
           {/* CHECKBOX Virtuales */}
@@ -1127,6 +1257,28 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* ALERTA ENLACE CAÍDO INTERFAZ FÍSICA / NAVEGADOR OFFLINE */}
+      {isNetworkOffline && (
+        <div className="bg-red-500/10 border-b border-rose-950 px-4 py-2 flex flex-col md:flex-row items-center justify-between gap-3 text-xs animate-pulse text-red-300">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-rose-500 shrink-0 animate-bounce" />
+            <div>
+              <span className="font-bold uppercase tracking-wide text-rose-450 pr-1">⚠️ Error de Capa Física / Enlace de Red:</span> 
+              La interfaz <span className="font-mono text-white bg-red-950/40 px-1 py-0.5 rounded border border-rose-900/30 font-semibold">{selectedInterface}</span> reporta cable desconectado o Wi-Fi apagado. Las lecturas en vivo e ICMP están congeladas y reportan pérdida total.
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setIsCablePhysicallyConnected(true);
+              addAlert("Conectando de nuevo el cable virtual de red física.", "success");
+            }}
+            className="text-[10px] bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-rose-200 hover:text-white px-2.5 py-1 rounded font-bold cursor-pointer transition-all shrink-0"
+          >
+            Reconectar Cable
+          </button>
+        </div>
+      )}
 
       {/* BREADCRUMBS SECONDARY ROW */}
       <nav className="bg-[#0B1120] text-[11px] text-slate-400 px-4 py-1.5 border-b border-slate-800 flex items-center justify-between select-none shadow-xs font-medium">
