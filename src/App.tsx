@@ -17,17 +17,108 @@ import TestingCenter from './components/TestingCenter';
 import BandwidthMonitor from './components/BandwidthMonitor';
 import NetworkAICopilot from './components/NetworkAICopilot';
 
+const extractSubnetFromIp = (ip: string): string => {
+  const parts = ip.trim().split('.');
+  if (parts.length === 4) {
+    if (parts[0] === '172' && parts[1] === '17') {
+      return '172.17.0.0/16';
+    }
+    return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+  }
+  return '';
+};
+
 export default function App() {
+  // User physical / manual laptop IP override setup
+  const [deviceManualIp, setDeviceManualIp] = useState<string>(() => {
+    return localStorage.getItem('netmonitor_manual_ip') || '';
+  });
+  const [tempIpVal, setTempIpVal] = useState<string>(() => {
+    return localStorage.getItem('netmonitor_manual_ip') || '';
+  });
+  const [isEditingRealIp, setIsEditingRealIp] = useState<boolean>(false);
+
   // General simulator state
   const [includeVirtuals, setIncludeVirtuals] = useState<boolean>(false);
   const [subnetSegment, setSubnetSegment] = useState<string>('192.168.1.0/24');
-  const [selectedInterface, setSelectedInterface] = useState<string>('Realtek PCIe GbE Family Controller');
+  const [selectedInterface, setSelectedInterface] = useState<string>('Intel Wi-Fi 6E AX211 @ 802.11ax');
+  const [serverInterfaces, setServerInterfaces] = useState<any[]>([]);
+
+  // Dynamically populated interface config listing real hardware and falling back to virtual / presets
+  const activeInterfacesList = useMemo(() => {
+    // 1. Simulated physical network adapters representing typical laptop/desktop network cards
+    const simulatedHardwareList = INTERFACES_CONFIG.map(i => {
+      let ip = "192.168.1.55";
+      if (i.name.includes("Wi-Fi") || i.type === "Wi-Fi") {
+        ip = "192.168.100.55";
+      } else if (i.name.includes("Loopback") || i.type === "Virtual") {
+        ip = "172.17.0.55";
+      }
+
+      // Keep dynamic manual laptop IP inside the chosen physical interface context
+      let segments = [...i.segments];
+      if (deviceManualIp) {
+        const trimmed = deviceManualIp.trim();
+        const customSeg = extractSubnetFromIp(trimmed);
+        
+        if (customSeg && !segments.includes(customSeg)) {
+          segments = [customSeg, ...segments];
+        }
+        
+        // Match base segment or first segment
+        const activeSeg = subnetSegment || segments[0];
+        if (customSeg === activeSeg) {
+          ip = trimmed;
+        } else if (segments.includes(customSeg)) {
+          ip = trimmed;
+        }
+      }
+
+      return {
+        name: i.name,
+        type: i.type,
+        segments: segments,
+        ip,
+        mac: "84:C8:A0:BB:AB:66",
+        netmask: "255.255.255.0",
+        subnet: segments[0] || "192.168.1.0/24"
+      };
+    });
+
+    // 2. Real hosting server interfaces from Cloud Run
+    const cloudServerList = (serverInterfaces || []).map(i => ({
+      name: `Servidor en la Nube - ${i.name}`,
+      type: i.type,
+      segments: i.segments,
+      ip: i.ip,
+      mac: i.mac,
+      netmask: i.netmask,
+      subnet: i.subnet
+    }));
+
+    return [...simulatedHardwareList, ...cloudServerList];
+  }, [serverInterfaces, deviceManualIp, subnetSegment]);
+
+  useEffect(() => {
+    fetch('/api/interfaces')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setServerInterfaces(data);
+          addAlert(`Plataforma en la nube: Detectadas ${data.length} interfaces de hardware en el contenedor de ejecución.`, 'info');
+        }
+      })
+      .catch(err => {
+        console.warn("Could not load dynamic interfaces, falling back to simulator defaults:", err);
+      });
+  }, []);
+
   const [scanAllSegments, setScanAllSegments] = useState<boolean>(true);
   const [viewedSegmentFilter, setViewedSegmentFilter] = useState<string>('all');
   const [currentScanningSegName, setCurrentScanningSegName] = useState<string>('');
   const [selectedInterval, setSelectedInterval] = useState<string>('1 minuto');
   const [currentTime, setCurrentTime] = useState<string>('');
-  
+
   // Subnet calculator state
   const [calcIp, setCalcIp] = useState<string>('192.168.1.0');
   const [calcCidr, setCalcCidr] = useState<number>(24);
@@ -223,21 +314,37 @@ export default function App() {
 
   // Synchronize interface segments on interface change
   useEffect(() => {
-    const currentInterfaceObj = INTERFACES_CONFIG.find(i => i.name === selectedInterface) || INTERFACES_CONFIG[0];
-    const segments = currentInterfaceObj.segments;
+    const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+    let segments = [...currentInterfaceObj.segments];
     
+    // Incorporate manual IP's subnet segment if configured
+    if (deviceManualIp) {
+      const customSeg = extractSubnetFromIp(deviceManualIp);
+      if (customSeg && !segments.includes(customSeg)) {
+        segments = [customSeg, ...segments];
+      }
+    }
+
     // Auto sync viewedSegmentFilter state and subnet segment inputs
     setViewedSegmentFilter('all');
     if (segments.length > 0) {
       setSubnetSegment(segments[0]);
     }
-  }, [selectedInterface]);
+  }, [selectedInterface, deviceManualIp, activeInterfacesList]);
 
   // Unified empty pool initializer based on selectedInterface and raw inputs
   useEffect(() => {
-    const currentInterfaceObj = INTERFACES_CONFIG.find(i => i.name === selectedInterface) || INTERFACES_CONFIG[0];
+    const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
     let segments = [...currentInterfaceObj.segments];
     
+    // Add manual IP segment if configured
+    if (deviceManualIp) {
+      const customSeg = extractSubnetFromIp(deviceManualIp);
+      if (customSeg && !segments.includes(customSeg)) {
+        segments = [customSeg, ...segments];
+      }
+    }
+
     // Fallback: if the user dynamically entered a custom subnet segment that's not in the default list,
     // add it as a segment context so it can be initialized and scanned!
     if (subnetSegment && !segments.includes(subnetSegment)) {
@@ -249,15 +356,25 @@ export default function App() {
       const base = seg.replace(/\.0\/24$/, '').replace(/\.0\/16$/, '');
       const subnetPool = Array.from({ length: 254 }, (_, idx) => {
         const i = idx + 1;
+        const currentIp = `${base}.${i}`;
+        const isCustomWorkstation = deviceManualIp ? (currentIp === deviceManualIp.trim()) : (i === 55);
+
+        let workstationName = 'Laptop de Trabajo (Este PC)';
+        if (selectedInterface.includes('PCIe')) {
+          workstationName = 'Estación de Trabajo (Este PC)';
+        } else if (selectedInterface.includes('Loopback') || selectedInterface.includes('Virtual')) {
+          workstationName = 'Nodo Docker Host (Este PC)';
+        }
+
         return {
           id: `host-${base.replace(/\./g, '_')}-${i}`,
-          ip: `${base}.${i}`,
-          host: '—',
-          mac: '—',
+          ip: currentIp,
+          host: isCustomWorkstation ? workstationName : '—',
+          mac: isCustomWorkstation ? '84:C8:A0:BB:AB:66' : '—',
           ping: null,
           estado: 'No_Escaneado' as const,
           lastChecked: null,
-          sensorPing: false,
+          sensorPing: isCustomWorkstation,
           interfaz: selectedInterface,
           segmento: seg,
         };
@@ -270,7 +387,7 @@ export default function App() {
     setLastScanDone(false);
     setLastScanTimeStr(null);
     setScanDurationSec(null);
-  }, [selectedInterface, subnetSegment]);
+  }, [selectedInterface, subnetSegment, deviceManualIp, activeInterfacesList]);
 
   // Handle active states if Virtuales changes, ask to scan again
   const handleVirtualsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -442,8 +559,23 @@ export default function App() {
     setScanProgress(0);
     setScannedIndex(0);
 
-    const currentInterfaceObj = INTERFACES_CONFIG.find(i => i.name === selectedInterface) || INTERFACES_CONFIG[0];
+    const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
     const segmentsToScan = scanAllSegments ? currentInterfaceObj.segments : [subnetSegment];
+
+    let realHosts: any[] = [];
+    fetch('/api/scan-real-arp')
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.devices)) {
+          realHosts = data.devices;
+          if (realHosts.length > 0) {
+            addAlert(`Sonda ARP física completada: Se encontraron ${realHosts.length} dispositivos reales conectados en tu misma red local.`, 'success');
+          }
+        }
+      })
+      .catch(err => {
+        console.warn("ARP real host scanner skipped (sandboxed background controller active):", err);
+      });
 
     addAlert(`Iniciando escaneo secuencial ICMP en ${segmentsToScan.length} segmento(s) registrado(s) para ${selectedInterface}...`, 'info');
 
@@ -453,10 +585,76 @@ export default function App() {
     const totalSteps = totalStepsPerSegment * segmentsToScan.length;
     const intervalStep = 100; // total: ~1.2s per subnet, super responsive!
 
-    // Generate final target pools for all selected segments
+    // Generate final target pools for all selected segments with custom manual IP overrides
     const finalTargetsMap: Record<string, Device[]> = {};
     segmentsToScan.forEach(seg => {
-      finalTargetsMap[seg] = generateFullSubnet(seg, includeVirtuals, selectedInterface);
+      const rawTargets = generateFullSubnet(seg, includeVirtuals, selectedInterface);
+      if (deviceManualIp) {
+        const trimmedManualIp = deviceManualIp.trim();
+        const manualSubnet = extractSubnetFromIp(trimmedManualIp);
+        const isIpInThisSegment = seg === manualSubnet;
+
+        if (isIpInThisSegment) {
+          finalTargetsMap[seg] = rawTargets.map(d => {
+            if (d.ip === trimmedManualIp) {
+              let workstationName = 'Laptop de Trabajo (Este PC)';
+              if (selectedInterface.includes('PCIe')) {
+                workstationName = 'Estación de Trabajo (Este PC)';
+              } else if (selectedInterface.includes('Loopback') || selectedInterface.includes('Virtual')) {
+                workstationName = 'Nodo Docker Host (Este PC)';
+              }
+
+              return {
+                ...d,
+                host: workstationName,
+                mac: '84:C8:A0:BB:AB:66',
+                ping: 3,
+                estado: 'OK' as const,
+                sensorPing: true,
+                consumoDownload: 8.5,
+                consumoUpload: 2.1,
+                totalConsumido: 1120.0
+              };
+            }
+            // Clear default .55 preset to prevent duplicates
+            const parts = d.ip.split('.');
+            if (parts[3] === '55' && d.ip !== trimmedManualIp) {
+              return {
+                ...d,
+                host: '—',
+                mac: '—',
+                ping: null,
+                estado: 'Caído' as const,
+                sensorPing: false,
+                consumoDownload: 0,
+                consumoUpload: 0,
+                totalConsumido: 0
+              };
+            }
+            return d;
+          });
+        } else {
+          // If in a different segment, clean out accidental presets matching 'Este PC'
+          finalTargetsMap[seg] = rawTargets.map(d => {
+            if (d.host.includes('(Este PC)')) {
+              return {
+                ...d,
+                host: '—',
+                mac: '—',
+                ping: null,
+                estado: 'Caído' as const,
+                sensorPing: false,
+                consumoDownload: 0,
+                consumoUpload: 0,
+                totalConsumido: 0
+              };
+            }
+            return d;
+          });
+        }
+      } else {
+        finalTargetsMap[seg] = rawTargets;
+      }
     });
 
     const timer = setInterval(() => {
@@ -514,6 +712,55 @@ export default function App() {
               });
             }
           });
+
+          // Overlay real host ARP results if retrieved!
+          if (realHosts && realHosts.length > 0) {
+            realHosts.forEach(r => {
+              const rSubnet = extractSubnetFromIp(r.ip);
+              // Ensure this device matches one of our active scan subnets
+              if (segmentsToScan.includes(rSubnet)) {
+                // Find if the IP is already in our nextPool
+                const idx = nextPool.findIndex(d => d.ip === r.ip);
+                
+                // Format MAC nicely
+                const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
+                
+                // Determine whether this is the local computer/gateway or device
+                const isGateway = r.ip.endsWith('.1');
+                const isThisPc = r.ip === currentInterfaceObj.ip;
+                
+                let hostNameStr = r.vendor;
+                if (isThisPc) {
+                  hostNameStr = `Laptop de Trabajo (Este PC) - ${r.vendor}`;
+                } else if (isGateway) {
+                  hostNameStr = `Gateway de Red (Router) - ${r.vendor}`;
+                }
+
+                const deviceObj = {
+                  id: `host-${r.ip.replace(/\./g, '_')}`,
+                  ip: r.ip,
+                  host: hostNameStr,
+                  mac: macToUse,
+                  ping: r.ping || 4,
+                  estado: 'OK' as const,
+                  lastChecked: new Date().toLocaleTimeString(),
+                  sensorPing: true,
+                  sensorHttp: isGateway || isThisPc,
+                  consumoDownload: isThisPc ? 8.5 : Number((Math.random() * 5).toFixed(1)),
+                  consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
+                  totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
+                  interfaz: selectedInterface,
+                  segmento: rSubnet
+                };
+
+                if (idx !== -1) {
+                  nextPool[idx] = deviceObj;
+                } else {
+                  nextPool.push(deviceObj);
+                }
+              }
+            });
+          }
 
           // Compute sensors for all scanned devices
           const generatedSensors = generateSensorsForDevices(nextPool);
@@ -573,12 +820,12 @@ export default function App() {
 
   const mapDevices = useMemo(() => {
     if (viewedSegmentFilter === 'all') {
-      const activeObj = INTERFACES_CONFIG.find(i => i.name === selectedInterface) || INTERFACES_CONFIG[0];
+      const activeObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
       const primarySeg = activeObj.segments[0] || subnetSegment;
       return devices.filter(d => d.segmento === primarySeg);
     }
     return devices.filter(d => d.segmento === viewedSegmentFilter);
-  }, [devices, viewedSegmentFilter, selectedInterface, subnetSegment]);
+  }, [devices, viewedSegmentFilter, selectedInterface, subnetSegment, activeInterfacesList]);
 
   const counts = useMemo<ScanStats>(() => {
     if (!lastScanDone && !isScanning) {
@@ -621,8 +868,88 @@ export default function App() {
     );
   }, [segmentFilteredDevices, sidebarSearch]);
 
+  // Dynamic workstation IP properties based on the active segment or interface
+  const activeWorkstationInfo = useMemo(() => {
+    const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+    
+    // Build dynamic array of segments including any custom manual IP segment
+    let segments = [...currentInterfaceObj.segments];
+    if (deviceManualIp) {
+      const customSeg = extractSubnetFromIp(deviceManualIp);
+      if (customSeg && !segments.includes(customSeg)) {
+        segments = [customSeg, ...segments];
+      }
+    }
+
+    // Determine which segment is active
+    let seg = viewedSegmentFilter !== 'all' ? viewedSegmentFilter : subnetSegment;
+    // If we have viewedSegmentFilter set to 'all' and subnetSegment isn't in this interface (including manual segment),
+    // let's grab the first segment of the interface to keep it aligned!
+    if (viewedSegmentFilter === 'all' && !segments.includes(seg)) {
+      seg = segments[0] || '192.168.1.0/24';
+    }
+
+    const base = seg.replace(/\.0\/24$/, '').replace(/\.0\/16$/, '');
+    
+    // Use manual IP if provided; fallback to the real interface IP or simulated .55 IP
+    let localIp = currentInterfaceObj.ip || `${base}.55`;
+    if (deviceManualIp) {
+      const trimmed = deviceManualIp.trim();
+      const customSeg = extractSubnetFromIp(trimmed);
+      if (customSeg === seg) {
+        localIp = trimmed;
+      } else {
+        const parts = trimmed.split('.');
+        if (parts.length === 4) {
+          localIp = trimmed;
+        }
+      }
+    }
+
+    const gateway = `${base}.1`;
+    const subnet = seg;
+
+    return {
+      localIp,
+      gateway,
+      subnet
+    };
+  }, [viewedSegmentFilter, selectedInterface, subnetSegment, deviceManualIp, activeInterfacesList]);
+
+  const handleSaveCustomIp = () => {
+    const rawVal = tempIpVal.trim();
+    if (!rawVal) {
+      setDeviceManualIp('');
+      localStorage.removeItem('netmonitor_manual_ip');
+      addAlert('Se restablecieron los valores de simulación por defecto.', 'info');
+      setIsEditingRealIp(false);
+      return;
+    }
+
+    const parts = rawVal.split('.');
+    if (parts.length !== 4 || parts.some(p => isNaN(Number(p)) || Number(p) < 0 || Number(p) > 255)) {
+      addAlert('Dirección IP inválida. Por favor ingresa una dirección IPv4 válida (ej. 192.168.1.134).', 'error');
+      return;
+    }
+
+    setDeviceManualIp(rawVal);
+    localStorage.setItem('netmonitor_manual_ip', rawVal);
+    setIsEditingRealIp(false);
+
+    // Prompt user to perform scan to refresh the active nodes with the new IP mappings
+    const detectedSegment = extractSubnetFromIp(rawVal);
+    if (detectedSegment) {
+      setSubnetSegment(detectedSegment);
+      // Automatically switch to the physical Wi-Fi or first simulated interface to reflect the IP
+      if (!selectedInterface.includes("Intel Wi-Fi") && !selectedInterface.includes("Realtek")) {
+        setSelectedInterface("Intel Wi-Fi 6E AX211 @ 802.11ax");
+      }
+    }
+    addAlert(`IP real de tu portátil guardada: ${rawVal}. Sincronizando interfaz al segmento local: ${detectedSegment || 'Auto'}. ¡Pulsa "Escanear ahora" para barrer el segmento real!`, 'success');
+  };
+
   const copyCellUrl = () => {
-    navigator.clipboard.writeText('http://192.168.1.55:8080');
+    navigator.clipboard.writeText(`http://${activeWorkstationInfo.localIp}:8080`);
     setCopiedSuccess(true);
     setTimeout(() => setCopiedSuccess(false), 2000);
   };
@@ -650,17 +977,73 @@ export default function App() {
         {/* Dynamic Controls Header Group */}
         <div className="flex flex-wrap items-center gap-4 text-[11px] ml-auto">
           {/* Interfaz Select */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-slate-500 font-medium">Interfaz</span>
-            <select 
-              value={selectedInterface}
-              onChange={(e) => setSelectedInterface(e.target.value)}
-              className="bg-slate-950 text-slate-300 border border-slate-850 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-sans"
-            >
-              <option value="Realtek PCIe GbE Family Controller">Realtek PCIe GbE Family Controller</option>
-              <option value="Intel Wi-Fi 6E AX211 @ 802.11ax">Intel Wi-Fi 6E AX211 @ 802.11ax</option>
-              <option value="Microsoft Loopback Virtual Adapter">Microsoft Loopback Virtual Adapter</option>
-            </select>
+          <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
+            <div className="flex items-center gap-1.5 font-sans">
+              <span className="text-slate-500 font-medium">Interfaz</span>
+              <select 
+                value={selectedInterface}
+                onChange={(e) => setSelectedInterface(e.target.value)}
+                className="bg-slate-950 text-slate-200 border border-slate-850 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-medium"
+              >
+                {activeInterfacesList.map(i => (
+                  <option key={i.name} value={i.name}>
+                    {i.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Glowing Laptop IP Badge */}
+            <div className="flex items-center gap-1 bg-[#0f172a]/90 px-2 py-1 rounded-sm border border-cyan-500/20 text-cyan-400 font-mono text-[11px] h-[24px]">
+              <span className="text-slate-500 text-[10px]">Mi IP:</span>
+              {isEditingRealIp ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={tempIpVal}
+                    placeholder="ej: 192.168.1.134"
+                    onChange={(e) => setTempIpVal(e.target.value)}
+                    className="bg-slate-900 border border-cyan-500/50 rounded text-slate-200 px-1 py-0 w-28 text-[9px] focus:outline-hidden font-mono"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveCustomIp();
+                      if (e.key === 'Escape') setIsEditingRealIp(false);
+                    }}
+                    autoFocus
+                  />
+                  <button 
+                    onClick={handleSaveCustomIp} 
+                    className="text-emerald-450 hover:text-emerald-300 font-bold px-0.5 cursor-pointer text-[12px]"
+                    title="Confirmar IP real"
+                  >
+                    ✓
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setTempIpVal(deviceManualIp);
+                      setIsEditingRealIp(false);
+                    }} 
+                    className="text-rose-450 hover:text-rose-300 font-bold px-1 cursor-pointer text-[12px]"
+                    title="Cancelar"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <span 
+                  onClick={() => {
+                    setTempIpVal(deviceManualIp || activeWorkstationInfo.localIp);
+                    setIsEditingRealIp(true);
+                  }}
+                  className="cursor-pointer hover:underline text-cyan-400 font-bold hover:text-cyan-300 select-all flex items-center gap-1 group leading-none"
+                  title="Haz clic para ingresar la dirección IP real de tu portátil"
+                >
+                  {activeWorkstationInfo.localIp}
+                  <span className="text-[8px] text-[#06b6d4] px-1 py-0.5 bg-cyan-950/40 rounded group-hover:bg-cyan-900/60 font-sans font-normal border border-cyan-900/30">
+                    {deviceManualIp ? 'Propia' : 'Simulada (Editar)'}
+                  </span>
+                </span>
+              )}
+            </div>
           </div>
 
           {/* CHECKBOX Virtuales */}
@@ -956,6 +1339,101 @@ export default function App() {
             </ul>
           </div>
 
+          {/* PERSONALIZACIÓN DE ADAPTADOR FÍSICO */}
+          <div className="bg-slate-950 p-3 rounded-md border border-slate-850 shadow-inner text-slate-300">
+            <div className="flex items-center justify-between">
+              <h5 className="font-semibold text-slate-200 flex items-center gap-1.5 text-[11px] font-display">
+                <Settings className="h-3.5 w-3.5 text-cyan-400" />
+                Mi Adaptador de Red Real
+              </h5>
+              <button
+                onClick={() => setIsEditingRealIp(!isEditingRealIp)}
+                className="text-[#06b6d4] hover:text-cyan-300 text-[10px] font-semibold cursor-pointer select-none underline decoration-cyan-500/30"
+              >
+                {isEditingRealIp ? 'Ver info' : (deviceManualIp ? 'Cambiar IP' : 'Ajustar')}
+              </button>
+            </div>
+            
+            {deviceManualIp && !isEditingRealIp && (
+              <div className="mt-2 p-1.5 bg-slate-900/60 rounded border border-cyan-950/40 flex items-center justify-between">
+                <div className="leading-tight">
+                  <span className="text-[8px] text-slate-500 font-mono block">IP CAPTURADA</span>
+                  <span className="text-emerald-400 font-mono font-bold text-[11px]">{deviceManualIp}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setDeviceManualIp('');
+                    setTempIpVal('');
+                    localStorage.removeItem('netmonitor_manual_ip');
+                    addAlert('Se restablecieron los valores de IP simulados por defecto (.55).', 'info');
+                  }}
+                  className="bg-slate-950 hover:bg-slate-800 text-rose-405 border border-slate-800 text-[8px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                  title="Restablecer IP a la simulación estándar"
+                >
+                  Reset
+                </button>
+              </div>
+            )}
+            
+            {(isEditingRealIp || !deviceManualIp) && (
+              <div className="mt-2 space-y-2">
+                <p className="text-[10px] text-slate-400 leading-normal">
+                  Dado que la app corre de forma segura en la nube (Cloud Run) y los navegadores web por privacidad bloquean el acceso al hardware real, ingresa tu dirección IP local para sincronizar con tu red física:
+                </p>
+                <div className="space-y-1.5">
+                  <div className="flex gap-1.5 items-center">
+                    <input
+                      type="text"
+                      placeholder="Ej: 192.168.1.134"
+                      value={tempIpVal}
+                      onChange={(e) => setTempIpVal(e.target.value)}
+                      className="flex-1 bg-slate-900 border border-slate-800/85 rounded px-2 py-1 text-[10px] font-mono text-slate-200 focus:border-cyan-500 focus:outline-hidden"
+                    />
+                    <button
+                      onClick={handleSaveCustomIp}
+                      className="bg-cyan-600 hover:bg-cyan-500 text-white px-2.5 py-1 rounded font-bold text-[10px] transition-all cursor-pointer"
+                    >
+                      Ok
+                    </button>
+                  </div>
+                  
+                  {/* Presets segment list for super-easy 1-click calibration! */}
+                  <div className="mt-1">
+                    <span className="text-[8px] text-slate-500 font-semibold block uppercase tracking-wider mb-1">Preconfiguraciones comunes:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { ip: '192.168.1.134', label: '1.x (Wifi Hogar/Movistar)' },
+                        { ip: '192.168.0.45', label: '0.x (VTR/Claro)' },
+                        { ip: '192.168.100.55', label: '100.x (Fibra ONT)' },
+                        { ip: '10.0.0.12', label: '10.x (Corporativo)' }
+                      ].map((item) => (
+                        <button
+                          key={item.ip}
+                          onClick={() => {
+                            setTempIpVal(item.ip);
+                            const prevSelected = selectedInterface;
+                            setSelectedInterface("Intel Wi-Fi 6E AX211 @ 802.11ax");
+                            setDeviceManualIp(item.ip);
+                            localStorage.setItem('netmonitor_manual_ip', item.ip);
+                            const customSeg = extractSubnetFromIp(item.ip);
+                            if (customSeg) {
+                              setSubnetSegment(customSeg);
+                            }
+                            addAlert(`Calibración rápida: Configurada IP ${item.ip} (${item.label}). Presiona "Escanear ahora" para simular este segmento físico.`, 'success');
+                          }}
+                          className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-cyan-400 text-[8px] px-1 py-0.5 rounded cursor-pointer transition-colors"
+                          title={`Preajustar segmento ${item.ip}`}
+                        >
+                          {item.label.split(' ')[0]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* ACCESO DESDE CELULAR (From mockup details, bottom left sidebar) */}
           <div className="bg-slate-950 p-3 rounded-md border border-slate-850 mt-auto shadow-inner text-slate-300">
             <h5 className="font-semibold text-slate-200 flex items-center gap-1.5 text-[11px] font-display">
@@ -964,7 +1442,7 @@ export default function App() {
             </h5>
             <p className="text-[10px] text-slate-500 mt-1">Misma red Wi-Fi que este PC (servidor)</p>
             <div className="mt-2 text-cyan-400 font-mono font-medium truncate select-all">
-              http://192.168.1.55:8080
+              http://{activeWorkstationInfo.localIp}:8080
             </div>
             <button 
               onClick={copyCellUrl}
@@ -983,15 +1461,15 @@ export default function App() {
             </div>
             <div className="flex justify-between">
               <span>IP local:</span>
-              <span className="text-slate-400">192.168.1.55</span>
+              <span className="text-slate-400">{activeWorkstationInfo.localIp}</span>
             </div>
             <div className="flex justify-between">
               <span>Subred:</span>
-              <span className="text-slate-400">192.168.1.0/24</span>
+              <span className="text-slate-400">{activeWorkstationInfo.subnet}</span>
             </div>
             <div className="flex justify-between">
               <span>Gateway:</span>
-              <span className="text-slate-400">192.168.1.1</span>
+              <span className="text-slate-400">{activeWorkstationInfo.gateway}</span>
             </div>
           </div>
         </aside>
@@ -1031,7 +1509,7 @@ export default function App() {
                   </button>
 
                   {(() => {
-                    const currentInterfaceObj = INTERFACES_CONFIG.find(i => i.name === selectedInterface) || INTERFACES_CONFIG[0];
+                    const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
                     let segments = [...currentInterfaceObj.segments];
                     if (subnetSegment && !segments.includes(subnetSegment)) {
                       segments = [subnetSegment, ...segments];

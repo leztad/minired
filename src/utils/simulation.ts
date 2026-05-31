@@ -26,7 +26,7 @@ export const INTERFACES_CONFIG: NetworkInterfaceConfig[] = [
   {
     name: "Intel Wi-Fi 6E AX211 @ 802.11ax",
     type: "Wi-Fi",
-    segments: ["192.168.100.0/24", "10.0.0.0/24"]
+    segments: ["192.168.1.0/24", "192.168.0.0/24", "192.168.100.0/24", "10.0.0.0/24"]
   },
   {
     name: "Microsoft Loopback Virtual Adapter",
