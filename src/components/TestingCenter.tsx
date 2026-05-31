@@ -14,6 +14,8 @@ interface TestingCenterProps {
   setHistoryData: React.Dispatch<React.SetStateAction<HistoryPoint[]>>;
   subnetSegment: string;
   includeVirtuals: boolean;
+  activeAnomaly: 'none' | 'latency' | 'gateway' | 'loss';
+  setActiveAnomaly: React.Dispatch<React.SetStateAction<'none' | 'latency' | 'gateway' | 'loss'>>;
 }
 
 interface TestStep {
@@ -30,10 +32,10 @@ export default function TestingCenter({
   setSensors,
   setHistoryData,
   subnetSegment,
-  includeVirtuals
+  includeVirtuals,
+  activeAnomaly,
+  setActiveAnomaly
 }: TestingCenterProps) {
-  // Anomaly states
-  const [activeAnomaly, setActiveAnomaly] = useState<'none' | 'latency' | 'gateway' | 'loss'>('none');
   
   // Terminal and Interactive Runner states
   const [isRunningDiagnostic, setIsRunningDiagnostic] = useState<boolean>(false);
@@ -265,7 +267,7 @@ export default function TestingCenter({
               <button
                 onClick={() => injectAnomaly('none')}
                 className={`w-full py-2 px-3 rounded-xs text-[11px] font-semibold font-sans flex items-center justify-between transition-all cursor-pointer ${
-                  activeAnomaly === 'none' || activeAnomaly === 'none'
+                  (activeAnomaly as string) === 'none'
                     ? 'bg-emerald-500/15 border border-emerald-500 text-emerald-400'
                     : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
                 }`}
@@ -281,7 +283,7 @@ export default function TestingCenter({
               <button
                 onClick={() => injectAnomaly('latency')}
                 className={`w-full py-2 px-3 rounded-xs text-[11px] font-semibold font-sans flex items-center justify-between transition-all cursor-pointer ${
-                  activeAnomaly === 'latency'
+                  (activeAnomaly as string) === 'latency'
                     ? 'bg-amber-500/15 border border-amber-500 text-amber-400 font-semibold'
                     : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
                 }`}
@@ -297,7 +299,7 @@ export default function TestingCenter({
               <button
                 onClick={() => injectAnomaly('gateway')}
                 className={`w-full py-2 px-3 rounded-xs text-[11px] font-semibold font-sans flex items-center justify-between transition-all cursor-pointer ${
-                  activeAnomaly === 'gateway'
+                  (activeAnomaly as string) === 'gateway'
                     ? 'bg-rose-500/15 border border-rose-500 text-rose-400 font-semibold'
                     : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
                 }`}
@@ -313,7 +315,7 @@ export default function TestingCenter({
               <button
                 onClick={() => injectAnomaly('loss')}
                 className={`w-full py-2 px-3 rounded-xs text-[11px] font-semibold font-sans flex items-center justify-between transition-all cursor-pointer ${
-                  activeAnomaly === 'loss'
+                  (activeAnomaly as string) === 'loss'
                     ? 'bg-purple-500/15 border border-purple-500 text-purple-400 font-semibold'
                     : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
                 }`}

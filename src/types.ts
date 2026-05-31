@@ -11,6 +11,8 @@ export interface Device {
   consumoDownload?: number; // Speed in Mbps
   consumoUpload?: number;   // Speed in Mbps
   totalConsumido?: number;   // Accumulated data in MB
+  interfaz?: string;        // Active interface name
+  segmento?: string;        // Connected subnet segment
 }
 
 export interface Sensor {

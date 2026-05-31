@@ -3,30 +3,64 @@ import {
   Network, Activity, Cpu, Server, Search, RefreshCw, Sliders, Globe, Clock, 
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
   ChevronDown, Monitor, Copy, Plus, Play, Pause, ExternalLink, HelpCircle, 
-  ShieldCheck, Info, Radio
+  ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable
 } from 'lucide-react';
 
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
-import { generateFullSubnet, generateSensorsForDevices } from './utils/simulation';
+import { generateFullSubnet, generateSensorsForDevices, INTERFACES_CONFIG } from './utils/simulation';
+import { calculateSubnetDetails } from './utils/subnetMath';
 import MapSubred from './components/MapSubred';
 import HistorialHosts from './components/HistorialHosts';
 import DeviceTable from './components/DeviceTable';
 import SensorTable from './components/SensorTable';
 import TestingCenter from './components/TestingCenter';
 import BandwidthMonitor from './components/BandwidthMonitor';
+import NetworkAICopilot from './components/NetworkAICopilot';
 
 export default function App() {
   // General simulator state
   const [includeVirtuals, setIncludeVirtuals] = useState<boolean>(false);
   const [subnetSegment, setSubnetSegment] = useState<string>('192.168.1.0/24');
   const [selectedInterface, setSelectedInterface] = useState<string>('Realtek PCIe GbE Family Controller');
+  const [scanAllSegments, setScanAllSegments] = useState<boolean>(true);
+  const [viewedSegmentFilter, setViewedSegmentFilter] = useState<string>('all');
+  const [currentScanningSegName, setCurrentScanningSegName] = useState<string>('');
   const [selectedInterval, setSelectedInterval] = useState<string>('1 minuto');
   const [currentTime, setCurrentTime] = useState<string>('');
   
+  // Subnet calculator state
+  const [calcIp, setCalcIp] = useState<string>('192.168.1.0');
+  const [calcCidr, setCalcCidr] = useState<number>(24);
+  
   // Navigation
-  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo'>('vista_general');
+  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic'>('vista_general');
   const [sidebarSearch, setSidebarSearch] = useState<string>('');
   const [isLanTreeOpen, setIsLanTreeOpen] = useState<boolean>(true);
+
+  // Gemini & Diagnóstico Inteligente API states
+  const [aiReport, setAiReport] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // Live Alerts & Log center state
+  const [liveAlerts, setLiveAlerts] = useState<{ id: string; time: string; msg: string; type: 'success' | 'warning' | 'error' | 'info' }[]>([
+    { id: 'start', time: '23:39:10', msg: 'Monitor local asignado a interfaz Realtek PCIe Controller.', type: 'info' },
+    { id: 'ready', time: '23:39:55', msg: 'Socket Listener ICMP DHCP montado en puerto virtual. Esperando barrido inicial.', type: 'success' }
+  ]);
+
+  // Port Scanner States
+  const [portScanStatus, setPortScanStatus] = useState<'idle' | 'scanning' | 'done'>('idle');
+  const [portScanProgress, setPortScanProgress] = useState<number>(0);
+  const [portScanResults, setPortScanResults] = useState<{ port: number; service: string; status: 'open' | 'closed'; risk: 'low' | 'medium' | 'high'; desc: string }[]>([]);
+  const [activeScanningPort, setActiveScanningPort] = useState<number | null>(null);
+
+  const addAlert = (msg: string, type: 'success' | 'warning' | 'error' | 'info' = 'info') => {
+    const timestamp = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    setLiveAlerts(prev => [
+      { id: Math.random().toString(36).substring(2, 9), time: timestamp, msg, type },
+      ...prev
+    ].slice(0, 35)); // hold last 35 logs
+  };
 
   // Scan states
   const [isScanning, setIsScanning] = useState<boolean>(false);
@@ -63,12 +97,19 @@ export default function App() {
   const [copiedSuccess, setCopiedSuccess] = useState<boolean>(false);
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
   const [tempName, setTempName] = useState<string>('');
+  const [modalTab, setModalTab] = useState<'info' | 'ports'>('info');
+  const [activeAnomaly, setActiveAnomaly] = useState<'none' | 'latency' | 'gateway' | 'loss'>('none');
 
   // Synchronize renaming fields on selecting a device or state change
   useEffect(() => {
     if (!selectedDevice) {
       setIsEditingName(false);
       setTempName('');
+      setModalTab('info');
+      setPortScanStatus('idle');
+      setPortScanProgress(0);
+      setPortScanResults([]);
+      setActiveScanningPort(null);
     } else {
       const activeDevice = devices.find(d => d.id === selectedDevice.id);
       if (activeDevice) {
@@ -82,6 +123,7 @@ export default function App() {
     setDevices(prev => {
       const targetDevice = prev.find(d => d.id === id);
       if (targetDevice) {
+        addAlert(`Apodo de dispositivo con IP ${targetDevice.ip} cambiado a "${finalName}".`, 'info');
         setSensors(sPrev => sPrev.map(s => {
           if (s.ip === targetDevice.ip) {
             return { ...s, dispositivo: finalName };
@@ -91,6 +133,81 @@ export default function App() {
       }
       return prev.map(d => d.id === id ? { ...d, host: finalName } : d);
     });
+  };
+
+  const handleStartPortScan = (deviceIp: string) => {
+    if (portScanStatus === 'scanning') return;
+    setPortScanStatus('scanning');
+    setPortScanProgress(0);
+    setPortScanResults([]);
+    setActiveScanningPort(null);
+    addAlert(`Iniciando escaneo de seguridad y puertos TCP en host ${deviceIp}...`, 'info');
+
+    const portsToScan = [
+      { port: 21, service: 'FTP', desc: 'Transferencia de Archivos' },
+      { port: 22, service: 'SSH', desc: 'Acceso Remoto Seguro (SSH)' },
+      { port: 23, service: 'TELNET', desc: 'Acceso Remoto no síncrono (Inseguro)' },
+      { port: 53, service: 'DNS', desc: 'Servidor Domain Name System' },
+      { port: 80, service: 'HTTP', desc: 'Servidor Web Inseguro' },
+      { port: 161, service: 'SNMP', desc: 'Monitoreo de Red Simple' },
+      { port: 443, service: 'HTTPS', desc: 'Servidor Web Seguro SSL' },
+      { port: 3306, service: 'MySQL', desc: 'Manejador de Base de Datos' },
+      { port: 8080, service: 'HTTP-ALT', desc: 'Puerto HTTP Secundario/Proxy' }
+    ];
+
+    let currentIndex = 0;
+
+    const scanInterval = setInterval(() => {
+      if (currentIndex >= portsToScan.length) {
+        clearInterval(scanInterval);
+        setPortScanStatus('done');
+        setActiveScanningPort(null);
+        setPortScanProgress(100);
+        addAlert(`Escaneo de puertos TCP culminado con éxito sobre ${deviceIp}.`, 'success');
+        return;
+      }
+
+      const currentPortObj = portsToScan[currentIndex];
+      setActiveScanningPort(currentPortObj.port);
+      setPortScanProgress(Math.round(((currentIndex + 1) / portsToScan.length) * 100));
+
+      const suffix = deviceIp.split('.').pop() || '';
+      let status: 'open' | 'closed' = 'closed';
+      let risk: 'low' | 'medium' | 'high' = 'low';
+
+      if (suffix === '1') {
+        if ([22, 53, 80, 443].includes(currentPortObj.port)) status = 'open';
+      } else if (suffix === '38' || deviceIp.endsWith('.38')) {
+        if ([80, 23, 8080].includes(currentPortObj.port)) {
+          status = 'open';
+          if (currentPortObj.port === 23) risk = 'high';
+        }
+      } else if (suffix === '40' || deviceIp.endsWith('.40')) {
+        if ([80, 443, 8080].includes(currentPortObj.port)) status = 'open';
+      } else if (suffix === '55' || deviceIp.endsWith('.55')) {
+        if ([22, 443].includes(currentPortObj.port)) status = 'open';
+      } else if (suffix === '15' || deviceIp.endsWith('.15')) {
+        if ([21, 22, 80].includes(currentPortObj.port)) {
+          status = 'open';
+          if (currentPortObj.port === 21) risk = 'medium';
+        }
+      } else {
+        if ([80, 443].includes(currentPortObj.port)) status = 'open';
+      }
+
+      setPortScanResults(prev => [
+        ...prev,
+        {
+          port: currentPortObj.port,
+          service: currentPortObj.service,
+          status,
+          risk,
+          desc: currentPortObj.desc
+        }
+      ]);
+
+      currentIndex++;
+    }, 280);
   };
 
   // Update clock
@@ -104,29 +221,56 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Initialize empty subnet on startup (unscanned state - matching Image 1)
+  // Synchronize interface segments on interface change
   useEffect(() => {
-    // Generates a clean, entirely offline/unscanned list of 254 devices
-    const base = subnetSegment.replace(/\.0\/24$/, '');
-    const initialPool: Device[] = Array.from({ length: 254 }, (_, idx) => {
-      const i = idx + 1;
-      return {
-        id: `host-${i}`,
-        ip: `${base}.${i}`,
-        host: '—',
-        mac: '—',
-        ping: null,
-        estado: 'No_Escaneado',
-        lastChecked: null,
-        sensorPing: false,
-      };
+    const currentInterfaceObj = INTERFACES_CONFIG.find(i => i.name === selectedInterface) || INTERFACES_CONFIG[0];
+    const segments = currentInterfaceObj.segments;
+    
+    // Auto sync viewedSegmentFilter state and subnet segment inputs
+    setViewedSegmentFilter('all');
+    if (segments.length > 0) {
+      setSubnetSegment(segments[0]);
+    }
+  }, [selectedInterface]);
+
+  // Unified empty pool initializer based on selectedInterface and raw inputs
+  useEffect(() => {
+    const currentInterfaceObj = INTERFACES_CONFIG.find(i => i.name === selectedInterface) || INTERFACES_CONFIG[0];
+    let segments = [...currentInterfaceObj.segments];
+    
+    // Fallback: if the user dynamically entered a custom subnet segment that's not in the default list,
+    // add it as a segment context so it can be initialized and scanned!
+    if (subnetSegment && !segments.includes(subnetSegment)) {
+      segments = [subnetSegment, ...segments];
+    }
+
+    let initialPool: Device[] = [];
+    segments.forEach(seg => {
+      const base = seg.replace(/\.0\/24$/, '').replace(/\.0\/16$/, '');
+      const subnetPool = Array.from({ length: 254 }, (_, idx) => {
+        const i = idx + 1;
+        return {
+          id: `host-${base.replace(/\./g, '_')}-${i}`,
+          ip: `${base}.${i}`,
+          host: '—',
+          mac: '—',
+          ping: null,
+          estado: 'No_Escaneado' as const,
+          lastChecked: null,
+          sensorPing: false,
+          interfaz: selectedInterface,
+          segmento: seg,
+        };
+      });
+      initialPool = [...initialPool, ...subnetPool];
     });
+
     setDevices(initialPool);
     setSensors([]);
     setLastScanDone(false);
     setLastScanTimeStr(null);
     setScanDurationSec(null);
-  }, [subnetSegment]);
+  }, [selectedInterface, subnetSegment]);
 
   // Handle active states if Virtuales changes, ask to scan again
   const handleVirtualsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,82 +435,127 @@ export default function App() {
     }));
   };
 
-  // Perform Network Scan Simulation (taking 3.5 seconds to sweep the grid)
+  // Perform Network Scan Simulation (supporting multi-segment sequential scan of all configured subnets)
   const handleStartScan = () => {
     if (isScanning) return;
     setIsScanning(true);
     setScanProgress(0);
     setScannedIndex(0);
 
-    const fullTargetPool = generateFullSubnet(subnetSegment, includeVirtuals);
-    
-    // Create animated progress sweep
-    let currentPercent = 0;
-    const intervalStep = 120; // total duration: ~3.6s
-    const totalSteps = 25; 
+    const currentInterfaceObj = INTERFACES_CONFIG.find(i => i.name === selectedInterface) || INTERFACES_CONFIG[0];
+    const segmentsToScan = scanAllSegments ? currentInterfaceObj.segments : [subnetSegment];
+
+    addAlert(`Iniciando escaneo secuencial ICMP en ${segmentsToScan.length} segmento(s) registrado(s) para ${selectedInterface}...`, 'info');
+
+    let segmentIndex = 0;
     let stepCount = 0;
+    const totalStepsPerSegment = 12; // 12 updates per segment is fast and gorgeous
+    const totalSteps = totalStepsPerSegment * segmentsToScan.length;
+    const intervalStep = 100; // total: ~1.2s per subnet, super responsive!
+
+    // Generate final target pools for all selected segments
+    const finalTargetsMap: Record<string, Device[]> = {};
+    segmentsToScan.forEach(seg => {
+      finalTargetsMap[seg] = generateFullSubnet(seg, includeVirtuals, selectedInterface);
+    });
 
     const timer = setInterval(() => {
       stepCount++;
-      currentPercent = Math.min(100, Math.round((stepCount / totalSteps) * 100));
-      setScanProgress(currentPercent);
+      const currentSegment = segmentsToScan[segmentIndex];
+      setCurrentScanningSegName(currentSegment);
 
-      const itemsScannedCount = Math.min(254, Math.round((stepCount / totalSteps) * 254));
+      const segmentPercent = (stepCount - (segmentIndex * totalStepsPerSegment)) / totalStepsPerSegment;
+      const itemsScannedCount = Math.min(254, Math.round(segmentPercent * 254));
+
+      const overallPercent = Math.min(100, Math.round((stepCount / totalSteps) * 100));
+      setScanProgress(overallPercent);
       setScannedIndex(itemsScannedCount);
 
-      // Mutate part of the pool in real-time to show incremental scan in grid!
+      // Smooth real-time update of simulated active hosts inside devices state
       setDevices(prev => {
         const nextPool = [...prev];
-        for (let i = 0; i < itemsScannedCount; i++) {
-          nextPool[i] = {
-            ...fullTargetPool[i],
-            lastChecked: new Date().toLocaleTimeString(),
-          };
+        const currentTargets = finalTargetsMap[currentSegment];
+        if (currentTargets) {
+          currentTargets.slice(0, itemsScannedCount).forEach(t => {
+            const idx = nextPool.findIndex(d => d.ip === t.ip);
+            if (idx !== -1) {
+              nextPool[idx] = {
+                ...t,
+                lastChecked: new Date().toLocaleTimeString(),
+              };
+            }
+          });
         }
         return nextPool;
       });
 
+      // Advance to the next configured segment if step reached threshold
+      if (stepCount % totalStepsPerSegment === 0) {
+        segmentIndex = Math.min(segmentsToScan.length - 1, segmentIndex + 1);
+      }
+
       if (stepCount >= totalSteps) {
         clearInterval(timer);
-        
-        // Setup final details
-        const finalDevicesState = fullTargetPool.map(d => ({
-          ...d,
-          lastChecked: new Date().toLocaleTimeString(),
-        }));
-        setDevices(finalDevicesState);
 
-        // Generate sensors
-        const generatedSensors = generateSensorsForDevices(finalDevicesState);
-        setSensors(generatedSensors);
+        // Apply final state to ALL segments scanned
+        setDevices(prev => {
+          const nextPool = [...prev];
+          segmentsToScan.forEach(seg => {
+            const currentTargets = finalTargetsMap[seg];
+            if (currentTargets) {
+              currentTargets.forEach(t => {
+                const idx = nextPool.findIndex(d => d.ip === t.ip);
+                if (idx !== -1) {
+                  nextPool[idx] = {
+                    ...t,
+                    lastChecked: new Date().toLocaleTimeString(),
+                  };
+                }
+              });
+            }
+          });
 
-        // Scan meta
-        const now = new Date();
-        const scanTimeStr = now.toLocaleString('es-ES', { 
-          day: '2-digit', month: '2-digit', year: 'numeric',
-          hour: '2-digit', minute: '2-digit', second: '2-digit',
-          hour12: false
+          // Compute sensors for all scanned devices
+          const generatedSensors = generateSensorsForDevices(nextPool);
+          setSensors(generatedSensors);
+
+          // Meta statistics computed
+          const now = new Date();
+          const scanTimeStr = now.toLocaleString('es-ES', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false
+          });
+          const duration = Number((1.5 + Math.random() * 1.5).toFixed(1));
+
+          const activeHostsFiltered = nextPool.filter(d => 
+            (d.estado === 'OK' || d.estado === 'Advertencia') && 
+            segmentsToScan.includes(d.segmento || '')
+          );
+          const liveHostsCount = activeHostsFiltered.length;
+
+          addAlert(`Sonda ICMP concluida en ${duration}s. Se encontraron ${liveHostsCount} hosts activos en ${segmentsToScan.length} subredes.`, 'success');
+
+          setLastScanTimeStr(scanTimeStr);
+          setScanDurationSec(duration);
+          setLastScanDone(true);
+          setIsScanning(false);
+
+          // Latency aggregates
+          const validPings = activeHostsFiltered.filter(d => d.ping !== null).map(d => d.ping as number);
+          const avgPing = validPings.length > 0 ? Math.round(validPings.reduce((a, b) => a + b, 0) / validPings.length) : 0;
+
+          setHistoryData(hPrev => [
+            ...hPrev,
+            {
+              timeLabels: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+              hostsActivos: liveHostsCount,
+              latenciaMedia: avgPing
+            }
+          ].slice(-8));
+
+          return nextPool;
         });
-        const duration = Number((1.2 + Math.random() * 2).toFixed(1)); // e.g. 1.8s
-        
-        setLastScanTimeStr(scanTimeStr);
-        setScanDurationSec(duration);
-        setLastScanDone(true);
-        setIsScanning(false);
-
-        // Append to history graph
-        const liveHostsCount = finalDevicesState.filter(d => d.estado === 'OK' || d.estado === 'Advertencia').length;
-        const validPings = finalDevicesState.filter(d => d.ping !== null).map(d => d.ping as number);
-        const avgPing = validPings.length > 0 ? Math.round(validPings.reduce((a, b) => a + b, 0) / validPings.length) : 0;
-
-        setHistoryData(prev => [
-          ...prev, 
-          { 
-            timeLabels: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), 
-            hostsActivos: liveHostsCount,
-            latenciaMedia: avgPing
-          }
-        ].slice(-8)); // keep last 8 scans
       }
     }, intervalStep);
   };
@@ -376,18 +565,33 @@ export default function App() {
     setSubnetSegment('192.168.1.0/24');
   };
 
-  // Helper values
+  // Helper values filtered by the active, viewed segment
+  const segmentFilteredDevices = useMemo(() => {
+    if (viewedSegmentFilter === 'all') return devices;
+    return devices.filter(d => d.segmento === viewedSegmentFilter);
+  }, [devices, viewedSegmentFilter]);
+
+  const mapDevices = useMemo(() => {
+    if (viewedSegmentFilter === 'all') {
+      const activeObj = INTERFACES_CONFIG.find(i => i.name === selectedInterface) || INTERFACES_CONFIG[0];
+      const primarySeg = activeObj.segments[0] || subnetSegment;
+      return devices.filter(d => d.segmento === primarySeg);
+    }
+    return devices.filter(d => d.segmento === viewedSegmentFilter);
+  }, [devices, viewedSegmentFilter, selectedInterface, subnetSegment]);
+
   const counts = useMemo<ScanStats>(() => {
     if (!lastScanDone && !isScanning) {
       return { ok: 0, advertencia: 0, caido: 0, total: 0, lastScanTime: null, scanDuration: null };
     }
-    const ok = devices.filter(d => d.estado === 'OK').length;
-    const advertencia = devices.filter(d => d.estado === 'Advertencia').length;
-    const caido = devices.filter(d => d.estado === 'Caído').length;
-    const total = devices.length;
+    const filtered = segmentFilteredDevices;
+    const ok = filtered.filter(d => d.estado === 'OK').length;
+    const advertencia = filtered.filter(d => d.estado === 'Advertencia').length;
+    const caido = filtered.filter(d => d.estado === 'Caído').length;
+    const total = filtered.length;
 
     return { ok, advertencia, caido, total, lastScanTime: lastScanTimeStr, scanDuration: scanDurationSec };
-  }, [devices, lastScanDone, isScanning, lastScanTimeStr, scanDurationSec]);
+  }, [segmentFilteredDevices, lastScanDone, isScanning, lastScanTimeStr, scanDurationSec]);
 
   // Overall availability % calculation
   const statsAvailability = useMemo(() => {
@@ -401,21 +605,21 @@ export default function App() {
   // Average active latency calculation
   const statsAvgLatency = useMemo(() => {
     if (!lastScanDone && !isScanning) return '—';
-    const activeWithPing = devices.filter(d => d.ping !== null);
+    const activeWithPing = segmentFilteredDevices.filter(d => d.ping !== null);
     if (activeWithPing.length === 0) return '—';
     const sum = activeWithPing.reduce((acc, curr) => acc + (curr.ping || 0), 0);
     return `${Math.round(sum / activeWithPing.length)} ms`;
-  }, [devices, lastScanDone, isScanning]);
+  }, [segmentFilteredDevices, lastScanDone, isScanning]);
 
   // Filter devices list for sidebar tree view
   const sidebarFilteredDevices = useMemo(() => {
-    const list = devices.filter(d => d.estado === 'OK' || d.estado === 'Advertencia');
+    const list = segmentFilteredDevices.filter(d => d.estado === 'OK' || d.estado === 'Advertencia');
     if (!sidebarSearch) return list;
     return list.filter(d => 
       d.ip.includes(sidebarSearch) || 
       d.host.toLowerCase().includes(sidebarSearch.toLowerCase())
     );
-  }, [devices, sidebarSearch]);
+  }, [segmentFilteredDevices, sidebarSearch]);
 
   const copyCellUrl = () => {
     navigator.clipboard.writeText('http://192.168.1.55:8080');
@@ -460,7 +664,7 @@ export default function App() {
           </div>
 
           {/* CHECKBOX Virtuales */}
-          <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer">
+          <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer" title="Habilita la simulación de hosts y contenedores virtuales en la subred activa">
             <input 
               type="checkbox" 
               checked={includeVirtuals}
@@ -470,9 +674,20 @@ export default function App() {
             <span className="select-none text-[11px] font-medium">Virtuales</span>
           </label>
 
+          {/* CHECKBOX Scan All Configured Subnets */}
+          <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer" title="Escaneo y sonda secuencial completa sobre todas las VLANs y subredes registradas en esta interfaz">
+            <input 
+              type="checkbox" 
+              checked={scanAllSegments}
+              onChange={(e) => setScanAllSegments(e.target.checked)}
+              className="rounded-xs border-slate-850 text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-cyan-500"
+            />
+            <span className="select-none text-[11px] font-medium text-cyan-400/90 font-bold">Escaneo Multi-Red</span>
+          </label>
+
           {/* Segmento IP Input */}
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-500 font-medium">Segmento IP</span>
+            <span className="text-slate-500 font-medium font-sans">Segmento IP</span>
             <div className="flex">
               <input 
                 type="text" 
@@ -516,7 +731,11 @@ export default function App() {
             }`}
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-            {isScanning ? `Escaneando... (${scanProgress}%)` : 'Escanear ahora'}
+            {isScanning ? (
+              <span className="text-[10px] truncate max-w-[150px]">
+                {currentScanningSegName ? `Sondeando ${currentScanningSegName.replace('.0/16', '').replace('.0/24', '')}...` : `Escaneando...`}
+              </span >
+            ) : 'Escanear ahora'}
           </button>
 
           {/* CLOCK */}
@@ -677,6 +896,20 @@ export default function App() {
                   <span className="ml-auto bg-cyan-500/10 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">TEST</span>
                 </button>
               </li>
+              <li>
+                <button 
+                  onClick={() => setActiveView('ai_diagnostic')}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'ai_diagnostic' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Brain className="h-3.5 w-3.5 text-purple-400 animate-pulse" />
+                  <span>Copiloto de Red AI</span>
+                  <span className="ml-auto bg-purple-500/15 text-purple-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-purple-500/20">GEMINI</span>
+                </button>
+              </li>
 
               {/* Collapsible Subnet Folder Entry */}
               <li className="pt-2">
@@ -769,6 +1002,78 @@ export default function App() {
           {/* RENDER CHOSEN COMPONENT PATH */}
           {activeView === 'vista_general' && (
             <div className="space-y-4">
+              
+              {/* INTERACTIVE SEGMENTS TAB SELECTOR (Supports custom multi-segment view states) */}
+              <div className="bg-[#0B1120]/40 border border-slate-800/80 p-3.5 rounded-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#06b6d4] font-mono flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5" /> Segon de Red / Segmentación Activa en Interfaz
+                  </span>
+                  <p className="text-[11px] text-slate-500 font-sans">
+                    Filtra y visualiza el mapa de red, los logs y las métricas para un segmento específico o la vista unificada.
+                  </p>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setViewedSegmentFilter('all')}
+                    className={`px-3 py-2 rounded transition-all cursor-pointer text-xs font-semibold flex items-center gap-2 border ${
+                      viewedSegmentFilter === 'all'
+                        ? 'bg-slate-800 text-cyan-400 border-cyan-500/40 shadow-lg shadow-cyan-950/20'
+                        : 'bg-slate-950/50 text-slate-400 border-slate-850 hover:text-white hover:bg-slate-900/30'
+                    }`}
+                  >
+                    <Globe className="h-3.5 w-3.5" />
+                    <span>Vista Conjunta (Todos)</span>
+                    <span className="ml-1 bg-slate-900 border border-slate-800/80 text-[10px] text-cyan-400 font-mono font-bold px-1.5 py-0.5 rounded-full select-none">
+                      {devices.filter(d => d.estado === 'OK' || d.estado === 'Advertencia').length}
+                    </span>
+                  </button>
+
+                  {(() => {
+                    const currentInterfaceObj = INTERFACES_CONFIG.find(i => i.name === selectedInterface) || INTERFACES_CONFIG[0];
+                    let segments = [...currentInterfaceObj.segments];
+                    if (subnetSegment && !segments.includes(subnetSegment)) {
+                      segments = [subnetSegment, ...segments];
+                    }
+
+                    return segments.map(seg => {
+                      const isActive = viewedSegmentFilter === seg;
+                      const activeCount = devices.filter(d => d.segmento === seg && (d.estado === 'OK' || d.estado === 'Advertencia')).length;
+                      
+                      // Assign a user-friendly alias based on subnet prefixes
+                      let alias = "Subred";
+                      if (seg.startsWith('192.168.1.')) alias = "LAN Principal";
+                      else if (seg.startsWith('192.168.20.')) alias = "VLAN IoT / Domótica";
+                      else if (seg.startsWith('192.168.100.')) alias = "Segmento IPTV / TV";
+                      else if (seg.startsWith('10.0.0.')) alias = "WiFi Core";
+                      else if (seg.startsWith('172.17.')) alias = "Contenedores Docker";
+                      else if (seg.startsWith('10.10.10.')) alias = "VLAN Servidores DMZ";
+                      
+                      return (
+                        <button
+                          key={seg}
+                          onClick={() => setViewedSegmentFilter(seg)}
+                          className={`px-3 py-2 rounded transition-all cursor-pointer text-xs font-semibold flex items-center gap-2 border ${
+                            isActive
+                              ? 'bg-slate-800 text-cyan-450 text-cyan-400 border-cyan-500/40 shadow-lg shadow-cyan-950/20'
+                              : 'bg-slate-950/50 text-slate-400 border-slate-855 hover:text-white hover:bg-slate-900/30'
+                          }`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <div className="text-left font-mono">
+                            <span className="font-sans font-semibold text-[11px] block text-[9px] text-slate-500 tracking-tight leading-none mb-0.5">{alias}</span>
+                            <span>{seg}</span>
+                          </div>
+                          <span className="ml-1 bg-slate-900 border border-slate-800 text-[10px] text-slate-300 font-mono px-1.5 py-0.5 rounded-full select-none leading-none">
+                            {activeCount}
+                          </span>
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
               
               {/* TOP CIRCULAR GAUGES ROW (Matches image 1) */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -923,6 +1228,167 @@ export default function App() {
                 </div>
               </div>
 
+              {/* NEW SECTION: PREMIUM IP SUBNET CALCULATOR & LIVE NETWORK ACTIVITY ALERT REPORT */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                
+                {/* ADVANCED SUBNET CALCULATOR */}
+                <div className="bg-slate-900/50 p-4 border border-slate-800 rounded-md shadow-xs flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase text-slate-400 font-display mb-3 border-b border-slate-850 pb-2 flex items-center gap-1.5">
+                      <Sliders className="h-4 w-4 text-cyan-400" />
+                      Calculadora de Subred IP e Inyección LAN
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-semibold block mb-1 uppercase font-display">IP Base de Red</label>
+                        <input
+                          type="text"
+                          value={calcIp}
+                          onChange={(e) => setCalcIp(e.target.value)}
+                          placeholder="192.168.1.0"
+                          className="w-full bg-slate-950 text-slate-200 border border-slate-850 rounded px-2.5 py-1 text-xs font-mono focus:outline-hidden focus:border-cyan-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-semibold block mb-1 uppercase font-display">Prefijo CIDR</label>
+                        <select
+                          value={calcCidr}
+                          onChange={(e) => setCalcCidr(Number(e.target.value))}
+                          className="w-full bg-slate-950 text-slate-200 border border-slate-850 rounded px-2.5 py-1 text-xs font-mono focus:outline-hidden focus:border-cyan-500"
+                        >
+                          <option value="30">/30 (4 hosts, 2 usables)</option>
+                          <option value="29">/29 (8 hosts, 6 usables)</option>
+                          <option value="28">/28 (16 hosts, 14 usables)</option>
+                          <option value="27">/27 (32 hosts, 30 usables)</option>
+                          <option value="26">/26 (64 hosts, 62 usables)</option>
+                          <option value="24">/24 (256 hosts, 254 usables)</option>
+                          <option value="23">/23 (512 hosts, 510 usables)</option>
+                          <option value="22">/22 (1024 hosts, 1022 usables)</option>
+                          <option value="16">/16 (65536 hosts, 65534 usables)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {(() => {
+                      const ans = calculateSubnetDetails(calcIp, calcCidr);
+                      if (!ans) {
+                        return (
+                          <div className="bg-red-500/10 border border-rose-955/40 p-2.5 rounded text-rose-450 text-center font-semibold text-[11px]">
+                            La dirección IP ingress es inválida. Ej. use "192.168.1.0"
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="space-y-2 bg-slate-950/70 p-3 rounded-xs border border-slate-850 font-mono text-[10.5px]">
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-400">
+                            <div className="flex justify-between border-b border-slate-900/40 py-0.5">
+                              <span className="text-slate-500">Máscara:</span>
+                              <span className="text-slate-200 font-semibold">{ans.netMask}</span>
+                            </div>
+                            <div className="flex justify-between border-b border-slate-900/40 py-0.5">
+                              <span className="text-slate-500">Usables:</span>
+                              <span className="text-emerald-400 font-bold">{ans.usableCount} IPs</span>
+                            </div>
+                            <div className="flex justify-between border-b border-slate-900/40 py-0.5 col-span-2">
+                              <span className="text-slate-400 font-sans">Rango Host Usables:</span>
+                              <span className="text-cyan-400 font-semibold">{ans.usableRange}</span>
+                            </div>
+                            <div className="flex justify-between border-b border-slate-900/40 py-0.5">
+                              <span className="text-slate-500">Wilcard:</span>
+                              <span className="text-slate-300">{ans.wildcard}</span>
+                            </div>
+                            <div className="flex justify-between border-b border-slate-900/40 py-0.5">
+                              <span className="text-slate-500">ID Red:</span>
+                              <span className="text-slate-200">{ans.netAddr}</span>
+                            </div>
+                            <div className="flex justify-between col-span-2 py-0.5">
+                              <span className="text-slate-500 font-mono">Broadcast:</span>
+                              <span className="text-rose-400">{ans.broadAddr}</span>
+                            </div>
+                          </div>
+                          
+                          {/* Binary mask rendering to look extremely pro */}
+                          <div className="border-t border-slate-900 pt-2 text-[9px] text-slate-500 leading-tight space-y-0.5 font-semibold">
+                            <div className="truncate"><span className="text-slate-550 font-sans mr-2">IP (Binario):</span>{ans.binaryIp}</div>
+                            <div className="truncate"><span className="text-slate-550 font-sans mr-2">Netmask (Bin):</span>{ans.binaryMask}</div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="mt-3">
+                    <button
+                      onClick={() => {
+                        const segment = `${calcIp}/${calcCidr}`;
+                        setSubnetSegment(segment);
+                        addAlert(`IP Asignada manualmente mediante calculadora a ${segment}.`, 'info');
+                        // Small trigger timeout to scan automatically
+                        setTimeout(() => {
+                          handleStartScan();
+                        }, 250);
+                      }}
+                      className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-1.5 px-3 rounded-xs text-xs flex items-center justify-center gap-1.5 transition-all shadow-md hover:shadow-cyan-500/10 cursor-pointer"
+                    >
+                      <Wifi className="h-3.5 w-3.5" />
+                      Inyectar y Escanear esta Subred
+                    </button>
+                  </div>
+                </div>
+
+                {/* LIVE ALERTS AND LOG REPORT PANEL */}
+                <div className="bg-slate-900/50 p-4 border border-slate-800 rounded-md shadow-xs flex flex-col justify-between w-full">
+                  <div>
+                    <div className="flex justify-between items-center border-b border-slate-850 pb-2 mb-2">
+                      <h3 className="text-xs font-bold uppercase text-slate-400 font-display flex items-center gap-1.5">
+                        <Terminal className="h-4 w-4 text-emerald-400 animate-pulse" />
+                        Registro de Actividad y Alertas de Red
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setLiveAlerts([
+                            { id: 'start', time: new Date().toLocaleTimeString(), msg: 'Monitor local re-establecido. Registros vaciados.', type: 'info' }
+                          ]);
+                        }}
+                        className="text-[9px] text-[#22d3ee] bg-cyan-950/10 hover:bg-[#0284c7]/20 hover:text-cyan-300 font-mono tracking-wider hover:underline uppercase px-1.5 py-0.5 rounded border border-cyan-800/20 cursor-pointer transition-all"
+                      >
+                        Limpiar Logs
+                      </button>
+                    </div>
+
+                    <div className="max-h-[178px] overflow-y-auto space-y-2 pr-1 font-mono text-[10.5px]">
+                      {liveAlerts.length === 0 ? (
+                        <p className="text-center text-slate-600 italic py-10">Ningún registro nuevo en sesión.</p>
+                      ) : (
+                        liveAlerts.map(alert => (
+                          <div 
+                            key={alert.id} 
+                            className={`p-2 rounded-xs border flex items-start gap-2.5 transition-all duration-150 ${
+                              alert.type === 'success' ? 'bg-emerald-500/5 border-emerald-950/20 text-emerald-350' :
+                              alert.type === 'warning' ? 'bg-amber-500/5 border-amber-950/20 text-amber-300' :
+                              alert.type === 'error' ? 'bg-red-500/5 border-red-950/20 text-red-350' :
+                              'bg-slate-950/50 border-slate-850/60 text-slate-400'
+                            }`}
+                          >
+                            <span className="text-[9px] text-slate-500 select-none font-semibold whitespace-nowrap pt-0.5">{alert.time}</span>
+                            <div className="text-left leading-relaxed">
+                              {alert.msg}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-[9px] text-slate-500 font-mono text-left pt-2 border-t border-slate-850/40 mt-3 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping shrink-0" />
+                    <span>Syslog de red activo escuchando tráfico en Loopback local y ARP.</span>
+                  </div>
+                </div>
+
+              </div>
+
               {/* BOTTOM BENTO GRID: MAPS & TOP LATENCY TABLE */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 
@@ -1034,7 +1500,7 @@ export default function App() {
 
               {/* MAPA DE SUBRED GRID */}
               <div className="w-full">
-                <MapSubred devices={devices} onSelectDevice={setSelectedDevice} />
+                <MapSubred devices={mapDevices} onSelectDevice={setSelectedDevice} />
               </div>
 
             </div>
@@ -1045,7 +1511,7 @@ export default function App() {
           )}
 
           {activeView === 'dispositivos' && (
-            <DeviceTable devices={devices} onSelectDevice={setSelectedDevice} />
+            <DeviceTable devices={segmentFilteredDevices} onSelectDevice={setSelectedDevice} />
           )}
 
           {activeView === 'ancho_banda' && (
@@ -1069,6 +1535,17 @@ export default function App() {
               setHistoryData={setHistoryData}
               subnetSegment={subnetSegment}
               includeVirtuals={includeVirtuals}
+              activeAnomaly={activeAnomaly}
+              setActiveAnomaly={setActiveAnomaly}
+            />
+          )}
+
+          {activeView === 'ai_diagnostic' && (
+            <NetworkAICopilot 
+              devices={devices}
+              activeAnomaly={activeAnomaly}
+              subnetSegment={subnetSegment}
+              sensors={sensors}
             />
           )}
 
@@ -1199,83 +1676,239 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Diagnostic Parameters Grid */}
-                <div className="space-y-2 text-xs">
-                  <h5 className="font-semibold uppercase text-slate-500 text-[10px] tracking-wider font-display text-left">
-                    PARÁMETROS DEL HOST
-                  </h5>
-                  <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xs border border-slate-850/50 font-mono text-[11px] text-slate-300">
-                    <div>
-                      <span className="text-slate-500 block text-[9px] text-left">MAC ADDRESS</span>
-                      <span className="text-slate-200 font-medium font-mono text-left block">{activeDiagDevice.mac}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[9px] text-left">PING LATENCIA</span>
-                      <span className={`font-semibold text-left block ${activeDiagDevice.ping ? 'text-cyan-400' : 'text-slate-500'}`}>
-                        {activeDiagDevice.ping !== null ? `${activeDiagDevice.ping} ms` : '—'}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      <span className="text-slate-500 block text-[9px] text-left">BAJADA/SUBIDA</span>
-                      <span className="text-slate-200 block text-left font-semibold">
-                        <span className="text-cyan-400">↓{(activeDiagDevice.consumoDownload || 0).toFixed(1)}</span>
-                        <span className="text-slate-600">/</span>
-                        <span className="text-amber-500">↑{(activeDiagDevice.consumoUpload || 0).toFixed(1)}</span>
-                        <span className="text-slate-500 text-[9px] ml-1 font-normal font-sans">Mbps</span>
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                       <span className="text-slate-500 block text-[9px] text-left">DATO TOTAL</span>
-                       <span className="text-emerald-400 font-semibold block text-left">
-                         {activeDiagDevice.totalConsumido !== undefined ? `${Math.round(activeDiagDevice.totalConsumido)} MB` : '0 MB'}
-                       </span>
-                    </div>
-                  </div>
+                {/* TABS SELECTOR IN MODAL */}
+                <div className="flex border-b border-slate-850 text-xs">
+                  <button
+                    onClick={() => setModalTab('info')}
+                    className={`flex-1 py-1.5 font-bold tracking-wide uppercase transition-all duration-150 text-center cursor-pointer ${
+                      modalTab === 'info'
+                        ? 'border-b-2 border-cyan-500 text-cyan-400 font-semibold'
+                        : 'text-slate-500 hover:text-slate-350 bg-slate-950/20'
+                    }`}
+                  >
+                    📁 Parámetros
+                  </button>
+                  <button
+                    onClick={() => setModalTab('ports')}
+                    className={`flex-1 py-1.5 font-bold tracking-wide uppercase transition-all duration-150 text-center cursor-pointer ${
+                      modalTab === 'ports'
+                        ? 'border-b-2 border-cyan-500 text-cyan-400 font-semibold'
+                        : 'text-slate-500 hover:text-slate-350 bg-slate-950/20'
+                    }`}
+                  >
+                    🔍 Escáner Puertos
+                  </button>
                 </div>
 
-                {/* Simulated active checkers/sensors list inside diagnostic popup */}
-                <div className="space-y-2 text-xs text-slate-300">
-                  <h5 className="font-semibold uppercase text-slate-500 text-[10px] tracking-wider font-display text-left">
-                    SENSORES INTEGRADOS ({activeDiagDevice.estado === 'No_Escaneado' ? 0 : activeDiagDevice.sensorHttp ? 2 : 1})
-                  </h5>
-                  {activeDiagDevice.estado === 'No_Escaneado' ? (
-                    <p className="text-slate-500 text-[11px] italic font-sans text-left">(Mapeador sin escanear. Inicie un escaneo para activar sensores).</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {/* Ping Sensor row */}
-                      <div className="flex items-center justify-between p-2 rounded-xs bg-slate-950/25 border border-slate-850/60 text-slate-300">
-                        <div className="text-left">
-                          <div className="font-medium text-slate-300 text-left">Sensor Ping ICMP</div>
-                          <span className="text-[10px] text-slate-500 font-mono text-left block">Verifica respuesta de eco</span>
+                {modalTab === 'info' ? (
+                  <div className="space-y-4">
+                    {/* Diagnostic Parameters Grid */}
+                    <div className="space-y-1.5 text-xs">
+                      <h5 className="font-bold uppercase text-slate-500 text-[10px] tracking-wider font-display text-left">
+                        PARÁMETROS DEL HOST
+                      </h5>
+                      <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xs border border-slate-850/50 font-mono text-[11px] text-slate-300">
+                        <div>
+                          <span className="text-slate-500 block text-[9px] text-left">MAC ADDRESS</span>
+                          <span className="text-slate-200 font-semibold font-mono text-left block">{activeDiagDevice.mac}</span>
                         </div>
-                        <div className="text-right">
-                          <span className="font-mono font-semibold text-slate-200">{activeDiagDevice.ping !== null ? `${activeDiagDevice.ping} ms` : 'Falla'}</span>
-                          <div className={`text-[9px] uppercase font-bold ${activeDiagDevice.ping !== null ? 'text-emerald-400' : 'text-rose-500'}`}>
-                            {activeDiagDevice.ping !== null ? 'Responde' : 'Fuera de red'}
-                          </div>
+                        <div>
+                          <span className="text-slate-500 block text-[9px] text-left">PING LATENCIA</span>
+                          <span className={`font-bold text-left block ${activeDiagDevice.ping ? 'text-cyan-400' : 'text-slate-500'}`}>
+                            {activeDiagDevice.ping !== null ? `${activeDiagDevice.ping} ms` : '—'}
+                          </span>
+                        </div>
+                        <div className="mt-1">
+                          <span className="text-slate-500 block text-[9px] text-left">BAJADA/SUBIDA</span>
+                          <span className="text-slate-200 block text-left font-bold">
+                            <span className="text-cyan-400">↓{(activeDiagDevice.consumoDownload || 0).toFixed(1)}</span>
+                            <span className="text-slate-600">/</span>
+                            <span className="text-amber-500">↑{(activeDiagDevice.consumoUpload || 0).toFixed(1)}</span>
+                            <span className="text-slate-500 text-[9px] ml-1 font-normal font-sans">Mbps</span>
+                          </span>
+                        </div>
+                        <div className="mt-1">
+                           <span className="text-slate-500 block text-[9px] text-left">DATO TOTAL</span>
+                           <span className="text-emerald-400 font-bold block text-left">
+                             {activeDiagDevice.totalConsumido !== undefined ? `${Math.round(activeDiagDevice.totalConsumido)} MB` : '0 MB'}
+                           </span>
                         </div>
                       </div>
+                    </div>
 
-                      {/* HTTP Sensor row if applicable */}
-                      {activeDiagDevice.sensorHttp && (
-                        <div className="flex items-center justify-between p-2 rounded-xs bg-slate-950/25 border border-slate-855/60 text-slate-300">
-                          <div className="text-left">
-                            <div className="font-medium text-slate-300 text-left">Sensor Puerto TCP HTTP</div>
-                            <span className="text-[10px] text-slate-500 font-mono text-left block">Verifica código 200 en puerto 80</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="font-mono font-semibold text-slate-200">
-                              {activeDiagDevice.estado === 'OK' ? '200 OK' : 'No responde'}
-                            </span>
-                            <div className={`text-[9px] uppercase font-bold ${activeDiagDevice.estado === 'OK' ? 'text-emerald-400' : 'text-amber-550'}`}>
-                              {activeDiagDevice.estado === 'OK' ? 'Activo' : 'Advertencia'}
+                    {/* Simulated active checkers/sensors list inside diagnostic popup */}
+                    <div className="space-y-1.5 text-xs text-slate-300">
+                      <h5 className="font-bold uppercase text-slate-500 text-[10px] tracking-wider font-display text-left">
+                        SENSORES INTEGRADOS ({activeDiagDevice.estado === 'No_Escaneado' ? 0 : activeDiagDevice.sensorHttp ? 2 : 1})
+                      </h5>
+                      {activeDiagDevice.estado === 'No_Escaneado' ? (
+                        <p className="text-slate-500 text-[11px] italic font-sans text-left">(Mapeador sin escanear. Inicie un escaneo para activar sensores).</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {/* Ping Sensor row */}
+                          <div className="flex items-center justify-between p-2 rounded-xs bg-slate-950/25 border border-slate-850/60 text-slate-300">
+                            <div className="text-left">
+                              <div className="font-semibold text-slate-300 text-left">Sensor Ping ICMP</div>
+                              <span className="text-[10px] text-slate-500 font-mono text-left block">Verifica respuesta de eco</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-mono font-bold text-slate-200">{activeDiagDevice.ping !== null ? `${activeDiagDevice.ping} ms` : 'Falla'}</span>
+                              <div className={`text-[9px] uppercase font-bold ${activeDiagDevice.ping !== null ? 'text-emerald-400' : 'text-rose-500'}`}>
+                                {activeDiagDevice.ping !== null ? 'Responde' : 'Fuera de red'}
+                              </div>
                             </div>
                           </div>
+
+                          {/* HTTP Sensor row if applicable */}
+                          {activeDiagDevice.sensorHttp && (
+                            <div className="flex items-center justify-between p-2 rounded-xs bg-slate-950/25 border border-[#1e293b] text-slate-300">
+                              <div className="text-left">
+                                <div className="font-semibold text-slate-300 text-left">Sensor Puerto TCP HTTP</div>
+                                <span className="text-[10px] text-slate-500 font-mono text-left block">Verifica código 200 en puerto 80</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-mono font-bold text-slate-200">
+                                  {activeDiagDevice.estado === 'OK' ? '200 OK' : 'No responde'}
+                                </span>
+                                <div className={`text-[9px] uppercase font-bold ${activeDiagDevice.estado === 'OK' ? 'text-emerald-400' : 'text-amber-550'}`}>
+                                  {activeDiagDevice.estado === 'OK' ? 'Activo' : 'Advertencia'}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3.5 text-xs text-slate-300">
+                    <div className="flex justify-between items-center border-b border-slate-850 pb-1.5">
+                      <h5 className="font-bold uppercase text-slate-500 text-[10px] tracking-wider font-display text-left">
+                        EXPLORADOR DE PUERTOS LOCAL
+                      </h5>
+                      {activeScanningPort && (
+                        <div className="text-[10px] text-cyan-400 font-mono animate-pulse">
+                          Escaneando puerto: {activeScanningPort}
+                        </div>
+                      )}
+                    </div>
+
+                    {portScanStatus === 'idle' && (
+                      <div className="text-center py-5 space-y-3">
+                        <Terminal className="h-8 w-8 text-slate-550 mx-auto opacity-40 text-slate-500" />
+                        <p className="text-[11px] text-slate-400 leading-relaxed font-sans max-w-xs mx-auto">
+                          Inspeccione los puertos TCP más comunes de este sistema para buscar configuraciones vulnerables o servicios expuestos.
+                        </p>
+                        <button
+                          onClick={() => handleStartPortScan(activeDiagDevice.ip)}
+                          className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-4 py-1.5 rounded-xs hover:shadow-cyan-500/10 hover:shadow-md active:scale-95 transition-all text-xs cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          <Search className="h-3.5 w-3.5" />
+                          Ejecutar Escaneo de Puertos
+                        </button>
+                      </div>
+                    )}
+
+                    {portScanStatus === 'scanning' && (
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center text-[10px] font-mono pr-1 text-slate-400">
+                          <span>Progreso de Escaneo TCP...</span>
+                          <span>{portScanProgress}%</span>
+                        </div>
+                        <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-850">
+                          <div 
+                            className="bg-cyan-400 h-full transition-all duration-200 ease-out shadow-inner"
+                            style={{ width: `${portScanProgress}%` }}
+                          />
+                        </div>
+                        <div className="max-h-[160px] overflow-y-auto space-y-1.5 bg-slate-950/40 p-2 border border-slate-850 rounded-xs pr-1">
+                          {portScanResults.map(r => (
+                            <div key={r.port} className="flex justify-between items-center p-1 font-mono text-[10px] border-b border-slate-900/40">
+                              <span className="text-slate-300">{r.port}/tcp ({r.service})</span>
+                              <span className="text-slate-405 text-slate-500 truncate max-w-[140px] text-[9px]">{r.desc}</span>
+                              <span className={`px-1 py-0.2 rounded-xs font-bold uppercase text-[8px] ${
+                                r.status === 'open' 
+                                  ? r.risk === 'high' ? 'bg-rose-500/15 text-rose-450 text-rose-400 border border-rose-500/20' 
+                                    : r.risk === 'medium' ? 'bg-amber-500/15 text-amber-500 border border-amber-500/20'
+                                    : 'bg-emerald-500/10 text-emerald-450 text-emerald-400'
+                                  : 'bg-slate-900 text-slate-600'
+                              }`}>
+                                {r.status === 'open' ? 'Abierto' : 'Cerrado'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {portScanStatus === 'done' && (
+                      <div className="space-y-3.5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-emerald-400 font-mono flex items-center gap-1">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Escaneo Completado
+                          </span>
+                          <button
+                            onClick={() => handleStartPortScan(activeDiagDevice.ip)}
+                            className="text-cyan-400 hover:text-cyan-300 font-bold text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            Re-escanear
+                          </button>
+                        </div>
+                        
+                        <div className="max-h-[165px] overflow-y-auto space-y-1 bg-slate-950 p-2.5 rounded-xs border border-slate-850 pr-1">
+                          {portScanResults.map(r => (
+                            <div key={r.port} className="flex items-center justify-between p-1 border-b border-slate-900 text-[10.5px]">
+                              <div className="text-left">
+                                <div className="font-mono text-slate-200">
+                                  {r.port} <span className="text-slate-500 text-[9px]">/tcp</span> ({r.service})
+                                </div>
+                                <div className="text-[9px] text-slate-500">{r.desc}</div>
+                              </div>
+                              <span className={`px-1.5 py-0.5 rounded-xs font-mono font-bold text-[8px] leading-none ${
+                                r.status === 'open'
+                                  ? r.risk === 'high' ? 'bg-red-500/10 text-rose-400 border border-rose-900/40'
+                                    : r.risk === 'medium' ? 'bg-amber-500/15 text-amber-500 border border-amber-800/30'
+                                    : 'bg-emerald-500/10 text-emerald-400 border border-emerald-950/40'
+                                  : 'bg-slate-900 text-slate-600'
+                              }`}>
+                                {r.status === 'open' ? 'Abierto' : 'Cerrado'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Security Advisory alert based on found risk */}
+                        {portScanResults.some(r => r.risk === 'high' && r.status === 'open') ? (
+                          <div className="bg-red-500/10 p-2 rounded-xs border border-rose-950/40 text-[10px] leading-relaxed flex items-start gap-2 text-rose-300">
+                            <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400" />
+                            <div className="text-left">
+                              <strong className="block text-rose-400 uppercase font-bold text-[9px] mb-0.5">Alerta de Vulnerabilidad Crítica</strong>
+                              El puerto TELNET (23) se encuentra abierto. TELNET transmite toda la información (incluidos los usuarios y claves) en texto plano, haciéndolo vulnerable a escuchas no autorizadas. Migre de inmediato a SSH (puerto 22) para cifrar la conexión.
+                            </div>
+                          </div>
+                        ) : portScanResults.some(r => r.risk === 'medium' && r.status === 'open') ? (
+                          <div className="bg-amber-500/10 p-2 rounded-xs border border-amber-950/30 text-[10px] leading-relaxed flex items-start gap-2 text-amber-300">
+                            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400" />
+                            <div className="text-left">
+                              <strong className="block text-amber-400 uppercase font-bold text-[9px] mb-0.5">Advertencia de Seguridad Media</strong>
+                              Se detectó el puerto FTP (21) abierto en el NAS de backup. FTP no implementa cifrado nativo sobre el canal de control. Considere actualizar el servicio de almacenamiento local a SFTP o HTTPS si los datos son confidenciales.
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-emerald-500/10 p-2 rounded-xs border border-emerald-950/40 text-[10px] leading-relaxed flex items-start gap-2 text-emerald-300">
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                            <div className="text-left">
+                              <strong className="block text-emerald-400 uppercase font-bold text-[9px] mb-0.5">Análisis de Postura Sano</strong>
+                              No se encontraron puertos inseguros de administración expuestos. Los puertos abiertos detectados poseen configuraciones normales para transporte de datos local LAN.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
               </div>
 
