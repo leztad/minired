@@ -174,7 +174,7 @@ export default function NetworkAudit({ devices, onAddLog }: NetworkAuditProps) {
 
   // EXPORT 3: MARKDOWN COPY TO CLIPBOARD
   const copyAsMarkdown = () => {
-    let md = `# REPORT DE SEGURIDAD Y AUDITORÍA DE RED LAN
+    let md = `# REPORTE DE SEGURIDAD Y AUDITORÍA DE RED LAN
 Generado por: **RedMonitor Admin Sonda**  
 Fecha: \`${new Date().toLocaleString('es-ES')}\`  
 
@@ -182,7 +182,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
 
 ## 📊 RESUMEN EJECUTIVO
 - **Total Hosts Activos**: ${totals.count} dispositivos con dirección IP asociada.
-- **Alertas / Advertencias**: ${totals.warnings} hosts con latencias anomalías o sobreconsumo.
+- **Alertas / Advertencias**: ${totals.warnings} hosts con latencias anómalas o sobreconsumo.
 - **Latencia Local Media**: ${totals.avgLatency} ms  
 - **Resultado General**: **Nivel de seguridad de red: [ ${totals.score}% ]** - *${totals.rank}*
 
@@ -322,7 +322,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(11);
       doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.text("IP SONDADAS CON DIRECCIÓN MAC ASOCIADA", 10, 85);
+      doc.text("DIRECCIONES IP SONDEADAS CON DIRECCIÓN MAC ASOCIADA", 10, 85);
 
       doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
       doc.rect(10, 89, 190, 8, 'F');
