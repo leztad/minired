@@ -109,10 +109,22 @@ export default function App() {
   }, [isNetworkOffline]);
 
   // General simulator state
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
+    return localStorage.getItem('netmonitor_demo_mode') !== 'false';
+  });
   const [includeVirtuals, setIncludeVirtuals] = useState<boolean>(false);
   const [subnetSegment, setSubnetSegment] = useState<string>('192.168.1.0/24');
   const [selectedInterface, setSelectedInterface] = useState<string>('Intel Wi-Fi 6E AX211 @ 802.11ax');
   const [serverInterfaces, setServerInterfaces] = useState<any[]>([]);
+  const [isHostedInCloud, setIsHostedInCloud] = useState<boolean>(false);
+  const [isLocalHelpModalOpen, setIsLocalHelpModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isCloud = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      setIsHostedInCloud(isCloud);
+    }
+  }, []);
 
   // Dynamically populated interface config listing real hardware and falling back to virtual / presets
   const activeInterfacesList = useMemo(() => {
@@ -155,9 +167,9 @@ export default function App() {
       };
     });
 
-    // 2. Real hosting server interfaces from Cloud Run
+    // 2. Real hosting server interfaces
     const cloudServerList = (serverInterfaces || []).map(i => ({
-      name: `Servidor en la Nube - ${i.name}`,
+      name: i.name,
       type: i.type,
       segments: i.segments,
       ip: i.ip,
@@ -166,7 +178,24 @@ export default function App() {
       subnet: i.subnet
     }));
 
-    return [...simulatedHardwareList, ...cloudServerList];
+    const combined = [...simulatedHardwareList, ...cloudServerList];
+    const uniqueList: any[] = [];
+    const seenNames = new Set<string>();
+
+    for (const item of combined) {
+      let uniqueName = item.name;
+      let counter = 1;
+      while (seenNames.has(uniqueName)) {
+        uniqueName = `${item.name} (${item.ip || counter++})`;
+      }
+      seenNames.add(uniqueName);
+      uniqueList.push({
+        ...item,
+        name: uniqueName
+      });
+    }
+
+    return uniqueList;
   }, [serverInterfaces, deviceManualIp, subnetSegment]);
 
   useEffect(() => {
@@ -434,7 +463,9 @@ export default function App() {
       const subnetPool = Array.from({ length: 254 }, (_, idx) => {
         const i = idx + 1;
         const currentIp = `${base}.${i}`;
-        const isCustomWorkstation = deviceManualIp ? (currentIp === deviceManualIp.trim()) : (i === 55);
+        const isCustomWorkstation = deviceManualIp 
+          ? (currentIp === deviceManualIp.trim()) 
+          : (currentInterfaceObj?.ip ? (currentIp === currentInterfaceObj.ip) : (i === 55));
 
         let workstationName = 'Laptop de Trabajo (Este PC)';
         if (selectedInterface.includes('PCIe')) {
@@ -443,11 +474,15 @@ export default function App() {
           workstationName = 'Nodo Docker Host (Este PC)';
         }
 
+        const macToUse = isCustomWorkstation 
+          ? (currentInterfaceObj?.mac && currentInterfaceObj.mac !== '00:00:00:00:00:00' ? currentInterfaceObj.mac.toUpperCase() : '84:C8:A0:BB:AB:66') 
+          : '—';
+
         return {
           id: `host-${base.replace(/\./g, '_')}-${i}`,
           ip: currentIp,
           host: isCustomWorkstation ? workstationName : '—',
-          mac: isCustomWorkstation ? '84:C8:A0:BB:AB:66' : '—',
+          mac: macToUse,
           ping: null,
           estado: 'No_Escaneado' as const,
           lastChecked: null,
@@ -668,7 +703,8 @@ export default function App() {
     const segmentsToScan = scanAllSegments ? currentInterfaceObj.segments : [subnetSegment];
 
     let realHosts: any[] = [];
-    fetch('/api/scan-real-arp')
+    // Pass the active subnet segment to the backend so it knows exactly which /24 scope to actively ping
+    fetch('/api/scan-real-arp?subnet=' + encodeURIComponent(subnetSegment))
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data.devices)) {
@@ -694,7 +730,7 @@ export default function App() {
     // Generate final target pools for all selected segments with custom manual IP overrides
     const finalTargetsMap: Record<string, Device[]> = {};
     segmentsToScan.forEach(seg => {
-      const rawTargets = generateFullSubnet(seg, includeVirtuals, selectedInterface);
+      const rawTargets = generateFullSubnet(seg, includeVirtuals, selectedInterface, isDemoMode);
       if (deviceManualIp) {
         const trimmedManualIp = deviceManualIp.trim();
         const manualSubnet = extractSubnetFromIp(trimmedManualIp);
@@ -833,14 +869,17 @@ export default function App() {
                 const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
                 
                 // Determine whether this is the local computer/gateway or device
-                const isGateway = r.ip.endsWith('.1');
+                const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
                 const isThisPc = r.ip === currentInterfaceObj.ip;
                 
-                let hostNameStr = r.vendor;
+                // Choose the resolved hostname if retrieved, fallback to MAC manufacturer vendor
+                let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
+                
+                let hostNameStr = nameLabel;
                 if (isThisPc) {
-                  hostNameStr = `Laptop de Trabajo (Este PC) - ${r.vendor}`;
+                  hostNameStr = `Este PC (${nameLabel})`;
                 } else if (isGateway) {
-                  hostNameStr = `Gateway de Red (Router) - ${r.vendor}`;
+                  hostNameStr = `Gateway/Router (${nameLabel})`;
                 }
 
                 const deviceObj = {
@@ -1176,6 +1215,22 @@ export default function App() {
             </button>
           </div>
 
+          {/* TOGGLE Demo / Simulación */}
+          <label className="flex items-center gap-1.5 text-amber-400 cursor-pointer" title="Habilita la simulación de hosts de prueba (TV, Consolas, Cámaras, etc.). Desactívalo para que el escáner sea 100% real y busque únicamente tus equipos físicos activos en la red local actual.">
+            <input 
+              type="checkbox" 
+              checked={isDemoMode}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setIsDemoMode(checked);
+                localStorage.setItem('netmonitor_demo_mode', String(checked));
+                addAlert(checked ? "Modo Simulación DEMO activado: El escáner generará datos demostrativos y alarmas ficticias." : "Modo ESCANEO REAL activado: El escáner ahora mostrará con precisión quirúrgica únicamente tus dispositivos reales físicamente conectados mediante ARP y barrido ICMP.", "warning");
+              }}
+              className="rounded-xs border-slate-850 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-amber-500"
+            />
+            <span className="select-none text-[11px] font-bold font-sans">🧪 Modo Demo</span>
+          </label>
+
           {/* CHECKBOX Virtuales */}
           <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer" title="Habilita la simulación de hosts y contenedores virtuales en la subred activa">
             <input 
@@ -1277,6 +1332,89 @@ export default function App() {
           >
             Reconectar Cable
           </button>
+        </div>
+      )}
+
+      {/* ADVERTENCIA DE RED EJECUTÁNDOSE EN SANDBOX CLOUD */}
+      {isHostedInCloud && (
+        <div className="bg-amber-500/10 border-b border-amber-950/40 px-4 py-2 text-xs text-amber-300 font-sans">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 max-w-7xl mx-auto w-full">
+            <div className="flex items-start gap-2.5">
+              <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold uppercase tracking-wide text-amber-450 pr-1">🌐 Servidor en la Nube de Google Cloud Run:</span>
+                Esta vista previa de la aplicación corre en un servidor remoto de Google. 
+                Por motivos de seguridad informática y sandbox, este servidor remoto no puede acceder a los enrutadores físicos privados ni a la red local residencial (`192.168.1.x`) de tu portátil a menos que lo corras físicamente. 
+                {!isDemoMode && (
+                  <span className="text-rose-450 font-bold block mt-1">
+                    ⚠️ Al tener desactivado el "Modo Demo", el escáner intentará buscar equipos reales en el servidor remoto de Google, reportando los hosts locales como caídos. Activa "Modo Demo" para ver datos ilustrativos o corre la app localmente.
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => setIsLocalHelpModalOpen(true)}
+              className="text-[11px] bg-amber-500/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-200 font-bold px-3 py-1 rounded-sm cursor-pointer transition-all shrink-0 hover:text-white"
+            >
+              🚀 ¿Cómo escanear mi red real?
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE INSTRUCCIONES DE ESCANEO DE RED LOCAL REAL */}
+      {isLocalHelpModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xs">
+          <div className="bg-slate-900 border border-slate-800 rounded-lg max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 font-sans">
+            <h3 className="text-md font-bold text-white flex items-center gap-2 mb-4">
+              <Network className="h-5 w-5 text-cyan-400" />
+              ¿Cómo escanear mi red local real?
+            </h3>
+            
+            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+              Actualmente estás utilizando la vista previa en la nube (<span className="text-amber-450">Google Cloud Run</span>). Los servidores remotos de Google no pueden acceder a tu enrutador físico ni a tus dispositivos internos por motivos lógicos de seguridad y enrutamiento privado.
+            </p>
+
+            <div className="bg-slate-950/90 border border-slate-850 rounded-xs p-3.5 mb-5 font-sans">
+              <h4 className="text-[11px] font-bold text-cyan-400 mb-2 uppercase tracking-wider">Paso a paso para medición real / física:</h4>
+              <ol className="text-slate-300 text-[11px] space-y-2.5 list-decimal list-inside leading-snug">
+                <li>
+                  Haz clic en el menú superior izquierdo/derecho en la barra de herramientas y descarga el código fuente (<span className="text-emerald-400 font-semibold">Export ZIP</span>).
+                </li>
+                <li>
+                  Descomprime el archivo en tu portátil o PC.
+                </li>
+                <li>
+                  Abre la consola/terminal en esa carpeta y ejecuta:
+                  <div className="mt-1.5 bg-slate-900 border border-slate-800 text-slate-200 p-1.5 rounded font-mono text-[10px] break-all select-all">
+                    npm install
+                  </div>
+                </li>
+                <li>
+                  Inicia la aplicación en tu entorno local físico:
+                  <div className="mt-1.5 bg-slate-900 border border-slate-800 text-cyan-400 p-1.5 rounded font-mono text-[10px] break-all select-all">
+                    npm run dev
+                  </div>
+                </li>
+                <li>
+                  Abre <span className="text-white underline font-semibold">http://localhost:3000</span> en tu navegador y ¡listo! El escáner ARP y barrido ICMP se ejecutará directo en tu hardware de red físico.
+                </li>
+              </ol>
+            </div>
+
+            <p className="text-[10px] text-slate-400 leading-normal mb-5">
+              💡 <span className="text-amber-400 font-semibold">Tip:</span> Para explorar y probar todas las métricas del panel gráfico en el contenedor en la nube, te recomendamos mantener activado el <span className="text-amber-400 font-semibold">🧪 Modo Demo</span>.
+            </p>
+
+            <div className="flex justify-end">
+              <button 
+                onClick={() => setIsLocalHelpModalOpen(false)}
+                className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-xs transition-all cursor-pointer shadow-md"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -143,7 +143,7 @@ const SUBNET_PRESETS: Record<string, {
 };
 
 // Generate the full pool of 254 devices for a single segment
-export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean, interfaceName?: string): Device[] {
+export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean, interfaceName?: string, isDemoMode: boolean = true): Device[] {
   const devices: Device[] = [];
   const base = subnetBase.replace(/\.0\/24$/, '').replace(/\.0\/16$/, '');
 
@@ -151,8 +151,14 @@ export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean,
   const presetKey = SUBNET_PRESETS[base] ? base : '192.168.1';
   const subnetPresetGroup = SUBNET_PRESETS[presetKey];
 
-  const activePresets = subnetPresetGroup.active;
-  const virtualPresets = subnetPresetGroup.virtual;
+  const activePresets = !isDemoMode 
+    ? {
+        1: { host: 'Gateway de Red (Router)', mac: '10:7B:44:A2:99:11', ping: 2, estado: 'OK' as const, sensorHttp: true, consumoDownload: 1.5, consumoUpload: 0.5, totalConsumido: 450 },
+        55: { host: 'Laptop de Trabajo (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 1, estado: 'OK' as const, sensorHttp: true, consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120 }
+      }
+    : subnetPresetGroup.active;
+
+  const virtualPresets = isDemoMode ? subnetPresetGroup.virtual : {};
 
   for (let i = 1; i <= 254; i++) {
     const ip = `${base}.${i}`;

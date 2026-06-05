@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import os from "os";
+import dns from "dns";
 import { exec } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
@@ -11,7 +12,8 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Simple Helper to map MAC OUI to common network device vendors to make it beautiful
 const getVendorByMac = (mac: string): string => {
@@ -76,6 +78,15 @@ app.get("/api/interfaces", (req, res) => {
           } else {
             friendlyName = `PCIe Ethernet - ${name}`;
           }
+
+          let originalFriendlyName = friendlyName;
+          let disambigCounter = 1;
+          while (results.some(r => r.name === friendlyName)) {
+            friendlyName = `${originalFriendlyName} (${ip})`;
+            if (results.some(r => r.name === friendlyName)) {
+              friendlyName = `${originalFriendlyName} (${ip}) #${disambigCounter++}`;
+            }
+          }
           
           results.push({
             name: friendlyName,
@@ -119,48 +130,151 @@ app.get("/api/interfaces", (req, res) => {
   }
 });
 
-// API endpoint to retrieve the real online devices in the computer's ARP cache
-app.get("/api/scan-real-arp", (req, res) => {
-  const isWindows = process.platform === "win32";
-  const cmd = "arp -a";
-  
-  exec(cmd, (error, stdout, stderr) => {
-    const devices: any[] = [];
-    if (error) {
-      return res.json({ devices: [] });
-    }
-    
-    const lines = stdout.split("\n");
-    // Regex matches IPv4 address and MAC address
-    const ipMacRegex = /((?:\d{1,3}\.){3}\d{1,3})[^\d\w]+((?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2})/i;
-    const altRegex = /\(((?:\d{1,3}\.){3}\d{1,3})\) at ((?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2})/i;
-    
-    lines.forEach(line => {
-      let match = line.match(ipMacRegex);
-      if (!match) {
-        match = line.match(altRegex);
+// Helper to resolve IP hostname/computer name on the local subnet dynamically
+const resolveHostname = (ip: string): Promise<string> => {
+  return new Promise((resolve) => {
+    // 1. Try native dns.reverse which is extremely fast if a local DNS server is active (like the home router)
+    dns.reverse(ip, (err, hostnames) => {
+      if (!err && hostnames && hostnames.length > 0) {
+        let name = hostnames[0];
+        if (name.endsWith('.')) name = name.slice(0, -1);
+        return resolve(name);
       }
       
-      if (match) {
-        const ip = match[1];
-        let mac = match[2].replace(/-/g, ":").toUpperCase();
-        
-        // Exclude broadcast, multicast or loopback IPs
-        if (ip.startsWith("224.") || ip.startsWith("239.") || ip === "255.255.255.255" || ip.endsWith(".255") || ip.startsWith("127.")) {
-          return;
-        }
-        
-        devices.push({
-          ip,
-          mac,
-          estado: "OK",
-          ping: Math.floor(Math.random() * 8) + 1,
-          vendor: getVendorByMac(mac)
+      const isWindows = process.platform === "win32";
+      if (isWindows) {
+        // 2. On Windows, use PowerShell to query DNS / NetBIOS hostname
+        // This is extremely high-accuracy for Windows networks where devices have NetBIOS names
+        const psCmd = `powershell -NoProfile -Command "[System.Net.Dns]::GetHostEntry('${ip}').HostName"`;
+        exec(psCmd, { timeout: 1200 }, (psErr, psStdout) => {
+          if (!psErr && psStdout && psStdout.trim()) {
+            return resolve(psStdout.trim());
+          }
+          // Alternative: nslookup
+          exec(`nslookup ${ip}`, { timeout: 1000 }, (nsErr, nsStdout) => {
+            if (!nsErr && nsStdout) {
+              const lines = nsStdout.split('\n');
+              const nameLine = lines.find(line => line.toLowerCase().includes('name:') || line.toLowerCase().includes('nombre:'));
+              if (nameLine) {
+                const parts = nameLine.split(':');
+                if (parts.length > 1) {
+                  return resolve(parts[1].trim());
+                }
+              }
+            }
+            resolve("");
+          });
+        });
+      } else {
+        // 3. On Linux/macOS, try standard nslookup tools
+        exec(`nslookup ${ip}`, { timeout: 1000 }, (nsErr, nsStdout) => {
+          if (!nsErr && nsStdout) {
+            const lines = nsStdout.split('\n');
+            const nameLine = lines.find(line => line.toLowerCase().includes('name:') || line.toLowerCase().includes('nombre:') || line.toLowerCase().includes('name ='));
+            if (nameLine) {
+              if (nameLine.includes('=')) {
+                const parts = nameLine.split('=');
+                return resolve(parts[1].trim());
+              } else {
+                const parts = nameLine.split(':');
+                return resolve(parts[1].trim());
+              }
+            }
+          }
+          resolve("");
         });
       }
     });
-    
-    res.json({ devices });
+  });
+};
+
+// API endpoint to retrieve the real online devices in the computer's ARP cache
+app.get("/api/scan-real-arp", (req, res) => {
+  const subnetParam = req.query.subnet as string;
+  let base = "192.168.1";
+  if (subnetParam) {
+    const clean = subnetParam.split('/')[0].trim();
+    const parts = clean.split('.');
+    if (parts.length >= 3) {
+      base = `${parts[0]}.${parts[1]}.${parts[2]}`;
+    }
+  }
+
+  const isWindows = process.platform === "win32";
+  
+  // Choose the fast asynchronous ping sweep command based on platform to populate ARP table
+  let sweepCmd = "";
+  if (isWindows) {
+    // Highly optimized .NET async ping sweep in Windows PowerShell. We add a sleep of 1500ms to allow replies to populate 
+    // the system ARP table before PowerShell exits and triggering the callback!
+    sweepCmd = `powershell -NoProfile -Command "1..254 | ForEach-Object { try { [System.Net.NetworkInformation.Ping]::new().SendAsync('${base}.' + $_, 250) } catch {} }; Start-Sleep -Milliseconds 1500"`;
+  } else {
+    // Linux/Docker: send rapid parallel ICMP echo requests in the background and wait for all to complete
+    sweepCmd = `for i in {1..254}; do ping -c 1 -W 1 ${base}.$i >/dev/null 2>&1 & done; wait`;
+  }
+
+  // First perform an active ping sweep to populate the OS ARP cache table
+  exec(sweepCmd, { timeout: 4500 }, (sweepErr) => {
+    // Execute the standard ARP table reader
+    const cmd = "arp -a";
+    exec(cmd, (error, stdout, stderr) => {
+      const devices: any[] = [];
+      if (error) {
+        return res.json({ devices: [] });
+      }
+      
+      const lines = stdout.split("\n");
+      // Regex matches IPv4 address and MAC address
+      const ipMacRegex = /((?:\d{1,3}\.){3}\d{1,3})[^\d\w]+((?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2})/i;
+      const altRegex = /\(((?:\d{1,3}\.){3}\d{1,3})\) at ((?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2})/i;
+      
+      lines.forEach(line => {
+        let match = line.match(ipMacRegex);
+        if (!match) {
+          match = line.match(altRegex);
+        }
+        
+        if (match) {
+          const ip = match[1];
+          let mac = match[2].replace(/-/g, ":").toUpperCase();
+          
+          // Exclude broadcast, multicast or loopback IPs
+          if (ip.startsWith("224.") || ip.startsWith("239.") || ip === "255.255.255.255" || ip.endsWith(".255") || ip.startsWith("127.")) {
+            return;
+          }
+
+          // Filter to only match the currently scanned subnet Segment to avoid cross-pollution
+          if (!ip.startsWith(base + ".")) {
+            return;
+          }
+          
+          devices.push({
+            ip,
+            mac,
+            estado: "OK",
+            ping: Math.floor(Math.random() * 8) + 1,
+            vendor: getVendorByMac(mac)
+          });
+        }
+      });
+      
+      // Resolve hostnames for all active found endpoints in parallel
+      const resolvePromises = devices.map(async (device) => {
+        const hostname = await resolveHostname(device.ip);
+        return {
+          ...device,
+          hostname: hostname || ""
+        };
+      });
+
+      Promise.all(resolvePromises)
+        .then((resolvedDevices) => {
+          res.json({ devices: resolvedDevices });
+        })
+        .catch(() => {
+          res.json({ devices });
+        });
+    });
   });
 });
 

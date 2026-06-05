@@ -10,12 +10,18 @@ interface DeviceTableProps {
 export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'Todos' | 'OK' | 'Advertencia' | 'Caído'>('Todos');
+  const [hideUnused, setHideUnused] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
   // Filter logic
   const filteredDevices = useMemo(() => {
     return devices.filter(d => {
+      // If hiding unoccupied / unused IP spaces
+      if (hideUnused && d.estado === 'Caído' && (d.host === '—' || d.host === '')) {
+        return false;
+      }
+
       // Metric match
       const matchesSearch = 
         d.ip.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -27,7 +33,7 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
       if (selectedFilter === 'Todos') return true;
       return d.estado === selectedFilter;
     });
-  }, [devices, searchTerm, selectedFilter]);
+  }, [devices, searchTerm, selectedFilter, hideUnused]);
 
   // Pagination logic
   const totalPages = Math.max(1, Math.ceil(filteredDevices.length / itemsPerPage));
@@ -39,7 +45,7 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
   // Maintain page safety when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedFilter]);
+  }, [searchTerm, selectedFilter, hideUnused]);
 
   return (
     <div className="bg-slate-900/50 rounded-md border border-slate-800 shadow-xs overflow-hidden">
@@ -54,6 +60,17 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
 
         {/* Filters and Search Bar */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Checkbox to hide unoccupied/unused IP spaces */}
+          <label className="flex items-center gap-1.5 text-xs text-slate-450 cursor-pointer select-none border border-slate-800 bg-slate-950 px-2 py-1 rounded hover:text-slate-250 transition-colors">
+            <input
+              type="checkbox"
+              checked={hideUnused}
+              onChange={e => setHideUnused(e.target.checked)}
+              className="rounded-xs border-slate-800 text-cyan-500 focus:ring-cyan-500 h-3 w-3 bg-slate-950 cursor-pointer accent-cyan-500"
+            />
+            <span className="text-[11px] font-medium font-sans">Ocultar IPs Libres (Solo Activos)</span>
+          </label>
+
           {/* Tabs resembling mockup buttons */}
           <div className="flex rounded-xs border border-slate-800 p-0.5 bg-slate-950 text-xs text-slate-400">
             {(['Todos', 'OK', 'Advertencia', 'Caído'] as const).map(f => (

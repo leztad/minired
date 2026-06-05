@@ -73,32 +73,128 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
       return d ? (d.estado === 'OK' || d.estado === 'Advertencia') : false;
     };
 
-    // 1. Identify active endpoints at Layer 3
-    const activeWifiClients: any[] = [
-      { id: `${base}.70`, label: 'Dispositivo IoT (DHCP .70)', ip: `${base}.70`, type: 'iot' as const, parent: 'ap', linkType: 'wifi' as const, interfaceName: 'WLAN Living 5G' },
-      { id: `${base}.102`, label: 'Módulo IoT (DHCP .102)', ip: `${base}.102`, type: 'iot' as const, parent: 'ap', linkType: 'wifi' as const, interfaceName: 'WLAN IOT 2.4G' }
-    ].filter(n => isActiveDevice(n.ip));
+    // Grab all active devices in standard devices array
+    // Filter out the gateway (.1) and "Este PC"
+    const gatewayIp = `${base}.1`;
+    const localDevice = devices.find(d => {
+      const name = d.host.toLowerCase();
+      return name.includes('este pc') || name.includes('mi pc') || name.includes('computador de trabajo') || name.includes('estacion de trabajo') || name.includes('estación de trabajo') || name.includes('laptop de trabajo');
+    });
+    const localIp = localDevice?.ip || `${base}.55`;
 
-    const activeSwitchClients: any[] = [
-      { id: `${base}.38`, label: 'Dispositivo LAN (DHCP .38)', ip: `${base}.38`, type: 'tv' as const, parent: 'switch', linkType: 'ethernet' as const, interfaceName: 'Port LAN 3' },
-      { id: `${base}.40`, label: 'Dispositivo LAN (DHCP .40)', ip: `${base}.40`, type: 'gaming' as const, parent: 'switch', linkType: 'ethernet' as const, interfaceName: 'Port LAN 5' },
-      { id: `${base}.15`, label: 'Almacenamiento de Red (NAS)', ip: `${base}.15`, type: 'nas' as const, parent: 'switch', linkType: 'ethernet' as const, interfaceName: 'Port LAN 6' },
-      { id: `${base}.22`, label: 'Impresora de Red', ip: `${base}.22`, type: 'printer' as const, parent: 'switch', linkType: 'ethernet' as const, interfaceName: 'Port LAN 8' }
-    ].filter(n => isActiveDevice(n.ip));
+    const activeList = devices.filter(d => 
+      (d.estado === 'OK' || d.estado === 'Advertencia') &&
+      d.ip !== gatewayIp &&
+      d.ip !== localIp
+    );
 
-    const activeVirtualClients: any[] = [
-      { id: `${base}.10`, label: 'Base de Datos (Docker DB)', ip: `${base}.10`, type: 'server' as const, parent: `${base}.55`, linkType: 'virtual' as const, interfaceName: 'docker-veth0' },
-      { id: `${base}.11`, label: 'Servidor Web (Docker)', ip: `${base}.11`, type: 'server' as const, parent: `${base}.55`, linkType: 'virtual' as const, interfaceName: 'docker-veth1' },
-      { id: `${base}.200`, label: 'Máquina Virtual (VM Ubuntu)', ip: `${base}.200`, type: 'server' as const, parent: `${base}.55`, linkType: 'virtual' as const, interfaceName: 'vboxnet0' }
-    ].filter(n => isActiveDevice(n.ip));
+    // Dynamic categorization of active devices
+    const activeWifiClients: any[] = [];
+    const activeSwitchClients: any[] = [];
+    const activeVirtualClients: any[] = [];
+
+    // Check if the current environment is inherently Wi-Fi or Virtual
+    const someDeviceWithInterface = devices.find(x => x.interfaz);
+    const selectedIntName = someDeviceWithInterface?.interfaz || '';
+    const isInterfaceWifi = selectedIntName.toLowerCase().includes('wi-fi') || 
+                            selectedIntName.toLowerCase().includes('wifi') || 
+                            selectedIntName.toLowerCase().includes('wireless') || 
+                            selectedIntName.toLowerCase().includes('intel');
+    const isInterfaceVirtual = selectedIntName.toLowerCase().includes('loopback') || 
+                               selectedIntName.toLowerCase().includes('virtual') || 
+                               selectedIntName.toLowerCase().includes('docker');
+
+    activeList.forEach(d => {
+      const hostLower = d.host.toLowerCase();
+      
+      // Determine if virtual
+      const isVirtual = isInterfaceVirtual || 
+                        hostLower.includes('docker') || 
+                        hostLower.includes('contenedor') || 
+                        hostLower.includes('container') || 
+                        hostLower.includes('vm') || 
+                        hostLower.includes('virtual') || 
+                        hostLower.includes('grafana') || 
+                        hostLower.includes('influx') || 
+                        hostLower.includes('redis') || 
+                        hostLower.includes('postgres') || 
+                        hostLower.includes('rabbitmq') || 
+                        hostLower.includes('mininet') || 
+                        hostLower.includes('sdn');
+
+      // Determine if Wi-Fi (excluding virtuals)
+      const isWifi = !isVirtual && (
+                     isInterfaceWifi || 
+                     hostLower.includes('wifi') || 
+                     hostLower.includes('wi-fi') || 
+                     hostLower.includes('wireless') || 
+                     hostLower.includes('smartphone') || 
+                     hostLower.includes('iphone') || 
+                     hostLower.includes('android') || 
+                     hostLower.includes('tablet') || 
+                     hostLower.includes('ipad') || 
+                     hostLower.includes('alexa') || 
+                     hostLower.includes('echo') || 
+                     hostLower.includes('bulb') || 
+                     hostLower.includes('smart') || 
+                     hostLower.includes('nest') || 
+                     hostLower.includes('yale') || 
+                     hostLower.includes('bombilla') || 
+                     hostLower.includes('invitado') || 
+                     hostLower.includes('freelancer') || 
+                     hostLower.includes('celular') ||
+                     hostLower.includes('camera') || 
+                     hostLower.includes('cámara') ||
+                     hostLower.includes('livingroom')
+      );
+
+      // Detect visual icon type
+      let type: 'router' | 'switch' | 'ap' | 'desktop' | 'server' | 'tv' | 'gaming' | 'nas' | 'printer' | 'iot' | 'cloud' = 'desktop';
+      if (hostLower.includes('tv') || hostLower.includes('television')) {
+        type = 'tv';
+      } else if (hostLower.includes('gaming') || hostLower.includes('ps5') || hostLower.includes('playstation') || hostLower.includes('xbox') || hostLower.includes('nintendo') || hostLower.includes('consola')) {
+        type = 'gaming';
+      } else if (hostLower.includes('nas') || hostLower.includes('almacenamiento') || hostLower.includes('backup') || hostLower.includes('storage')) {
+        type = 'nas';
+      } else if (hostLower.includes('printer') || hostLower.includes('impresora')) {
+        type = 'printer';
+      } else if (isVirtual || hostLower.includes('server') || hostLower.includes('servidor') || hostLower.includes('db') || hostLower.includes('database')) {
+        type = 'server';
+      } else if (hostLower.includes('iot') || hostLower.includes('alexa') || hostLower.includes('echo') || hostLower.includes('bulb') || hostLower.includes('smart') || hostLower.includes('nest') || hostLower.includes('yale') || hostLower.includes('bombilla') || hostLower.includes('termostato') || hostLower.includes('sensor') || hostLower.includes('biométrico') || hostLower.includes('lector') || hostLower.includes('cámara') || hostLower.includes('camera') || hostLower.includes('dahua') || hostLower.includes('cctv')) {
+        type = 'iot';
+      } else if (hostLower.includes('ap') || hostLower.includes('access point') || hostLower.includes('unifi')) {
+        type = 'ap';
+      } else if (hostLower.includes('router') || hostLower.includes('gateway') || hostLower.includes('switch')) {
+        type = 'router';
+      }
+
+      const ipSuffix = d.ip.split('.').pop() || '0';
+      const clientObj = {
+        id: d.id,
+        label: d.host,
+        ip: d.ip,
+        type,
+        parent: isVirtual ? localIp : (isWifi ? 'ap' : 'switch'),
+        linkType: isVirtual ? ('virtual' as const) : (isWifi ? ('wifi' as const) : ('ethernet' as const)),
+        interfaceName: isVirtual ? `docker-veth${ipSuffix}` : (isWifi ? `WLAN Client-${ipSuffix}` : `Port LAN-${ipSuffix}`)
+      };
+
+      if (isVirtual) {
+        activeVirtualClients.push(clientObj);
+      } else if (isWifi) {
+        activeWifiClients.push(clientObj);
+      } else {
+        activeSwitchClients.push(clientObj);
+      }
+    });
 
     const hasVirtuals = activeVirtualClients.length > 0;
     const hasWifi = activeWifiClients.length > 0;
 
     const desktopNodeVal = {
-      id: `${base}.55`,
-      label: 'Estación de Trabajo (Este PC)',
-      ip: `${base}.55`,
+      id: localIp,
+      label: localDevice?.host || 'Estación de Trabajo (Este PC)',
+      ip: localIp,
       type: 'desktop' as const,
       interfaceName: 'Port LAN 4'
     };
