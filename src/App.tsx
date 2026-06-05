@@ -1359,8 +1359,16 @@ export default function App() {
             ) : 'Escanear ahora'}
           </button>
 
+          {/* DESIGNER AND PROGRAMMER STATEMENT */}
+          <div className="hidden sm:flex flex-col text-right pr-2">
+            <span className="text-[9px] uppercase tracking-wider font-bold text-slate-500">AUTORÍA DEL SISTEMA</span>
+            <span className="text-[10px] font-semibold text-slate-300 font-sans tracking-wide">
+              Diseñado y programado por <span className="font-bold text-cyan-400">ASNEIDER ZAPATA</span>
+            </span>
+          </div>
+
           {/* CLOCK */}
-          <div className="border-l border-slate-850 pl-3 font-mono font-bold text-[13px] tracking-wider text-cyan-400 drop-shadow-sm w-20 text-right">
+          <div className="border-l border-slate-850 pl-3 font-mono font-bold text-[13px] tracking-wider text-cyan-400 drop-shadow-sm w-20 text-right shrink-0">
             {currentTime || '9:34:52'}
           </div>
         </div>

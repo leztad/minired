@@ -4,6 +4,7 @@ import {
   ShieldCheck, ShieldAlert, Download, FileJson, FileSpreadsheet, Copy, 
   Search, Sliders, Server, Wifi, Activity, Terminal, CheckCircle2, AlertTriangle, Info, Network
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 
 interface NetworkAuditProps {
   devices: Device[];
@@ -206,6 +207,258 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
     onAddLog(`📋 Reporte de auditoría estructurado en Markdown copiado al portapapeles del sistema.`, 'info');
   };
 
+  const exportAsPDF = () => {
+    onAddLog("📄 Compilando reporte de auditoría en formato PDF...", "info");
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const primaryColor = [11, 17, 32]; 
+      const accentColor = [6, 182, 212];  
+      const successColor = [16, 185, 129]; 
+      const warningColor = [245, 158, 11]; 
+      const textColorPrimary = [15, 23, 42]; 
+      const textColorSecondary = [71, 85, 105]; 
+      const lightBg = [248, 250, 252]; 
+      const borderLineColor = [226, 232, 240]; 
+
+      const drawHeader = (pageNo: number) => {
+        doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+        doc.rect(0, 0, 210, 4, 'F');
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139); 
+        doc.text("SISTEMA DE MONITOREO DE RED - REDMONITOR", 10, 10);
+        doc.text("AUDITORÍA DE INFRAESTRUCTURA LAN", 200, 10, { align: 'right' });
+
+        doc.setDrawColor(203, 213, 225); 
+        doc.setLineWidth(0.3);
+        doc.line(10, 12, 200, 12);
+      };
+
+      const drawFooter = (pageNo: number) => {
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.2);
+        doc.line(10, 282, 200, 282);
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184); 
+        doc.text(`Reporte de Auditoría LAN - Generado automáticamente el ${new Date().toLocaleString('es-ES')}`, 10, 287);
+        doc.setFont('Helvetica', 'bold');
+        doc.text("Diseñado y programado por ASNEIDER ZAPATA", 105, 287, { align: 'center' });
+        doc.setFont('Helvetica', 'normal');
+        doc.text(`Pág ${pageNo}`, 200, 287, { align: 'right' });
+      };
+
+      let pageCount = 1;
+      drawHeader(pageCount);
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text("INFORME DE AUDITORÍA DE RED FÍSICA", 10, 22);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
+      doc.text("Sondeo y Validación de Interfaces Físicas, Direcciones MAC y Latencia LAN", 10, 27);
+
+      doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
+      doc.rect(10, 31, 190, 12, 'F');
+      doc.setDrawColor(borderLineColor[0], borderLineColor[1], borderLineColor[2]);
+      doc.setLineWidth(0.25);
+      doc.rect(10, 31, 190, 12, 'S');
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(textColorPrimary[0], textColorPrimary[1], textColorPrimary[2]);
+      doc.text(`Sonda de Monitoreo: RedMonitor Sonda de Campo Local`, 14, 38.5);
+      doc.text(`ID de Sonda: RED-MON-162BF909`, 100, 38.5);
+      doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 154, 38.5);
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text("RESUMEN EJECUTIVO DE SEGURIDAD", 10, 49);
+
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(186, 230, 253); 
+      doc.setLineWidth(0.3);
+      doc.rect(10, 52, 190, 24, 'F');
+      doc.rect(10, 52, 190, 24, 'S');
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
+      doc.text("TOTAL HOSTS ACTIVOS", 15, 59);
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text(`${totals.count} Dispositivos`, 15, 68);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
+      doc.text("LATENCIA MEDIA LAN", 80, 59);
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.setTextColor(totals.avgLatency > 50 ? warningColor[0] : successColor[0], totals.avgLatency > 50 ? warningColor[1] : successColor[1], totals.avgLatency > 50 ? warningColor[2] : successColor[2]);
+      doc.text(`${totals.avgLatency} ms`, 80, 68);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
+      doc.text("NIVEL DE SEGURIDAD GENERAL", 135, 59);
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(totals.score < 80 ? warningColor[0] : successColor[0], totals.score < 80 ? warningColor[1] : successColor[1], totals.score < 80 ? warningColor[2] : successColor[2]);
+      doc.text(`${totals.score}% - ${totals.rank.split('(')[0]}`, 135, 68);
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text("IP SONDADAS CON DIRECCIÓN MAC ASOCIADA", 10, 85);
+
+      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(10, 89, 190, 8, 'F');
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.text("DIRECCIÓN IP", 14, 94.5);
+      doc.text("DIRECCIÓN MAC", 39, 94.5);
+      doc.text("FABRICANTE NIC (ARP)", 76, 94.5);
+      doc.text("ESTACIÓN / HOST", 125, 94.5);
+      doc.text("LATENCIA", 168, 94.5);
+      doc.text("ESTADO", 187, 94.5);
+
+      let y = 97;
+      activeDevices.forEach((device, index) => {
+        const isAlternate = index % 2 === 1;
+        if (isAlternate) {
+          doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
+          doc.rect(10, y, 190, 7.5, 'F');
+        } else {
+          doc.setFillColor(255, 255, 255);
+        }
+
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.15);
+        doc.line(10, y + 7.5, 200, y + 7.5);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(0, 102, 153); 
+        doc.text(device.ip, 14, y + 4.8);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85); 
+        doc.text(device.mac, 39, y + 4.8);
+
+        const manufacturerRaw = resolveVendorByMac(device.mac);
+        let manufacturer = manufacturerRaw.length > 25 ? manufacturerRaw.substring(0, 23) + '...' : manufacturerRaw;
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
+        doc.text(manufacturer, 76, y + 4.8);
+
+        let friendlyHostName = device.host.length > 22 ? device.host.substring(0, 20) + '...' : device.host;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        doc.text(friendlyHostName, 125, y + 4.8);
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(device.ping && device.ping > 100 ? warningColor[0] : successColor[0], device.ping && device.ping > 100 ? warningColor[1] : successColor[1], device.ping && device.ping > 100 ? warningColor[2] : successColor[2]);
+        const pingLabel = device.ping !== null ? `${device.ping} ms` : '—';
+        doc.text(pingLabel, 168, y + 4.8);
+
+        if (device.estado === 'OK') {
+          doc.setFillColor(209, 250, 229); 
+          doc.rect(185, y + 1.5, 12, 4.5, 'F');
+          doc.setFont('Helvetica', 'bold');
+          doc.setFontSize(7);
+          doc.setTextColor(5, 150, 105); 
+          doc.text("OK", 191, y + 4.7, { align: 'center' });
+        } else {
+          doc.setFillColor(254, 243, 199); 
+          doc.rect(185, y + 1.5, 12, 4.5, 'F');
+          doc.setFont('Helvetica', 'bold');
+          doc.setFontSize(7);
+          doc.setTextColor(217, 119, 6); 
+          doc.text("WARN", 191, y + 4.7, { align: 'center' });
+        }
+
+        y += 7.5;
+
+        if (y > 265) {
+          drawFooter(pageCount);
+          doc.addPage();
+          pageCount += 1;
+          drawHeader(pageCount);
+
+          doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+          doc.rect(10, 18, 190, 8, 'F');
+
+          doc.setFont('Helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.setTextColor(255, 255, 255);
+          doc.text("DIRECCIÓN IP", 14, 23.5);
+          doc.text("DIRECCIÓN MAC", 39, 23.5);
+          doc.text("FABRICANTE NIC (ARP)", 76, 23.5);
+          doc.text("ESTACIÓN / HOST", 125, 23.5);
+          doc.text("LATENCIA", 168, 23.5);
+          doc.text("ESTADO", 187, 23.5);
+
+          y = 26; 
+        }
+      });
+
+      if (y > 245) {
+        drawFooter(pageCount);
+        doc.addPage();
+        pageCount += 1;
+        drawHeader(pageCount);
+        y = 18;
+      }
+
+      doc.setFillColor(241, 245, 249);
+      doc.rect(10, y + 6, 190, 22, 'F');
+      doc.setDrawColor(226, 232, 240);
+      doc.rect(10, y + 6, 190, 22, 'S');
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text("DECLARACIÓN DE VALIDACIÓN Y CONTROL DE AUDITORÍA", 14, y + 12);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
+      const note1 = "El presente reporte describe el estado actual de los dispositivos activos en la red LAN local.";
+      const note2 = "Las asignaciones MAC-IP fueron recolectadas a través del protocolo ARP nativo de los adaptadores activos.";
+      doc.text(note1, 14, y + 17);
+      doc.text(note2, 14, y + 21);
+
+      drawFooter(pageCount);
+
+      const formattedDate = new Date().toISOString().split('T')[0];
+      doc.save(`auditoria_seguridad_red_${formattedDate}.pdf`);
+
+      onAddLog("🏆 Reporte en PDF compilado y descargado exitosamente. Sello oficial de RedMonitor asignado.", "success");
+    } catch (e: any) {
+      console.error(e);
+      onAddLog(`❌ Error al generar el PDF: ${e.message || e}`, "error");
+    }
+  };
+
   return (
     <div className="space-y-4" id="network-audit-view">
       
@@ -230,6 +483,15 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
           >
             <Copy className="h-3.5 w-3.5 text-cyan-400" />
             <span>{copiedMarkdown ? '¡Markdown Copiado!' : 'Copiar Markdown'}</span>
+          </button>
+
+          <button
+            onClick={exportAsPDF}
+            className="bg-rose-900/40 hover:bg-rose-800 text-rose-200 hover:text-white font-bold py-1.5 px-3 rounded-xs border border-rose-850 text-[11px] flex items-center gap-1.5 cursor-pointer transition-all"
+            title="Exportar base de datos a un reporte PDF impreso formal"
+          >
+            <Download className="h-3.5 w-3.5 text-rose-450" />
+            <span>Exportar PDF</span>
           </button>
 
           <button
