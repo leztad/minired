@@ -711,6 +711,56 @@ export default function App() {
           realHosts = data.devices;
           if (realHosts.length > 0) {
             addAlert(`Sonda ARP física completada: Se encontraron ${realHosts.length} dispositivos reales conectados en tu misma red local.`, 'success');
+            
+            // Immediately apply real host results to React state to prevent timing discard
+            setDevices(prev => {
+              const nextPool = [...prev];
+              realHosts.forEach(r => {
+                const rSubnet = extractSubnetFromIp(r.ip);
+                if (segmentsToScan.includes(rSubnet)) {
+                  const idx = nextPool.findIndex(d => d.ip === r.ip);
+                  const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
+                  const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
+                  const isThisPc = r.ip === currentInterfaceObj.ip;
+                  
+                  let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
+                  let hostNameStr = nameLabel;
+                  if (isThisPc) {
+                    hostNameStr = `Este PC (${nameLabel})`;
+                  } else if (isGateway) {
+                    hostNameStr = `Gateway/Router (${nameLabel})`;
+                  }
+
+                  const deviceObj = {
+                    id: `host-${r.ip.replace(/\./g, '_')}`,
+                    ip: r.ip,
+                    host: hostNameStr,
+                    mac: macToUse,
+                    ping: r.ping || 4,
+                    estado: 'OK' as const,
+                    lastChecked: new Date().toLocaleTimeString(),
+                    sensorPing: true,
+                    sensorHttp: isGateway || isThisPc,
+                    consumoDownload: isThisPc ? 8.5 : Number((Math.random() * 5).toFixed(1)),
+                    consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
+                    totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
+                    interfaz: selectedInterface,
+                    segmento: rSubnet
+                  };
+
+                  if (idx !== -1) {
+                    nextPool[idx] = deviceObj;
+                  } else {
+                    nextPool.push(deviceObj);
+                  }
+                }
+              });
+
+              // Recompute sensors immediately for live dashboard health
+              const generatedSensors = generateSensorsForDevices(nextPool);
+              setSensors(generatedSensors);
+              return nextPool;
+            });
           }
         }
       })
