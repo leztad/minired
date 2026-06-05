@@ -243,16 +243,23 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       const drawFooter = (pageNo: number) => {
         doc.setDrawColor(226, 232, 240);
         doc.setLineWidth(0.2);
-        doc.line(10, 282, 200, 282);
+        doc.line(10, 281, 200, 281);
 
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(148, 163, 184); 
-        doc.text(`Reporte de Auditoría LAN - Generado automáticamente el ${new Date().toLocaleString('es-ES')}`, 10, 287);
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139); 
+        doc.text("RedMonitor — Reporte de Auditoría LAN", 10, 285.5);
+        doc.text(`Generación: ${new Date().toLocaleString('es-ES')}`, 10, 289);
+
         doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(51, 65, 85); 
         doc.text("Diseñado y programado por ASNEIDER ZAPATA", 105, 287, { align: 'center' });
+
         doc.setFont('Helvetica', 'normal');
-        doc.text(`Pág ${pageNo}`, 200, 287, { align: 'right' });
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184); 
+        doc.text(`Página ${pageNo}`, 200, 287, { align: 'right' });
       };
 
       let pageCount = 1;
