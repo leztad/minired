@@ -3,7 +3,8 @@ import {
   Network, Activity, Cpu, Server, Search, RefreshCw, Sliders, Globe, Clock, 
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
   ChevronDown, Monitor, Copy, Plus, Play, Pause, ExternalLink, HelpCircle, 
-  ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable
+  ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable,
+  Gauge
 } from 'lucide-react';
 
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
@@ -16,6 +17,8 @@ import SensorTable from './components/SensorTable';
 import TestingCenter from './components/TestingCenter';
 import BandwidthMonitor from './components/BandwidthMonitor';
 import NetworkAICopilot from './components/NetworkAICopilot';
+import SpeedTest from './components/SpeedTest';
+import NetworkAudit from './components/NetworkAudit';
 
 const extractSubnetFromIp = (ip: string): string => {
   const parts = ip.trim().split('.');
@@ -223,7 +226,7 @@ export default function App() {
   const [calcCidr, setCalcCidr] = useState<number>(24);
   
   // Navigation
-  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic'>('vista_general');
+  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red'>('vista_general');
   const [sidebarSearch, setSidebarSearch] = useState<string>('');
   const [isLanTreeOpen, setIsLanTreeOpen] = useState<boolean>(true);
 
@@ -1633,6 +1636,34 @@ export default function App() {
                   <span className="ml-auto bg-purple-500/15 text-purple-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-purple-500/20">GEMINI</span>
                 </button>
               </li>
+              <li>
+                <button 
+                  onClick={() => setActiveView('speed_test')}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'speed_test' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Gauge className="h-3.5 w-3.5 text-cyan-500" />
+                  <span>Prueba de Velocidad</span>
+                  <span className="ml-auto bg-cyan-500/10 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">MEGABITS</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => setActiveView('auditorias_red')}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'auditorias_red' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                  <span>Auditorías de Red</span>
+                  <span className="ml-auto bg-emerald-500/10 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20">AUDITOR</span>
+                </button>
+              </li>
 
               {/* Collapsible Subnet Folder Entry */}
               <li className="pt-2">
@@ -2365,6 +2396,14 @@ export default function App() {
               subnetSegment={subnetSegment}
               sensors={sensors}
             />
+          )}
+
+          {activeView === 'speed_test' && (
+            <SpeedTest onAddLog={addAlert} />
+          )}
+
+          {activeView === 'auditorias_red' && (
+            <NetworkAudit devices={devices} onAddLog={addAlert} />
           )}
 
         </main>
