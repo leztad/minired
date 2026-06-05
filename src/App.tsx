@@ -704,7 +704,7 @@ export default function App() {
 
     let realHosts: any[] = [];
     // Pass the active subnet segment to the backend so it knows exactly which /24 scope to actively ping
-    fetch('/api/scan-real-arp?subnet=' + encodeURIComponent(subnetSegment))
+    fetch(`/api/scan-real-arp?subnet=${encodeURIComponent(subnetSegment)}&isCloud=${isHostedInCloud}`)
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data.devices)) {
