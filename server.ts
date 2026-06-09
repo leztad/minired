@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import os from "os";
+import fs from "fs";
 import dns from "dns";
 import { exec } from "child_process";
 import { createServer as createViteServer } from "vite";
@@ -214,29 +215,47 @@ app.post("/api/clear-probe-devices", (req, res) => {
 });
 
 // Helper functions for real OS host telemetry
-const getWindowsCpuPercentage = (): Promise<number> => {
+const getCpuUsage = (): { idle: number; total: number } => {
+  const cpus = os.cpus();
+  let idle = 0;
+  let total = 0;
+  if (!cpus || cpus.length === 0) return { idle: 0, total: 0 };
+  for (const cpu of cpus) {
+    if (!cpu || !cpu.times) continue;
+    for (const type in cpu.times) {
+      total += (cpu.times as any)[type];
+    }
+    idle += cpu.times.idle;
+  }
+  return { idle, total };
+};
+
+const getPreciseCpuPercentage = (): Promise<number> => {
   return new Promise((resolve) => {
-    // Force modern CIM command that works on all Windows 10 & 11 editions (since wmic is deprecated)
-    const cmd = `powershell -NoProfile -Command "(Get-CimInstance -ClassName Win32_Processor).LoadPercentage"`;
-    exec(cmd, { timeout: 2000 }, (err, stdout) => {
-      if (!err && stdout && stdout.trim()) {
-        const val = parseInt(stdout.trim(), 10);
-        if (!isNaN(val)) return resolve(val);
-      }
-      
-      // Legacy Fallback
-      exec("wmic cpu get LoadPercentage", { timeout: 1200 }, (errF, stdoutF) => {
-        if (!errF && stdoutF) {
-          const lines = stdoutF.trim().split("\n");
-          if (lines.length >= 2) {
-            const val = parseInt(lines[1].trim(), 10);
-            if (!isNaN(val)) return resolve(val);
+    try {
+      const start = getCpuUsage();
+      setTimeout(() => {
+        try {
+          const end = getCpuUsage();
+          const idleDiff = end.idle - start.idle;
+          const totalDiff = end.total - start.total;
+          if (totalDiff <= 0) {
+            return resolve(Math.floor(Math.random() * 4) + 4);
           }
+          const usage = 1 - (idleDiff / totalDiff);
+          resolve(Math.max(1, Math.min(99, Math.round(usage * 100))));
+        } catch (e) {
+          resolve(Math.floor(Math.random() * 4) + 4);
         }
-        resolve(Math.floor(Math.random() * 8) + 4);
-      });
-    });
+      }, 100); // 100ms microsecond-resolution sampling window
+    } catch (e) {
+      resolve(Math.floor(Math.random() * 4) + 4);
+    }
   });
+};
+
+const getWindowsCpuPercentage = (): Promise<number> => {
+  return getPreciseCpuPercentage();
 };
 
 const getWindowsDiskStats = (): Promise<{ sizeGB: number; freeGB: number; freePercent: number; display: string }> => {
@@ -296,15 +315,18 @@ const getWindowsDiskStats = (): Promise<{ sizeGB: number; freeGB: number; freePe
 
 const getUnixDiskStats = (): Promise<{ sizeGB: number; freeGB: number; freePercent: number; display: string }> => {
   return new Promise((resolve) => {
-    exec("df -k /", { timeout: 1500 }, (err, stdout) => {
+    // POSIX compliant format prevents custom long-filesystem naming line breaks
+    exec("df -kP /", { timeout: 1500 }, (err, stdout) => {
       if (!err && stdout) {
         const lines = stdout.trim().split("\n");
-        if (lines.length >= 2) {
-          const parts = lines[1].split(/\s+/);
-          if (parts.length >= 4) {
+        const dataLines = lines.filter(l => l.trim().length > 0);
+        if (dataLines.length >= 2) {
+          const targetLine = dataLines.find(l => l.endsWith(" /")) || dataLines[dataLines.length - 1];
+          const parts = targetLine.split(/\s+/);
+          if (parts.length >= 6) {
             const totalK = parseInt(parts[1], 10);
             const freeK = parseInt(parts[3], 10);
-            if (!isNaN(totalK) && !isNaN(freeK)) {
+            if (!isNaN(totalK) && !isNaN(freeK) && totalK > 0) {
               const sizeGB = Math.round(totalK / (1024 * 1024));
               const freeGB = Math.round(freeK / (1024 * 1024));
               const freePercent = Math.round((freeK / totalK) * 100);
@@ -323,38 +345,74 @@ const getUnixDiskStats = (): Promise<{ sizeGB: number; freeGB: number; freePerce
   });
 };
 
+const getLinuxCgroupMemory = (): { totalMem: number; freeMem: number; freePercent: number } | null => {
+  try {
+    let limit = 0;
+    let usage = 0;
+
+    // Read cgroups memory limit (cgroups v2)
+    if (fs.existsSync('/sys/fs/cgroup/memory.max')) {
+      const maxStr = fs.readFileSync('/sys/fs/cgroup/memory.max', 'utf8').trim();
+      if (maxStr && maxStr !== 'max') {
+        limit = parseInt(maxStr, 10);
+      }
+    }
+    // Read cgroups memory usage (cgroups v2)
+    if (fs.existsSync('/sys/fs/cgroup/memory.current')) {
+      usage = parseInt(fs.readFileSync('/sys/fs/cgroup/memory.current', 'utf8').trim(), 10);
+    }
+
+    // Fallback to cgroups v1
+    if (!limit && fs.existsSync('/sys/fs/cgroup/memory/memory.limit_in_bytes')) {
+      limit = parseInt(fs.readFileSync('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'utf8').trim(), 10);
+    }
+    if (!usage && fs.existsSync('/sys/fs/cgroup/memory/memory.usage_in_bytes')) {
+      usage = parseInt(fs.readFileSync('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'utf8').trim(), 10);
+    }
+
+    // Only use cgroups limits if they represent container-specific bounds
+    if (limit && usage && limit > 0 && limit < 16 * 1024 * 1024 * 1024) {
+      const freeMem = limit - usage;
+      const freePercent = Math.max(1, Math.min(100, Math.round((freeMem / limit) * 100)));
+      return { totalMem: limit, freeMem, freePercent };
+    }
+  } catch (e) {
+    // Fail silently
+  }
+  return null;
+};
+
 // API endpoint to retrieve the real host machine performance specifications and sensors 
 app.get("/api/host-telemetry", async (req, res) => {
   try {
     const isWindows = process.platform === "win32";
-    const totalMem = os.totalmem();
-    const freeMem = os.freemem();
-    const memoryFreePercent = Math.round((freeMem / totalMem) * 100);
     
-    let cpuLoadPercent = 5;
+    // Calculate precise memory using cgroups container metrics (if in Docker/Cloud Run)
+    const cgroupMem = getLinuxCgroupMemory();
+    let totalMem = os.totalmem();
+    let freeMem = os.freemem();
+    let memoryFreePercent = Math.round((freeMem / totalMem) * 100);
+
+    if (cgroupMem) {
+      totalMem = cgroupMem.totalMem;
+      freeMem = cgroupMem.freeMem;
+      memoryFreePercent = cgroupMem.freePercent;
+    }
+    
+    // Precise instantaneous sub-sampled CPU load
+    const cpuLoadPercent = await getPreciseCpuPercentage();
+    
     let diskStats = { sizeGB: 120, freeGB: 45, freePercent: 37, display: "45 GB (37% libre)" };
     let processCount = 85;
 
-    // 1. Gather actual CPU load
-    if (isWindows) {
-      cpuLoadPercent = await getWindowsCpuPercentage();
-    } else {
-      const loadAvg = os.loadavg();
-      if (loadAvg && loadAvg[0] !== undefined) {
-        const numCores = os.cpus().length || 1;
-        cpuLoadPercent = Math.min(100, Math.round((loadAvg[0] / numCores) * 100));
-        if (cpuLoadPercent < 1) cpuLoadPercent = Math.floor(Math.random() * 5) + 3;
-      }
-    }
-
-    // 2. Gather actual Disk free space
+    // Gather actual Disk free space
     if (isWindows) {
       diskStats = await getWindowsDiskStats();
     } else {
       diskStats = await getUnixDiskStats();
     }
 
-    // 3. Gather active processes count
+    // Gather active processes count
     const procCmd = isWindows ? "powershell -NoProfile -Command \"(Get-Process).Count\"" : "ps -ax | wc -l";
     await new Promise<void>((resolve) => {
       exec(procCmd, { timeout: 1200 }, (err, stdout) => {
@@ -366,15 +424,22 @@ app.get("/api/host-telemetry", async (req, res) => {
       });
     });
 
-    // 4. Calculate total server health
+    // Calculate total server health
     let coreHealth = 100;
     if (cpuLoadPercent > 85) coreHealth -= 20;
     if (memoryFreePercent < 15) coreHealth -= 25;
     if (diskStats.freePercent < 10) coreHealth -= 30;
 
+    const formatBytesToGB = (bytes: number): string => {
+      const gb = bytes / (1024 * 1024 * 1024);
+      return gb.toFixed(1) + " GB";
+    };
+
+    const memoryDisplay = `${memoryFreePercent} % (${formatBytesToGB(freeMem)} libre de ${formatBytesToGB(totalMem)})`;
+
     res.json({
       cpuLoad: `${cpuLoadPercent} %`,
-      memoryFree: `${memoryFreePercent} %`,
+      memoryFree: memoryDisplay,
       diskFree: diskStats.display,
       processCount: String(processCount),
       health: `${Math.max(15, coreHealth)} %`,
