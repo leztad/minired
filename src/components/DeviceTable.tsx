@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Device } from '../types';
 import { Search, ChevronLeft, ChevronRight, Sliders, Monitor, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { resolveVendorByMac } from '../utils/macUtils';
 
 interface DeviceTableProps {
   devices: Device[];
@@ -161,7 +162,12 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
                       {d.ip}
                     </td>
                     <td className="py-2 px-3 font-mono text-slate-400">
-                      {d.mac}
+                      <div>{d.mac}</div>
+                      {d.mac && d.mac !== '—' && (
+                        <div className="text-[10px] text-slate-500 font-sans mt-0.5 tracking-normal">
+                          {resolveVendorByMac(d.mac)}
+                        </div>
+                      )}
                     </td>
                     <td className={`py-2 px-3 font-mono font-semibold ${pingColor}`}>
                       {pingText}

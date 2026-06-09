@@ -10,6 +10,7 @@ import {
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
 import { generateFullSubnet, generateSensorsForDevices, INTERFACES_CONFIG } from './utils/simulation';
 import { calculateSubnetDetails } from './utils/subnetMath';
+import { resolveVendorByMac } from './utils/macUtils';
 import MapSubred from './components/MapSubred';
 import HistorialHosts from './components/HistorialHosts';
 import DeviceTable from './components/DeviceTable';
@@ -2596,6 +2597,12 @@ export default function App() {
                            <span className="text-slate-500 block text-[9px] text-left">DATO TOTAL</span>
                            <span className="text-emerald-400 font-bold block text-left">
                              {activeDiagDevice.totalConsumido !== undefined ? `${Math.round(activeDiagDevice.totalConsumido)} MB` : '0 MB'}
+                           </span>
+                        </div>
+                        <div className="col-span-2 border-t border-slate-850/60 pt-2 mt-1">
+                           <span className="text-slate-500 block text-[9px] text-left">ESTIMACIÓN MARCA / FABRICANTE</span>
+                           <span className="text-cyan-400 font-semibold block text-left font-sans">
+                             {resolveVendorByMac(activeDiagDevice.mac)}
                            </span>
                         </div>
                       </div>
