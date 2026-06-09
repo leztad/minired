@@ -117,10 +117,25 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
   const prtgGroups = useMemo(() => {
     const base = currentSubnetBase;
     
-    // Find device helper
+    // Find device helpers
     const findDevByLastOctet = (octet: string) => {
       const ip = `${base}.${octet}`;
-      return devices.find(d => d.ip === ip);
+      const found = devices.find(d => d.ip === ip);
+      if (!found) return undefined;
+      // If NOT in demo mode, only return if actually alive/scanned successfully
+      if (!isDemoMode && (found.estado === 'Caído' || found.estado === 'No_Escaneado')) {
+        return undefined;
+      }
+      return found;
+    };
+
+    const findDevByCriteria = (criteriaFn: (d: any) => boolean) => {
+      return devices.find(d => {
+        if (!isDemoMode && (d.estado === 'Caído' || d.estado === 'No_Escaneado')) {
+          return false;
+        }
+        return criteriaFn(d);
+      });
     };
 
     const localDevice = devices.find(d => {
@@ -129,16 +144,16 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
     }) || devices.find(d => d.ip && d.ip.endsWith('.55'));
 
     const gatewayDevice = findDevByLastOctet('1');
-    const switchDevice = findDevByLastOctet('2') || devices.find(d => d.host.toLowerCase().includes('switch') || d.host.toLowerCase().includes('conmutador'));
-    const nvrDevice = findDevByLastOctet('81') || devices.find(d => d.host.toLowerCase().includes('nvr') || d.host.toLowerCase().includes('grabador') || d.host.toLowerCase().includes('grabadora'));
-    const cameraPtzDevice = findDevByLastOctet('82') || devices.find(d => d.host.toLowerCase().includes('ptz') || d.host.toLowerCase().includes('cámara exterior') || d.host.toLowerCase().includes('camara exterior'));
-    const cameraPasilloDevice = findDevByLastOctet('60') || devices.find(d => d.host.toLowerCase().includes('pasillo') || d.host.toLowerCase().includes('axis'));
-    const cameraDomoDevice = findDevByLastOctet('61') || devices.find(d => d.host.toLowerCase().includes('domo') || d.host.toLowerCase().includes('ezviz'));
+    const switchDevice = findDevByLastOctet('2') || findDevByCriteria(d => d.host.toLowerCase().includes('switch') || d.host.toLowerCase().includes('conmutador'));
+    const nvrDevice = findDevByLastOctet('81') || findDevByCriteria(d => d.host.toLowerCase().includes('nvr') || d.host.toLowerCase().includes('grabador') || d.host.toLowerCase().includes('grabadora'));
+    const cameraPtzDevice = findDevByLastOctet('82') || findDevByCriteria(d => d.host.toLowerCase().includes('ptz') || d.host.toLowerCase().includes('cámara exterior') || d.host.toLowerCase().includes('camara exterior'));
+    const cameraPasilloDevice = findDevByLastOctet('60') || findDevByCriteria(d => d.host.toLowerCase().includes('pasillo') || d.host.toLowerCase().includes('axis'));
+    const cameraDomoDevice = findDevByLastOctet('61') || findDevByCriteria(d => d.host.toLowerCase().includes('domo') || d.host.toLowerCase().includes('ezviz'));
     
-    const dbDevice = findDevByLastOctet('10') || devices.find(d => d.host.toLowerCase().includes('db') || d.host.toLowerCase().includes('database') || d.host.toLowerCase().includes('datos'));
-    const webDevice = findDevByLastOctet('11') || devices.find(d => d.host.toLowerCase().includes('web') || d.host.toLowerCase().includes('servidor web') || d.host.toLowerCase().includes('nginx'));
-    const nasDevice = findDevByLastOctet('15') || devices.find(d => d.host.toLowerCase().includes('nas') || d.host.toLowerCase().includes('backup') || d.host.toLowerCase().includes('synology'));
-    const vmDevice = findDevByLastOctet('200') || devices.find(d => d.host.toLowerCase().includes('ubuntu') || d.host.toLowerCase().includes('vm') || d.host.toLowerCase().includes('virtualbox'));
+    const dbDevice = findDevByLastOctet('10') || findDevByCriteria(d => d.host.toLowerCase().includes('db') || d.host.toLowerCase().includes('database') || d.host.toLowerCase().includes('datos'));
+    const webDevice = findDevByLastOctet('11') || findDevByCriteria(d => d.host.toLowerCase().includes('web') || d.host.toLowerCase().includes('servidor web') || d.host.toLowerCase().includes('nginx'));
+    const nasDevice = findDevByLastOctet('15') || findDevByCriteria(d => d.host.toLowerCase().includes('nas') || d.host.toLowerCase().includes('backup') || d.host.toLowerCase().includes('synology'));
+    const vmDevice = findDevByLastOctet('200') || findDevByCriteria(d => d.host.toLowerCase().includes('ubuntu') || d.host.toLowerCase().includes('vm') || d.host.toLowerCase().includes('virtualbox'));
 
     // Status mapping helper
     const getSensorStatus = (devState: 'OK' | 'Advertencia' | 'Caído' | 'No_Escaneado' | undefined, customState?: 'OK' | 'Advertencia' | 'Caído' | 'No_Escaneado') => {

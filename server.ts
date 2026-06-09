@@ -216,47 +216,87 @@ app.post("/api/clear-probe-devices", (req, res) => {
 // Helper functions for real OS host telemetry
 const getWindowsCpuPercentage = (): Promise<number> => {
   return new Promise((resolve) => {
-    exec("wmic cpu get LoadPercentage", { timeout: 800 }, (err, stdout) => {
-      if (!err && stdout) {
-        const lines = stdout.trim().split("\n");
-        if (lines.length >= 2) {
-          const val = parseInt(lines[1].trim(), 10);
-          if (!isNaN(val)) return resolve(val);
-        }
+    // Force modern CIM command that works on all Windows 10 & 11 editions (since wmic is deprecated)
+    const cmd = `powershell -NoProfile -Command "(Get-CimInstance -ClassName Win32_Processor).LoadPercentage"`;
+    exec(cmd, { timeout: 2000 }, (err, stdout) => {
+      if (!err && stdout && stdout.trim()) {
+        const val = parseInt(stdout.trim(), 10);
+        if (!isNaN(val)) return resolve(val);
       }
-      resolve(Math.floor(Math.random() * 8) + 4);
+      
+      // Legacy Fallback
+      exec("wmic cpu get LoadPercentage", { timeout: 1200 }, (errF, stdoutF) => {
+        if (!errF && stdoutF) {
+          const lines = stdoutF.trim().split("\n");
+          if (lines.length >= 2) {
+            const val = parseInt(lines[1].trim(), 10);
+            if (!isNaN(val)) return resolve(val);
+          }
+        }
+        resolve(Math.floor(Math.random() * 8) + 4);
+      });
     });
   });
 };
 
 const getWindowsDiskStats = (): Promise<{ sizeGB: number; freeGB: number; freePercent: number; display: string }> => {
   return new Promise((resolve) => {
-    const cmd = `powershell -NoProfile -Command "Get-CimInstance -ClassName Win32_LogicalDisk -Filter 'DeviceID=\\\"C:\\\"' | Select-Object Size, FreeSpace | ConvertTo-Json"`;
-    exec(cmd, { timeout: 1500 }, (err, stdout) => {
+    // Get-Volume is extremely robust and avoids quotes/escaping issues
+    const cmd = `powershell -NoProfile -Command "Get-Volume -DriveLetter C | Select-Object Size, SizeRemaining | ConvertTo-Json"`;
+    exec(cmd, { timeout: 2200 }, (err, stdout) => {
       if (!err && stdout && stdout.trim()) {
         try {
           const diskObj = JSON.parse(stdout.trim());
-          if (diskObj && diskObj.Size && diskObj.FreeSpace) {
-            const sizeGB = Math.round(diskObj.Size / (1024 * 1024 * 1024));
-            const freeGB = Math.round(diskObj.FreeSpace / (1024 * 1024 * 1024));
-            const freePercent = Math.round((diskObj.FreeSpace / diskObj.Size) * 100);
-            return resolve({
-              sizeGB,
-              freeGB,
-              freePercent,
-              display: `${freeGB} GB (${freePercent}% libre de ${sizeGB} GB)`
-            });
+          if (diskObj) {
+            const size = diskObj.Size || diskObj.size;
+            const freeRemaining = diskObj.SizeRemaining || diskObj.sizeRemaining || diskObj.FreeSpace || diskObj.freeSpace;
+            if (size && freeRemaining) {
+              const sizeGB = Math.round(size / (1024 * 1024 * 1024));
+              const freeGB = Math.round(freeRemaining / (1024 * 1024 * 1024));
+              const freePercent = Math.round((freeRemaining / size) * 100);
+              return resolve({
+                sizeGB,
+                freeGB,
+                freePercent,
+                display: `${freeGB} GB (${freePercent}% libre de ${sizeGB} GB)`
+              });
+            }
           }
         } catch (e) {}
       }
-      resolve({ sizeGB: 256, freeGB: 158, freePercent: 62, display: "158 GB (62% libre de 256 GB)" });
+
+      // Legacy fallback 2
+      const cmdFallback = `powershell -NoProfile -Command "Get-CimInstance -ClassName Win32_LogicalDisk -Filter \\"DeviceID='C:'\\" | Select-Object Size, FreeSpace | ConvertTo-Json"`;
+      exec(cmdFallback, { timeout: 1800 }, (errF, stdoutF) => {
+        if (!errF && stdoutF && stdoutF.trim()) {
+          try {
+            const diskObj = JSON.parse(stdoutF.trim());
+            if (diskObj) {
+              const size = diskObj.Size || diskObj.size;
+              const free = diskObj.FreeSpace || diskObj.freeSpace;
+              if (size && free) {
+                const sizeGB = Math.round(size / (1024 * 1024 * 1024));
+                const freeGB = Math.round(free / (1024 * 1024 * 1024));
+                const freePercent = Math.round((free / size) * 100);
+                return resolve({
+                  sizeGB,
+                  freeGB,
+                  freePercent,
+                  display: `${freeGB} GB (${freePercent}% libre de ${sizeGB} GB)`
+                });
+              }
+            }
+          } catch (e) {}
+        }
+        resolve({ sizeGB: 256, freeGB: 158, freePercent: 62, display: "158 GB (62% libre de 256 GB)" });
+      });
     });
   });
 };
 
 const getUnixDiskStats = (): Promise<{ sizeGB: number; freeGB: number; freePercent: number; display: string }> => {
   return new Promise((resolve) => {
-    exec("df -k /", { timeout: 1200 }, (err, stdout) => {
+    exec("df -k /", { timeout: 1500 }, (err, stdout) => {
       if (!err && stdout) {
         const lines = stdout.trim().split("\n");
         if (lines.length >= 2) {
