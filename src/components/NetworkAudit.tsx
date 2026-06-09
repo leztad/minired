@@ -99,7 +99,7 @@ export default function NetworkAudit({ devices, onAddLog }: NetworkAuditProps) {
         ip: d.ip,
         host: d.host,
         mac: d.mac,
-        fabricanteResolucion: resolveVendorByMac(d.mac),
+        fabricanteResolucion: resolveVendorByMac(d.mac, d.host, d.ip),
         pingMs: d.ping,
         estadoRed: d.estado,
         interfazAsignada: d.interfaz || '—',
@@ -132,7 +132,7 @@ export default function NetworkAudit({ devices, onAddLog }: NetworkAuditProps) {
         d.ip,
         `"${d.host.replace(/"/g, '""')}"`,
         d.mac,
-        `"${resolveVendorByMac(d.mac).replace(/"/g, '""')}"`,
+        `"${resolveVendorByMac(d.mac, d.host, d.ip).replace(/"/g, '""')}"`,
         d.ping !== null ? d.ping : "—",
         d.estado,
         d.segmento || "—",
@@ -175,7 +175,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
 `;
 
     activeDevices.forEach(d => {
-      md += `| ${d.ip} | ${d.host} | \`${d.mac}\` | ${resolveVendorByMac(d.mac)} | ${d.ping !== null ? `${d.ping} ms` : '—'} | ${d.estado} |\n`;
+      md += `| ${d.ip} | ${d.host} | \`${d.mac}\` | ${resolveVendorByMac(d.mac, d.host, d.ip)} | ${d.ping !== null ? `${d.ping} ms` : '—'} | ${d.estado} |\n`;
     });
 
     md += `\n*Nota: Reporte compilado en base a barrido de tramas ARP en Loopback de adaptadores de red de hardware disponibles.*`;
@@ -348,7 +348,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         doc.setTextColor(51, 65, 85); 
         doc.text(device.mac, 39, y + 4.8);
 
-        const manufacturerRaw = resolveVendorByMac(device.mac);
+        const manufacturerRaw = resolveVendorByMac(device.mac, device.host, device.ip);
         let manufacturer = manufacturerRaw.length > 25 ? manufacturerRaw.substring(0, 23) + '...' : manufacturerRaw;
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(8);
@@ -615,7 +615,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                 </tr>
               ) : (
                 filteredDevices.map(d => {
-                  const manufacturer = resolveVendorByMac(d.mac);
+                  const manufacturer = resolveVendorByMac(d.mac, d.host, d.ip);
                   return (
                     <tr 
                       key={d.id} 

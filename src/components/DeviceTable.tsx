@@ -111,6 +111,7 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
               <th className="py-2.5 px-4 w-12"></th>
               <th className="py-2.5 px-3">Host</th>
               <th className="py-2.5 px-3">IP</th>
+              <th className="py-2.5 px-3">Fabricante</th>
               <th className="py-2.5 px-3">MAC</th>
               <th className="py-2.5 px-3">Ping</th>
               <th className="py-2.5 px-3 text-right pr-6">Estado</th>
@@ -119,7 +120,7 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
           <tbody className="divide-y divide-slate-800/50 text-xs">
             {paginatedDevices.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-slate-500 font-sans">
+                <td colSpan={7} className="py-8 text-center text-slate-500 font-sans">
                   Sin dispositivos que coincidan con la búsqueda.
                 </td>
               </tr>
@@ -136,15 +137,34 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
                   pingText = `${d.ping} ms`;
                   pingColor = 'text-emerald-400';
                 } else if (d.estado === 'Advertencia') {
-                  badgeStyle = 'bg-amber-500/10 text-amber-400 font-semibold';
-                  indicatorColor = 'bg-amber-500/40 border border-amber-500';
-                  pingText = `${d.ping} ms`;
-                  pingColor = 'text-amber-500 font-medium';
+                   badgeStyle = 'bg-amber-500/10 text-amber-400 font-semibold';
+                   indicatorColor = 'bg-amber-500/40 border border-amber-500';
+                   pingText = `${d.ping} ms`;
+                   pingColor = 'text-amber-500 font-medium';
                 } else if (d.estado === 'Caído' && d.lastChecked !== null) {
-                  badgeStyle = 'bg-rose-500/15 text-rose-400 font-semibold';
-                  indicatorColor = 'bg-rose-500/40 border border-rose-500';
-                  pingText = '—';
+                   badgeStyle = 'bg-rose-500/15 text-rose-400 font-semibold';
+                   indicatorColor = 'bg-rose-500/40 border border-rose-500';
+                   pingText = '—';
                 }
+
+                const brandName = resolveVendorByMac(d.mac, d.host, d.ip);
+
+                let brandStyle = 'text-slate-400';
+                if (brandName.includes('Hikvision')) brandStyle = 'text-orange-400 font-bold';
+                else if (brandName.includes('Dahua')) brandStyle = 'text-yellow-500 font-bold';
+                else if (brandName.includes('EZVIZ')) brandStyle = 'text-amber-400 font-bold';
+                else if (brandName.includes('Axis')) brandStyle = 'text-emerald-400 font-bold';
+                else if (brandName.includes('CCTV') || brandName.includes('Cámara') || brandName.includes('NVR') || brandName.includes('UNV')) brandStyle = 'text-rose-400 font-semibold';
+                else if (brandName.includes('Apple')) brandStyle = 'text-sky-400 font-semibold';
+                else if (brandName.includes('Samsung')) brandStyle = 'text-blue-400 font-semibold';
+                else if (brandName.includes('Sony')) brandStyle = 'text-indigo-400 font-semibold';
+                else if (brandName.includes('HP') || brandName.includes('Hewlett')) brandStyle = 'text-rose-400 font-semibold';
+                else if (brandName.includes('Huawei')) brandStyle = 'text-red-400 font-semibold';
+                else if (brandName.includes('Ubiquiti')) brandStyle = 'text-amber-500 font-semibold';
+                else if (brandName.includes('Docker')) brandStyle = 'text-cyan-400 font-semibold';
+                else if (brandName.includes('Espressif')) brandStyle = 'text-emerald-400 font-semibold';
+                else if (brandName.includes('Synology')) brandStyle = 'text-sky-500 font-semibold';
+                else if (brandName.includes('Cisco')) brandStyle = 'text-emerald-400 font-semibold';
 
                 return (
                   <tr
@@ -161,13 +181,13 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
                     <td className="py-2 px-3 font-mono font-medium text-cyan-400">
                       {d.ip}
                     </td>
+                    <td className="py-2 px-3 font-sans">
+                      <span className={`${brandStyle} text-[11px]`}>
+                        {brandName}
+                      </span>
+                    </td>
                     <td className="py-2 px-3 font-mono text-slate-400">
-                      <div>{d.mac}</div>
-                      {d.mac && d.mac !== '—' && (
-                        <div className="text-[10px] text-slate-500 font-sans mt-0.5 tracking-normal">
-                          {resolveVendorByMac(d.mac)}
-                        </div>
-                      )}
+                      {d.mac}
                     </td>
                     <td className={`py-2 px-3 font-mono font-semibold ${pingColor}`}>
                       {pingText}
