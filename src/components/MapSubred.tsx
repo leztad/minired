@@ -45,11 +45,29 @@ const getShortHostName = (name: string): string => {
 };
 
 export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
-  // Toggle between 'topology' and 'grid'
-  const [viewMode, setViewMode] = useState<'topology' | 'grid'>('topology');
+  // Toggle between 'prtg', 'topology' and 'grid'
+  const [viewMode, setViewMode] = useState<'prtg' | 'topology' | 'grid'>('prtg');
   const [useOwnNames, setUseOwnNames] = useState<boolean>(true);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [hoveredGridId, setHoveredGridId] = useState<string | null>(null);
+
+  // PRTG View collapsible groups state
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
+    'group-local': false,
+    'group-infra': false,
+    'group-cctv': false,
+    'group-servers': false
+  });
+
+  const toggleGroup = (groupId: string) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [groupId]: !prev[groupId]
+    }));
+  };
+
+  const [prtgSearch, setPrtgSearch] = useState('');
+  const [prtgStatusFilter, setPrtgStatusFilter] = useState<'all' | 'OK' | 'Warning' | 'Down' | 'Paused'>('all');
 
   // Find current subnet base (e.g. "192.168.1" or "10.0.0")
   const currentSubnetBase = useMemo(() => {
@@ -62,6 +80,250 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
     }
     return '192.168.1';
   }, [devices]);
+
+  // PRTG Groups and Devices dynamic computation
+  const prtgGroups = useMemo(() => {
+    const base = currentSubnetBase;
+    
+    // Find device helper
+    const findDevByLastOctet = (octet: string) => {
+      const ip = `${base}.${octet}`;
+      return devices.find(d => d.ip === ip);
+    };
+
+    const localDevice = devices.find(d => {
+      const name = d.host.toLowerCase();
+      return name.includes('este pc') || name.includes('mi pc') || name.includes('computador de trabajo') || name.includes('estacion de trabajo') || name.includes('estación de trabajo') || name.includes('laptop de trabajo');
+    }) || devices.find(d => d.ip && d.ip.endsWith('.55'));
+
+    const gatewayDevice = findDevByLastOctet('1');
+    const nvrDevice = findDevByLastOctet('81') || devices.find(d => d.host.toLowerCase().includes('nvr') || d.host.toLowerCase().includes('grabador') || d.host.toLowerCase().includes('grabadora'));
+    const cameraPtzDevice = findDevByLastOctet('82') || devices.find(d => d.host.toLowerCase().includes('ptz') || d.host.toLowerCase().includes('cámara exterior') || d.host.toLowerCase().includes('camara exterior'));
+    const cameraPasilloDevice = findDevByLastOctet('60') || devices.find(d => d.host.toLowerCase().includes('pasillo') || d.host.toLowerCase().includes('axis'));
+    const cameraDomoDevice = findDevByLastOctet('61') || devices.find(d => d.host.toLowerCase().includes('domo') || d.host.toLowerCase().includes('ezviz'));
+    
+    const dbDevice = findDevByLastOctet('10') || devices.find(d => d.host.toLowerCase().includes('db') || d.host.toLowerCase().includes('database') || d.host.toLowerCase().includes('datos'));
+    const webDevice = findDevByLastOctet('11') || devices.find(d => d.host.toLowerCase().includes('web') || d.host.toLowerCase().includes('servidor web') || d.host.toLowerCase().includes('nginx'));
+    const nasDevice = findDevByLastOctet('15') || devices.find(d => d.host.toLowerCase().includes('nas') || d.host.toLowerCase().includes('backup') || d.host.toLowerCase().includes('synology'));
+    const vmDevice = findDevByLastOctet('200') || devices.find(d => d.host.toLowerCase().includes('ubuntu') || d.host.toLowerCase().includes('vm') || d.host.toLowerCase().includes('virtualbox'));
+
+    // Status mapping helper
+    const getSensorStatus = (devState: 'OK' | 'Advertencia' | 'Caído' | 'No_Escaneado' | undefined, customState?: 'OK' | 'Advertencia' | 'Caído' | 'No_Escaneado') => {
+      if (!devState || devState === 'No_Escaneado') return 'Paused' as const;
+      if (devState === 'Caído') return 'Down' as const;
+      if (customState) {
+        if (customState === 'Caído') return 'Down' as const;
+        if (customState === 'Advertencia') return 'Warning' as const;
+        return 'OK' as const;
+      }
+      if (devState === 'Advertencia') return 'Warning' as const;
+      return 'OK' as const;
+    };
+
+    return [
+      {
+        id: 'group-local',
+        name: 'Sonda Local (Local Probe - LAN Sonda)',
+        devices: [
+          {
+            id: 'dev-probe-pc',
+            name: `${localDevice?.host || 'Estación de Trabajo (Este PC)'}`,
+            ip: localDevice?.ip || `${base}.55`,
+            mac: localDevice?.mac || '84:C8:A0:BB:AB:66',
+            deviceObj: localDevice,
+            status: localDevice ? localDevice.estado : 'No_Escaneado',
+            type: 'desktop',
+            sensors: [
+              { name: 'Core Server Health', value: '100 %', status: getSensorStatus(localDevice?.estado) },
+              { name: 'CPU Load', value: '8 %', status: getSensorStatus(localDevice?.estado) },
+              { name: 'Memory Free Space', value: '42 %', status: getSensorStatus(localDevice?.estado) },
+              { name: 'Disk Free C:', value: '158 GB (76%)', status: getSensorStatus(localDevice?.estado) },
+              { name: 'Active Process Count', value: '148', status: getSensorStatus(localDevice?.estado) },
+              { name: 'sFlow Probe Listener', value: 'sFlow V5 v1', status: 'Paused' as const },
+              { name: 'DNS Lookup Speed', value: '12 ms', status: getSensorStatus(localDevice?.estado) },
+              { name: 'Traceroute Gateway', value: '1 saltos (1ms)', status: getSensorStatus(localDevice?.estado) },
+              { name: 'Local Port 80 Handler', value: '1 msec', status: getSensorStatus(localDevice?.estado) },
+              { name: 'Sensor Fac. AutoFailover', value: 'ALTA CRÍTICA', status: getSensorStatus(localDevice?.estado, 'Caído') }
+            ]
+          }
+        ]
+      },
+      {
+        id: 'group-infra',
+        name: 'ROUTER/SWITCHES (Infraestructura de Comunicaciones)',
+        devices: [
+          {
+            id: 'dev-gateway',
+            name: 'Router Central Gateway',
+            ip: gatewayDevice?.ip || `${base}.1`,
+            mac: gatewayDevice?.mac || '10:7B:44:A2:99:11',
+            deviceObj: gatewayDevice,
+            status: gatewayDevice ? gatewayDevice.estado : 'OK',
+            type: 'router',
+            sensors: [
+              { name: 'Gateway Ping', value: `${gatewayDevice?.ping || 2} msec`, status: getSensorStatus(gatewayDevice?.estado) },
+              { name: 'HTTP Admin Web', value: '200 OK (11ms)', status: getSensorStatus(gatewayDevice?.estado) },
+              { name: 'WAN Bandwidth Down', value: '10.2 Mbps', status: getSensorStatus(gatewayDevice?.estado) },
+              { name: 'WAN Bandwidth Up', value: '1.5 Mbps', status: getSensorStatus(gatewayDevice?.estado) },
+              { name: 'DHCP Pool IP Limit', value: '1.2 % (254 IPs)', status: getSensorStatus(gatewayDevice?.estado) },
+              { name: 'SFP+ Fiber GPON Link', value: '10G Link (Up)', status: getSensorStatus(gatewayDevice?.estado) }
+            ]
+          },
+          {
+            id: 'dev-switch',
+            name: 'Switch Principal Cisco/LAN',
+            ip: `${base}.2`,
+            mac: '2C:96:82:11:AA:FF',
+            deviceObj: null,
+            status: gatewayDevice ? gatewayDevice.estado : 'OK',
+            type: 'switch',
+            sensors: [
+              { name: 'Switch Core Ping', value: '1 ms', status: getSensorStatus(gatewayDevice?.estado) },
+              { name: 'PoE Power Alloc', value: '120W / 370W', status: getSensorStatus(gatewayDevice?.estado) },
+              { name: 'Port 1 Uplink Stat', value: '10G SFP+ Active', status: getSensorStatus(gatewayDevice?.estado) },
+              { name: 'Port 2 WiFi PoE Central', value: '1G Active (OK)', status: getSensorStatus(gatewayDevice?.estado) },
+              { name: 'Port 4 Workstation PC', value: '1G Active (OK)', status: getSensorStatus(gatewayDevice?.estado) },
+              { name: 'Port 24 Trunk Sonda', value: '450 kbit/s', status: getSensorStatus(gatewayDevice?.estado) }
+            ]
+          }
+        ]
+      },
+      {
+        id: 'group-cctv',
+        name: 'VIDEO CCTV & SEGURIDAD (Cámaras IP y Grabadores NVR)',
+        devices: [
+          ...(nvrDevice ? [{
+            id: 'dev-nvr',
+            name: nvrDevice.host,
+            ip: nvrDevice.ip,
+            mac: nvrDevice.mac,
+            deviceObj: nvrDevice,
+            status: nvrDevice.estado,
+            type: 'nas',
+            sensors: [
+              { name: 'NVR Server Ping', value: `${nvrDevice.ping || 4} ms`, status: getSensorStatus(nvrDevice.estado) },
+              { name: 'CCTV HDD Raid Space', value: '92% Libre / 16TB', status: getSensorStatus(nvrDevice.estado) },
+              { name: 'ONVIF Server Port 8080', value: 'Escuchando (OK)', status: getSensorStatus(nvrDevice.estado) },
+              { name: 'Total Cameras Rec Stream', value: '32 Canales (OK)', status: getSensorStatus(nvrDevice.estado) },
+              { name: 'Video Transcode Chipset', value: '42 % (H.265)', status: getSensorStatus(nvrDevice.estado) },
+              { name: 'CCTV Bandwidth Draw', value: `${nvrDevice.consumoUpload || 75.2} Mbps`, status: getSensorStatus(nvrDevice.estado) }
+            ]
+          }] : []),
+          ...(cameraPtzDevice ? [{
+            id: 'dev-ptz-cam',
+            name: cameraPtzDevice.host,
+            ip: cameraPtzDevice.ip,
+            mac: cameraPtzDevice.mac,
+            deviceObj: cameraPtzDevice,
+            status: cameraPtzDevice.estado,
+            type: 'iot',
+            sensors: [
+              { name: 'PTZ Camera Ping', value: `${cameraPtzDevice.ping || 11} ms`, status: getSensorStatus(cameraPtzDevice.estado) },
+              { name: 'RTSP H.264 MainStream', value: `${cameraPtzDevice.consumoUpload || 4.5} Mbps`, status: getSensorStatus(cameraPtzDevice.estado) },
+              { name: 'PTZ Control Latency', value: '14 ms (OK)', status: getSensorStatus(cameraPtzDevice.estado) },
+              { name: 'Camera Dome Motor Temp', value: '38.5 °C', status: getSensorStatus(cameraPtzDevice.estado) },
+              { name: 'Infrared IR LEDs status', value: 'Automático (Night-Off)', status: getSensorStatus(cameraPtzDevice.estado) }
+            ]
+          }] : []),
+          ...(cameraPasilloDevice ? [{
+            id: 'dev-pasillo-cam',
+            name: cameraPasilloDevice.host,
+            ip: cameraPasilloDevice.ip,
+            mac: cameraPasilloDevice.mac,
+            deviceObj: cameraPasilloDevice,
+            status: cameraPasilloDevice.estado,
+            type: 'iot',
+            sensors: [
+              { name: 'IP Camera Corridor Ping', value: `${cameraPasilloDevice.ping || 12} ms`, status: getSensorStatus(cameraPasilloDevice.estado) },
+              { name: 'RTSP Stream Bandwidth', value: `${cameraPasilloDevice.consumoUpload || 3.5} Mbps`, status: getSensorStatus(cameraPasilloDevice.estado) },
+              { name: 'ONVIF API Response', value: '200 OK (22ms)', status: getSensorStatus(cameraPasilloDevice.estado) },
+              { name: 'MicroSD Storage Card Health', value: '100% (64GB Class10)', status: getSensorStatus(cameraPasilloDevice.estado) }
+            ]
+          }] : []),
+          ...(cameraDomoDevice ? [{
+            id: 'dev-meeting-cam',
+            name: cameraDomoDevice.host,
+            ip: cameraDomoDevice.ip,
+            mac: cameraDomoDevice.mac,
+            deviceObj: cameraDomoDevice,
+            status: cameraDomoDevice.estado,
+            type: 'iot',
+            sensors: [
+              { name: 'IP Dome Meeting Ping', value: `${cameraDomoDevice.ping || 14} ms`, status: getSensorStatus(cameraDomoDevice.estado) },
+              { name: 'RTSP Video Stream', value: `${cameraDomoDevice.consumoUpload || 2.2} Mbps`, status: getSensorStatus(cameraDomoDevice.estado) },
+              { name: 'Motion Detector Status', value: 'Sin Movimiento', status: getSensorStatus(cameraDomoDevice.estado) },
+              { name: 'Privacy Mask Overlay', value: 'Desactivado (Full)', status: getSensorStatus(cameraDomoDevice.estado) }
+            ]
+          }] : [])
+        ]
+      },
+      {
+        id: 'group-servers',
+        name: 'SERVIDORES & SERVICIOS CORE (Docker Containers & Storage)',
+        devices: [
+          ...(dbDevice ? [{
+            id: 'dev-db',
+            name: dbDevice.host,
+            ip: dbDevice.ip,
+            mac: dbDevice.mac,
+            deviceObj: dbDevice,
+            status: dbDevice.estado,
+            type: 'server',
+            sensors: [
+              { name: 'DB Container Ping', value: `${dbDevice.ping || 5} ms`, status: getSensorStatus(dbDevice.estado) },
+              { name: 'PostgreSQL Active Conn', value: '22 Conexiones', status: getSensorStatus(dbDevice.estado) },
+              { name: 'SQL Query Max Latency P99', value: '3.2 ms', status: getSensorStatus(dbDevice.estado) },
+              { name: 'Tablespace Allocation', value: '1.2 GB', status: getSensorStatus(dbDevice.estado) }
+            ]
+          }] : []),
+          ...(webDevice ? [{
+            id: 'dev-web',
+            name: webDevice.host,
+            ip: webDevice.ip,
+            mac: webDevice.mac,
+            deviceObj: webDevice,
+            status: webDevice.estado,
+            type: 'server',
+            sensors: [
+              { name: 'Nginx Container Ping', value: `${webDevice.ping || 4} ms`, status: getSensorStatus(webDevice.estado) },
+              { name: 'Nginx Worker Threads', value: '4 Operando (OK)', status: getSensorStatus(webDevice.estado) },
+              { name: 'Container Storage Inodes', value: '15 % (Bajo)', status: getSensorStatus(webDevice.estado) },
+              { name: 'HTTP Response Rate (Port 80)', value: '25 msec', status: getSensorStatus(webDevice.estado) }
+            ]
+          }] : []),
+          ...(nasDevice ? [{
+            id: 'dev-nas',
+            name: nasDevice.host,
+            ip: nasDevice.ip,
+            mac: nasDevice.mac,
+            deviceObj: nasDevice,
+            status: nasDevice.estado,
+            type: 'nas',
+            sensors: [
+              { name: 'NAS Server Ping', value: `${nasDevice.ping || 95} ms`, status: getSensorStatus(nasDevice.estado) },
+              { name: 'RAID 5 Array Health', value: 'Sano (Advertencia CPU)', status: getSensorStatus(nasDevice.estado) },
+              { name: 'Free Storage Capacity', value: '68 % (8.4 TB libres)', status: getSensorStatus(nasDevice.estado) },
+              { name: 'SMB/NFS Daemon Status', value: 'Escucha Activa', status: getSensorStatus(nasDevice.estado) }
+            ]
+          }] : []),
+          ...(vmDevice ? [{
+            id: 'dev-vm',
+            name: vmDevice.host,
+            ip: vmDevice.ip,
+            mac: vmDevice.mac,
+            deviceObj: vmDevice,
+            status: vmDevice.estado,
+            type: 'server',
+            sensors: [
+              { name: 'Ubuntu VM Guest Ping', value: `${vmDevice.ping || 8} ms`, status: getSensorStatus(vmDevice.estado) },
+              { name: 'Host Hypervisor Overhead', value: '12 % (Bajo)', status: getSensorStatus(vmDevice.estado) },
+              { name: 'SSH Secure Daemon (P22)', value: 'Abierto / Online', status: getSensorStatus(vmDevice.estado) }
+            ]
+          }] : [])
+        ]
+      }
+    ];
+  }, [devices, currentSubnetBase]);
 
   // Define active coordinates and layout dynamically
   const topologyNodes: TopologyNode[] = useMemo(() => {
@@ -363,6 +625,25 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
     return <Activity className="h-3 w-3" />;
   };
 
+  // PRTG Quick status counts
+  const prtgCounts = useMemo(() => {
+    let ok = 0;
+    let warning = 0;
+    let down = 0;
+    let paused = 0;
+    prtgGroups.forEach(g => {
+      g.devices.forEach(d => {
+        d.sensors.forEach(s => {
+          if (s.status === 'OK') ok++;
+          else if (s.status === 'Warning') warning++;
+          else if (s.status === 'Down') down++;
+          else if (s.status === 'Paused') paused++;
+        });
+      });
+    });
+    return { ok, warning, down, paused, total: ok + warning + down + paused };
+  }, [prtgGroups]);
+
   return (
     <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-md text-slate-300">
       
@@ -414,6 +695,18 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
             <span className="text-[10px] uppercase font-bold text-slate-500 font-mono hidden md:inline">Vista de Red:</span>
             <div className="flex bg-slate-950 rounded p-0.5 border border-slate-800 leading-none text-[11px]">
               <button
+                onClick={() => setViewMode('prtg')}
+                className={`px-3 py-1.5 rounded-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
+                  viewMode === 'prtg' 
+                    ? 'bg-green-500 text-slate-950 font-bold' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-850'
+                }`}
+                title="Monitoreo estilo PRTG con grupos y telemetrías de sensores"
+              >
+                <Activity className="h-3.5 w-3.5" />
+                <span>Monitoreo Sondas (PRTG)</span>
+              </button>
+              <button
                 onClick={() => setViewMode('topology')}
                 className={`px-3 py-1.5 rounded-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5 ${
                   viewMode === 'topology' 
@@ -441,7 +734,304 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
       </div>
 
       {/* VIEWPORT BOX */}
-      {viewMode === 'grid' ? (
+      {viewMode === 'prtg' ? (
+        // RENDER: MONITOREO STYLE PRTG SENSORS LIST
+        <div className="bg-[#f0f2f5] border border-slate-350 rounded p-4 text-[#2c3e50] font-sans shadow-inner overflow-x-auto min-w-[760px] transition-all">
+          
+          {/* PRTG SUB-HEADER TOOLBAR */}
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-[#e2e8f0] p-2.5 rounded border border-[#ccd5e1] text-xs mb-3">
+            {/* Tree controllers */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-bold text-[#475569] font-mono text-[11px] uppercase mr-1">Árbol de Red:</span>
+              <button
+                onClick={() => setCollapsedGroups({
+                  'group-local': false,
+                  'group-infra': false,
+                  'group-cctv': false,
+                  'group-servers': false
+                })}
+                className="bg-white hover:bg-slate-50 border border-slate-350 px-2.5 py-1.5 rounded shadow-xs text-[10.5px] cursor-pointer font-bold text-slate-700 active:scale-95 transition-all"
+              >
+                [+] Expandir Todo
+              </button>
+              <button
+                onClick={() => setCollapsedGroups({
+                  'group-local': true,
+                  'group-infra': true,
+                  'group-cctv': true,
+                  'group-servers': true
+                })}
+                className="bg-white hover:bg-slate-50 border border-slate-350 px-2.5 py-1.5 rounded shadow-xs text-[10.5px] cursor-pointer font-bold text-slate-700 active:scale-95 transition-all"
+              >
+                [-] Colapsar Todo
+              </button>
+            </div>
+
+            {/* Quick Status Count Badges */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-bold text-[#475569] font-mono text-[11px] uppercase mr-1">Filtro Estado:</span>
+              <button
+                onClick={() => setPrtgStatusFilter('all')}
+                className={`px-2 py-1.5 rounded text-[10.5px] cursor-pointer font-bold border flex items-center gap-1.5 transition-all outline-hidden ${
+                  prtgStatusFilter === 'all'
+                    ? 'bg-slate-700 text-white border-slate-700 shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span>Todos</span>
+                <span className="bg-slate-100/40 px-1.5 py-0.2 rounded-full text-[9px] font-bold">{prtgCounts.total}</span>
+              </button>
+              <button
+                onClick={() => setPrtgStatusFilter('OK')}
+                className={`px-2 py-1.5 rounded text-[10.5px] cursor-pointer font-bold border flex items-center gap-1.5 transition-all outline-hidden ${
+                  prtgStatusFilter === 'OK'
+                    ? 'bg-[#7ac143] text-white border-[#65a335] shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#7ac143]"></span>
+                <span>Sano (OK)</span>
+                <span className="bg-green-100 text-green-800 px-1.5 py-0.2 rounded-full text-[9px] font-bold">{prtgCounts.ok}</span>
+              </button>
+              <button
+                onClick={() => setPrtgStatusFilter('Warning')}
+                className={`px-2 py-1.5 rounded text-[10.5px] cursor-pointer font-bold border flex items-center gap-1.5 transition-all outline-hidden ${
+                  prtgStatusFilter === 'Warning'
+                    ? 'bg-[#f59e0b] text-slate-950 border-[#d97706] shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#ffcb05]"></span>
+                <span>Alerta</span>
+                <span className="bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full text-[9px] font-bold">{prtgCounts.warning}</span>
+              </button>
+              <button
+                onClick={() => setPrtgStatusFilter('Down')}
+                className={`px-2 py-1.5 rounded text-[10.5px] cursor-pointer font-bold border flex items-center gap-1.5 transition-all outline-hidden ${
+                  prtgStatusFilter === 'Down'
+                    ? 'bg-[#df2020] text-white border-[#b91c1c] shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#df2020]"></span>
+                <span>Fallo (!!)</span>
+                <span className="bg-rose-100 text-rose-800 px-1.5 py-0.2 rounded-full text-[9px] font-bold">{prtgCounts.down}</span>
+              </button>
+              <button
+                onClick={() => setPrtgStatusFilter('Paused')}
+                className={`px-2 py-1.5 rounded text-[10.5px] cursor-pointer font-bold border flex items-center gap-1.5 transition-all outline-hidden ${
+                  prtgStatusFilter === 'Paused'
+                    ? 'bg-[#2185d0] text-white border-[#1d70b8] shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#2185d0]"></span>
+                <span>Pausado (||)</span>
+                <span className="bg-sky-100 text-sky-800 px-1.5 py-0.2 rounded-full text-[9px] font-bold">{prtgCounts.paused}</span>
+              </button>
+            </div>
+
+            {/* Filter Input */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Filtrar telemetrías..."
+                value={prtgSearch}
+                onChange={(e) => setPrtgSearch(e.target.value)}
+                className="bg-white border border-[#cbd5e1] text-[#1e293b] text-[11px] px-2.5 py-1.5 pr-7 rounded focus:outline-hidden focus:ring-1 focus:ring-[#3b82f6] focus:border-[#3b82f6] w-48 font-semibold placeholder:text-slate-400"
+              />
+              {prtgSearch && (
+                <button
+                  onClick={() => setPrtgSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-[11px] font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* ACTIVE DIRECTORY TREE CORE */}
+          <div className="bg-white p-3.5 rounded border border-[#cbd5e1] space-y-4 shadow-sm select-none">
+            {/* Header Parent Group Node */}
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 border-b border-dashed border-slate-200 pb-1.5">
+              <span className="font-bold text-[#1e293b] text-[12.5px] flex items-center gap-1">
+                <span>🟢</span>
+                <span>Local Probe (Sonda de Red IP)</span>
+              </span>
+              <span className="text-[10px] bg-slate-100 border border-slate-200 px-1.5 py-0.5 text-slate-550 rounded font-mono ml-auto">
+                PRTG Engine v12.1.80
+              </span>
+            </div>
+
+            <div className="space-y-4 border-l-2 border-[#e2e8f0] pl-3 ml-1.5">
+              {prtgGroups.map(group => {
+                const isGroupCollapsed = collapsedGroups[group.id];
+                
+                // Active status sensor filter check
+                const filteredDevices = group.devices.map(device => {
+                  const sFiltered = device.sensors.filter(s => {
+                    const matchesSearch = s.name.toLowerCase().includes(prtgSearch.toLowerCase()) || s.value.toLowerCase().includes(prtgSearch.toLowerCase());
+                    const matchesStatus = prtgStatusFilter === 'all' || s.status === prtgStatusFilter;
+                    return matchesSearch && matchesStatus;
+                  });
+                  return { ...device, sFiltered };
+                }).filter(d => d.sFiltered.length > 0);
+
+                if (filteredDevices.length === 0) return null;
+
+                return (
+                  <div key={group.id} className="space-y-2">
+                    {/* Folder Group Header Row */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <button
+                        onClick={() => toggleGroup(group.id)}
+                        className="p-1 rounded hover:bg-slate-50 text-slate-600 cursor-pointer font-bold select-none text-[12px] flex items-center gap-1 outline-hidden"
+                      >
+                        <span className="font-mono text-slate-400 w-3 mr-0.5">{isGroupCollapsed ? '[+]' : '[-]'}</span>
+                        <span className="text-[#1e293b] font-extrabold font-sans hover:text-[#2185d0] tracking-wide flex items-center gap-1">
+                          <span>📁</span>
+                          <span>{group.name}</span>
+                        </span>
+                      </button>
+                      <span className="text-[9px] bg-slate-100 border border-slate-200 text-slate-500 px-2 py-0.3 rounded-full ml-1 font-bold">
+                        {group.devices.length} {group.devices.length === 1 ? 'Grupo' : 'Grupos'}
+                      </span>
+                    </div>
+
+                    {/* Collapsible content wrapper */}
+                    {!isGroupCollapsed && (
+                      <div className="pl-4 space-y-3.5 border-l border-dotted border-slate-300 ml-2.5 pt-1.5 pb-1">
+                        {filteredDevices.map(device => {
+                          const devOkCount = device.sensors.filter(s => s.status === 'OK').length;
+                          const devWarningCount = device.sensors.filter(s => s.status === 'Warning').length;
+                          const devDownCount = device.sensors.filter(s => s.status === 'Down').length;
+                          const devPausedCount = device.sensors.filter(s => s.status === 'Paused').length;
+
+                          return (
+                            <div key={device.id} className="bg-[#fcfdfd] border border-[#cbd5e1] rounded p-2.5 shadow-sm hover:shadow-md hover:border-[#b4c6dc] transition-all">
+                              {/* Device name line and details */}
+                              <div className="flex items-center gap-2 border-b border-[#e2e8f0] pb-1.5 mb-2.5 flex-wrap md:flex-nowrap">
+                                <span className="text-[11.5px] font-black text-[#1e293b] flex items-[#1e293b] gap-1.5">
+                                  {device.type === 'router' ? '🛡️' : device.type === 'switch' ? '🎛️' : device.status === 'Caído' ? '🔴' : '🎥'}
+                                  <button
+                                    onClick={() => {
+                                      if (device.deviceObj) onSelectDevice(device.deviceObj);
+                                    }}
+                                    className="text-left font-extrabold text-[#192231] hover:text-[#2563eb] cursor-pointer hover:underline outline-hidden"
+                                    title="Haga clic para expandir monitoreo en vivo"
+                                  >
+                                    {device.name}
+                                  </button>
+                                </span>
+                                
+                                {device.ip !== '—' && (
+                                  <span className="font-mono text-[9px] bg-slate-100 border border-slate-200 px-1.5 py-0.3 rounded text-slate-500">
+                                    IP: {device.ip}
+                                  </span>
+                                )}
+
+                                {device.mac && device.mac !== '—' && (
+                                  <span className="font-mono text-[8.5px] text-slate-400 hidden xl:inline">
+                                    MAC: {device.mac}
+                                  </span>
+                                )}
+
+                                {/* Summary Counter badge dots */}
+                                <div className="ml-auto flex items-center gap-1 select-none">
+                                  {devDownCount > 0 && (
+                                    <span className="text-[9px] bg-[#fee2e2] text-[#991b1b] border border-[#fca5a5] px-1.5 py-0.2 rounded font-bold" title="Alarmas">
+                                      {devDownCount} Fallo
+                                    </span>
+                                  )}
+                                  {devWarningCount > 0 && (
+                                    <span className="text-[9px] bg-[#fef3c7] text-[#92400e] border border-[#fcd34d] px-1.5 py-0.2 rounded font-bold" title="Advertencias">
+                                      {devWarningCount} Alerta
+                                    </span>
+                                  )}
+                                  {devOkCount > 0 && (
+                                    <span className="text-[9px] bg-[#dcfce7] text-[#166534] border border-[#86efac] px-1.5 py-0.2 rounded font-bold" title="Sanos">
+                                      {devOkCount} OK
+                                    </span>
+                                  )}
+                                  {devPausedCount > 0 && (
+                                    <span className="text-[9px] bg-[#e0f2fe] text-[#075985] border border-[#7dd3fc] px-1.5 py-0.2 rounded font-bold" title="Pausados">
+                                      {devPausedCount} Pausa
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Wrap Grid of Sensors */}
+                              <div className="flex flex-wrap gap-2">
+                                {device.sFiltered.map((sensor, sIdx) => {
+                                  // Color choices
+                                  let statBarBg = 'bg-[#df2020]'; // Alarm Red
+                                  let statCardBg = 'bg-[#fbeaea] border-[#f0c3c3] text-[#8c1d1d] hover:bg-[#fae1e1]';
+                                  let symbol = '!!';
+
+                                  if (sensor.status === 'OK') {
+                                    statBarBg = 'bg-[#7ac143]'; // G
+                                    statCardBg = 'bg-[#edf7e3] border-[#ccdcb9] text-[#2e5d16] hover:bg-[#e4f1d7]';
+                                    symbol = '✓';
+                                  } else if (sensor.status === 'Warning') {
+                                    statBarBg = 'bg-[#ffcb05]'; // W
+                                    statCardBg = 'bg-[#fef9e7] border-[#f4e2b0] text-[#785b0a] hover:bg-[#fcf3d5]';
+                                    symbol = '!';
+                                  } else if (sensor.status === 'Paused') {
+                                    statBarBg = 'bg-[#2185d0]'; // P
+                                    statCardBg = 'bg-[#f0f5fc] border-[#ccd9ea] text-[#124268] hover:bg-[#e4edf8]';
+                                    symbol = '||';
+                                  }
+
+                                  return (
+                                    <div
+                                      key={`${device.id}-sensor-${sIdx}`}
+                                      className={`w-[138px] md:w-[155px] h-[44px] flex rounded-xs border shadow-xs transition-all duration-150 group cursor-pointer ${statCardBg}`}
+                                      title={`${sensor.name}: ${sensor.value} (${sensor.status})`}
+                                      onClick={() => {
+                                        if (device.deviceObj) onSelectDevice(device.deviceObj);
+                                      }}
+                                    >
+                                      {/* Left edge indicator bar */}
+                                      <div className={`w-[22px] flex flex-col items-center justify-center shrink-0 text-[10px] font-black text-white rounded-l-xs ${statBarBg}`}>
+                                        <span>{symbol}</span>
+                                      </div>
+
+                                      {/* Sensor Name/Metrics body */}
+                                      <div className="flex flex-col p-1 pl-1.5 justify-between w-full min-w-0">
+                                        <div className="text-[10px] font-bold leading-tight line-clamp-1 truncate select-none group-hover:text-blue-800" title={sensor.name}>
+                                          {sensor.name}
+                                        </div>
+                                        <div className="text-[9px] font-mono font-bold truncate text-right text-slate-700 select-all tracking-tight shrink-0">
+                                          {sensor.value}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          
+          {/* USER CAPTIONS */}
+          <div className="flex items-center justify-between bg-[#f8fafc] border border-[#cbd5e1] px-2.5 py-1.8 rounded text-[10px] text-slate-500 font-sans mt-2 shadow-xs leading-relaxed">
+            <span className="font-semibold flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse"></span>
+              <span>Detección CCTV activa: telemetría de streaming RTSP, almacenamiento HDD, ONVIF y latencias de enlace en tiempo real.</span>
+            </span>
+            <span className="italic select-none hidden md:inline">PRTG Sensor Network Monitor (Offline Sim)</span>
+          </div>
+        </div>
+      ) : viewMode === 'grid' ? (
         // RENDER: CLASSIC 254 SUB-NET DOT GRID
         <div className="space-y-3">
           <div className="flex gap-2 text-[9.5px] items-center text-slate-500 font-mono flex-wrap justify-end">
