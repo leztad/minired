@@ -123,6 +123,18 @@ export default function App() {
   const [isHostedInCloud, setIsHostedInCloud] = useState<boolean>(false);
   const [isLocalHelpModalOpen, setIsLocalHelpModalOpen] = useState<boolean>(false);
 
+  // Probe UI States
+  const [probeTab, setProbeTab] = useState<'arp' | 'manual' | 'local'>('arp');
+  const [arpPasteText, setArpPasteText] = useState<string>('');
+  const [manualDevIp, setManualDevIp] = useState<string>('');
+  const [manualDevName, setManualDevName] = useState<string>('');
+  const [manualDevMac, setManualDevMac] = useState<string>('');
+  const [manualDevVendor, setManualDevVendor] = useState<string>('');
+  const [manualDevicesList, setManualDevicesList] = useState<any[]>(() => {
+    const cached = localStorage.getItem('netmonitor_manual_devices');
+    return cached ? JSON.parse(cached) : [];
+  });
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const isCloud = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -690,6 +702,238 @@ export default function App() {
         ping: isPs ? 120 : isTv ? 85 : isNas ? 95 : 5
       };
     }));
+  };
+
+  // Autosync locally cached probe devices to express server on mount
+  useEffect(() => {
+    if (manualDevicesList && manualDevicesList.length > 0) {
+      fetch('/api/upload-probe-devices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ devices: manualDevicesList })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          // Immediately populate state
+          const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+          const mappedList = manualDevicesList.map((r, idx) => {
+            const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
+            const isThisPc = r.ip === currentInterfaceObj.ip;
+            
+            let nameLabel = r.hostname || r.vendor || 'Dispositivo LAN';
+            let hostNameStr = nameLabel;
+            if (isThisPc) {
+              hostNameStr = `Este PC (${nameLabel})`;
+            } else if (isGateway) {
+              hostNameStr = `Gateway/Router (${nameLabel})`;
+            }
+
+            return {
+              id: `host-${r.ip.replace(/\./g, '_')}`,
+              ip: r.ip,
+              host: hostNameStr,
+              mac: r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—',
+              ping: r.ping || Math.floor(Math.random() * 8) + 1,
+              estado: 'OK' as const,
+              lastChecked: new Date().toLocaleTimeString(),
+              sensorPing: true,
+              sensorHttp: isGateway || isThisPc,
+              consumoDownload: isThisPc ? 12.4 : Number((Math.random() * 4).toFixed(1)),
+              consumoUpload: isThisPc ? 3.1 : Number((Math.random() * 0.8).toFixed(1)),
+              totalConsumido: isThisPc ? 1420.5 : Number((30 + Math.random() * 200).toFixed(1)),
+              interfaz: selectedInterface,
+              segmento: subnetSegment,
+              os: isThisPc ? 'Windows 11 / Intel' : isGateway ? 'RouterOS / Linux' : r.hostname?.toLowerCase().includes('tv') ? 'Tizen OS' : r.hostname?.toLowerCase().includes('camara') || r.hostname?.toLowerCase().includes('cctv') ? 'Embedded Linux' : 'Android/iOS'
+            };
+          });
+
+          setDevices(mappedList);
+          setIsDemoMode(false);
+          setLastScanDone(true);
+          setLastScanTimeStr(new Date().toLocaleTimeString());
+          const newSensors = generateSensorsForDevices(mappedList);
+          setSensors(newSensors);
+        }
+      })
+      .catch(err => console.warn("Error autosyncing local probe devices:", err));
+    }
+  }, [selectedInterface, subnetSegment, activeInterfacesList]);
+
+  const parseArpOutput = (text: string) => {
+    const list: any[] = [];
+    const lines = text.split('\n');
+    const ipRegex = /((?:\d{1,3}\.){3}\d{1,3})/;
+    const macRegex = /((?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2})/;
+
+    lines.forEach(line => {
+      const ipMatch = line.match(ipRegex);
+      const macMatch = line.match(macRegex);
+      if (ipMatch) {
+        const ip = ipMatch[1];
+        if (ip.startsWith("224.") || ip.startsWith("239.") || ip === "255.255.255.255" || ip.endsWith(".255") || ip.startsWith("127.")) {
+          return;
+        }
+
+        let mac = "00:00:00:00:00:00";
+        if (macMatch) {
+          mac = macMatch[1].replace(/-/g, ':').toUpperCase();
+          if (mac === "FF:FF:FF:FF:FF:FF") {
+            return;
+          }
+        }
+
+        let hostname = "";
+        let vendor = "";
+
+        // Check for CSV format
+        if (line.includes('"') || line.includes(',')) {
+          const parts = line.split(/[",]+/);
+          const filteredParts = parts.map(p => p.trim()).filter(p => p.length > 1);
+          if (filteredParts.length >= 3) {
+            hostname = filteredParts[1] !== ip ? filteredParts[1] : "";
+            if (filteredParts[3] && filteredParts[3].length > 3 && !filteredParts[3].match(ipRegex) && !filteredParts[3].match(macRegex)) {
+              vendor = filteredParts[3];
+            }
+          }
+        }
+
+        if (!vendor && mac !== "00:00:00:00:00:00") {
+          vendor = resolveVendorByMac(mac, hostname, ip);
+        }
+
+        if (!hostname) {
+          if (ip.endsWith('.1') || ip.endsWith('.254')) {
+            hostname = "Gateway Central Ethernet";
+          } else if (ip.endsWith('.55')) {
+            hostname = "Estación Local (Este PC)";
+          } else {
+            // Check if IP is video or iot based on resolveVendor
+            const inferredBrand = resolveVendorByMac(mac, '', ip);
+            if (inferredBrand.toLowerCase().includes('cam') || inferredBrand.toLowerCase().includes('cctv') || inferredBrand.toLowerCase().includes('dahua') || inferredBrand.toLowerCase().includes('hikvision')) {
+              hostname = `Cámara CCTV Grabadora IP ${ip.split('.').pop()}`;
+            } else {
+              hostname = `Equipo Activo IP ${ip.split('.').pop()}`;
+            }
+          }
+        }
+
+        if (!list.some(d => d.ip === ip)) {
+          list.push({
+            ip,
+            mac,
+            estado: 'OK',
+            ping: Math.floor(Math.random() * 8) + 1,
+            vendor: vendor || 'Dispositivo LAN',
+            hostname: hostname
+          });
+        }
+      }
+    });
+    return list;
+  };
+
+  const handleUploadProbeDevices = (devicesToUpload: any[]) => {
+    fetch('/api/upload-probe-devices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ devices: devicesToUpload })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        addAlert(`🔌 ¡Sonda local sincronizada! Se cargaron ${data.count} dispositivos reales conectados en tu misma red local.`, 'success');
+        
+        const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+        const mappedList = devicesToUpload.map((r, idx) => {
+          const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
+          const isThisPc = r.ip === currentInterfaceObj.ip;
+          
+          let nameLabel = r.hostname || r.vendor || 'Dispositivo LAN';
+          let hostNameStr = nameLabel;
+          if (isThisPc) {
+            hostNameStr = `Este PC (${nameLabel})`;
+          } else if (isGateway) {
+            hostNameStr = `Gateway/Router (${nameLabel})`;
+          }
+
+          return {
+            id: `host-${r.ip.replace(/\./g, '_')}`,
+            ip: r.ip,
+            host: hostNameStr,
+            mac: r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—',
+            ping: r.ping || Math.floor(Math.random() * 8) + 1,
+            estado: 'OK' as const,
+            lastChecked: new Date().toLocaleTimeString(),
+            sensorPing: true,
+            sensorHttp: isGateway || isThisPc,
+            consumoDownload: isThisPc ? 12.4 : Number((Math.random() * 4).toFixed(1)),
+            consumoUpload: isThisPc ? 3.1 : Number((Math.random() * 0.8).toFixed(1)),
+            totalConsumido: isThisPc ? 1420.5 : Number((30 + Math.random() * 200).toFixed(1)),
+            interfaz: selectedInterface,
+            segmento: subnetSegment,
+            os: isThisPc ? 'Windows 11 / Intel' : isGateway ? 'RouterOS / Linux' : r.hostname?.toLowerCase().includes('tv') ? 'Tizen OS' : r.hostname?.toLowerCase().includes('camara') || r.hostname?.toLowerCase().includes('cctv') ? 'Embedded Linux' : 'Android/iOS'
+          };
+        });
+
+        // Prepend workstation device if missing
+        if (!mappedList.some(d => d.ip === currentInterfaceObj.ip)) {
+          mappedList.unshift({
+            id: `host-${currentInterfaceObj.ip.replace(/\./g, '_')}`,
+            ip: currentInterfaceObj.ip,
+            host: `Este PC (Laptop de Trabajo)`,
+            mac: currentInterfaceObj.mac,
+            ping: 1,
+            estado: 'OK' as const,
+            lastChecked: new Date().toLocaleTimeString(),
+            sensorPing: true,
+            sensorHttp: true,
+            consumoDownload: 14.5,
+            consumoUpload: 4.2,
+            totalConsumido: 2150.0,
+            interfaz: selectedInterface,
+            segmento: subnetSegment,
+            os: 'Windows 11 / Intel Core'
+          });
+        }
+
+        setDevices(mappedList);
+        setIsDemoMode(false); // Disable demo to lock in real mode!
+        localStorage.setItem('netmonitor_demo_mode', 'false');
+        setLastScanDone(true);
+        setLastScanTimeStr(new Date().toLocaleTimeString());
+        
+        const newSensors = generateSensorsForDevices(mappedList);
+        setSensors(newSensors);
+        
+        setManualDevicesList(devicesToUpload);
+        localStorage.setItem('netmonitor_manual_devices', JSON.stringify(devicesToUpload));
+        
+        setIsLocalHelpModalOpen(false);
+      } else {
+        addAlert("Error al sincronizar dispositivos de la sonda local.", "error");
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      addAlert("Error de red conectando con la sonda local del servidor.", "error");
+    });
+  };
+
+  const clearProbeDevices = () => {
+    fetch('/api/clear-probe-devices', { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        addAlert("🔌 Sonda física desconectada: Reestablecido los valores simulados predeterminados.", "info");
+        setManualDevicesList([]);
+        localStorage.removeItem('netmonitor_manual_devices');
+        setDevices([]);
+        setSensors([]);
+        setLastScanDone(false);
+        setIsLocalHelpModalOpen(false);
+      }
+    });
   };
 
   // Perform Network Scan Simulation (supporting multi-segment sequential scan of all configured subnets)
@@ -1424,61 +1668,310 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE INSTRUCCIONES DE ESCANEO DE RED LOCAL REAL */}
-      {isLocalHelpModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xs">
-          <div className="bg-slate-900 border border-slate-800 rounded-lg max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 font-sans">
-            <h3 className="text-md font-bold text-white flex items-center gap-2 mb-4">
-              <Network className="h-5 w-5 text-cyan-400" />
-              ¿Cómo escanear mi red local real?
-            </h3>
-            
-            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
-              Actualmente estás utilizando la vista previa en la nube (<span className="text-amber-450">Google Cloud Run</span>). Los servidores remotos de Google no pueden acceder a tu enrutador físico ni a tus dispositivos internos por motivos lógicos de seguridad y enrutamiento privado.
-            </p>
-
-            <div className="bg-slate-950/90 border border-slate-850 rounded-xs p-3.5 mb-5 font-sans">
-              <h4 className="text-[11px] font-bold text-cyan-400 mb-2 uppercase tracking-wider">Paso a paso para medición real / física:</h4>
-              <ol className="text-slate-300 text-[11px] space-y-2.5 list-decimal list-inside leading-snug">
-                <li>
-                  Haz clic en el menú superior izquierdo/derecho en la barra de herramientas y descarga el código fuente (<span className="text-emerald-400 font-semibold">Export ZIP</span>).
-                </li>
-                <li>
-                  Descomprime el archivo en tu portátil o PC.
-                </li>
-                <li>
-                  Abre la consola/terminal en esa carpeta y ejecuta:
-                  <div className="mt-1.5 bg-slate-900 border border-slate-800 text-slate-200 p-1.5 rounded font-mono text-[10px] break-all select-all">
-                    npm install
-                  </div>
-                </li>
-                <li>
-                  Inicia la aplicación en tu entorno local físico:
-                  <div className="mt-1.5 bg-slate-900 border border-slate-800 text-cyan-400 p-1.5 rounded font-mono text-[10px] break-all select-all">
-                    npm run dev
-                  </div>
-                </li>
-                <li>
-                  Abre <span className="text-white underline font-semibold">http://localhost:3000</span> en tu navegador y ¡listo! El escáner ARP y barrido ICMP se ejecutará directo en tu hardware de red físico.
-                </li>
-              </ol>
-            </div>
-
-            <p className="text-[10px] text-slate-400 leading-normal mb-5">
-              💡 <span className="text-amber-400 font-semibold">Tip:</span> Para explorar y probar todas las métricas del panel gráfico en el contenedor en la nube, te recomendamos mantener activado el <span className="text-amber-400 font-semibold">🧪 Modo Demo</span>.
-            </p>
-
-            <div className="flex justify-end">
-              <button 
-                onClick={() => setIsLocalHelpModalOpen(false)}
-                className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-xs transition-all cursor-pointer shadow-md"
-              >
-                Entendido
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+       {/* MODAL DE INSTRUCCIONES DE ESCANEO DE RED LOCAL REAL */}
+       {isLocalHelpModalOpen && (
+         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xs">
+           <div className="bg-slate-900 border border-slate-800 rounded-lg max-w-xl w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 font-sans">
+             <button 
+               onClick={() => setIsLocalHelpModalOpen(false)}
+               className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
+             >
+               <Terminal className="h-4 w-4" />
+             </button>
+ 
+             <h3 className="text-md font-bold text-white flex items-center gap-2 mb-2">
+               <Network className="h-5 w-5 text-cyan-400 animate-pulse" />
+               Conectar Dispositivos Reales de mi LAN
+             </h3>
+             
+             <p className="text-xs text-slate-350 mb-4 leading-relaxed">
+               Dado que este panel corre temporalmente en servidores en la nube de <span className="text-amber-450 font-semibold">Google Cloud Run</span>, el servidor no puede "tocar" tu enrutador físico ni tu red local de manera pasiva. Elige una de estas soluciones interactivas para sincronizar tus dispositivos reales:
+             </p>
+ 
+             {/* TABS SELECTOR */}
+             <div className="flex border-b border-slate-800 mb-4">
+               <button 
+                 onClick={() => setProbeTab('arp')} 
+                 className={`flex-1 pb-2.5 text-xs font-bold tracking-wide transition-all text-center border-b-2 cursor-pointer ${probeTab === 'arp' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+               >
+                 📋 Pegar arp -a (Rápido)
+               </button>
+               <button 
+                 onClick={() => setProbeTab('manual')} 
+                 className={`flex-1 pb-2.5 text-xs font-bold tracking-wide transition-all text-center border-b-2 cursor-pointer ${probeTab === 'manual' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+               >
+                 📝 Añadir Manual / CCTV
+               </button>
+               <button 
+                 onClick={() => setProbeTab('local')} 
+                 className={`flex-1 pb-2.5 text-xs font-bold tracking-wide transition-all text-center border-b-2 cursor-pointer ${probeTab === 'local' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+               >
+                 💻 Correr Localmente (Físico)
+               </button>
+             </div>
+ 
+             {/* CONTENT - TAB 1: ARP-A PASTE */}
+             {probeTab === 'arp' && (
+               <div className="space-y-3.5">
+                 <div className="bg-slate-950/80 p-3 rounded border border-slate-850 text-[11px] leading-relaxed text-slate-300">
+                   <p className="font-semibold text-cyan-400 mb-1">💡 ¿Cómo funciona este método?</p>
+                   Puedes sondear de forma pasiva tu red sin descargar nada. Abre la consola de tu ordenador, extrae la caché ARP de tu LAN en un segundo, y pégala aquí:
+                   <ol className="list-decimal list-inside space-y-1 mt-2 text-slate-400 font-sans">
+                     <li>Abre la consola en tu PC (<span className="text-white">PowerShell/CMD</span> en Windows o <span className="text-white">Terminal</span> en Mac/Linux).</li>
+                     <li>Escribe el comando <code className="text-emerald-400 bg-slate-900 px-1 py-0.5 rounded font-mono font-bold select-all">arp -a</code> y pulsa <kbd className="text-white">Enter</kbd>.</li>
+                     <li>Copia todo el texto que aparezca y pégalo en el cuadro de abajo.</li>
+                   </ol>
+                 </div>
+ 
+                 <div>
+                   <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">CONTENIDO COPIADO DE LA CONSOLA (ARP / EXPORT DE ESCÁNER):</label>
+                   <textarea
+                     rows={5}
+                     value={arpPasteText}
+                     onChange={(e) => setArpPasteText(e.target.value)}
+                     placeholder="Ejemplo Windows:&#10;192.168.1.1       10-7B-44-A2-99-11     dinámico&#10;192.168.1.15      00-11-32-8F-A1-AC     dinámico...&#10;&#10;Ejemplo Mac/Linux o Advanced IP Scanner CSV se detectan automáticamente."
+                     className="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-[11px] font-mono text-slate-200 focus:outline-hidden focus:border-cyan-500"
+                   />
+                 </div>
+ 
+                 <div className="flex justify-between items-center bg-slate-900/50 p-2 rounded">
+                   <span className="text-[10px] text-slate-400">
+                     Soporta: <span className="text-slate-300">arp -a dumper</span>, <span className="text-slate-300">nmap lists</span>, exports de <span className="text-slate-300">Advanced IP Scanner</span>.
+                   </span>
+                   {manualDevicesList.length > 0 && (
+                     <button
+                       onClick={clearProbeDevices}
+                       className="text-[10px] text-rose-450 hover:text-rose-400 font-bold bg-rose-950/20 px-2 py-1 rounded border border-rose-900/20 cursor-pointer"
+                       title="Restablece las simulaciones de prueba por defecto"
+                     >
+                       Limpiar Sonda
+                     </button>
+                   )}
+                 </div>
+ 
+                 <div className="flex justify-end gap-2 pt-1 border-t border-slate-800/60">
+                   <button 
+                     onClick={() => setIsLocalHelpModalOpen(false)}
+                     className="bg-slate-800 hover:bg-slate-755 text-slate-300 font-bold text-xs px-4 py-2 rounded-xs cursor-pointer"
+                   >
+                     Cerrar
+                   </button>
+                   <button 
+                     onClick={() => {
+                       if (!arpPasteText.trim()) {
+                         addAlert("⚠️ Mensaje: Por favor pega la salida de tu caché arp -a primero.", "warning");
+                         return;
+                       }
+                       const parsed = parseArpOutput(arpPasteText);
+                       if (parsed.length === 0) {
+                         addAlert("⚠️ Error de parseo: No se identificaron patrones de direcciones IP y MAC en el texto pegado.", "error");
+                       } else {
+                         handleUploadProbeDevices(parsed);
+                       }
+                     }}
+                     className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs px-5 py-2 rounded-xs shadow-md cursor-pointer flex items-center gap-1.5"
+                   >
+                     <RefreshCw className="h-3 w-3 animate-pulse" />
+                     Procesar y Cargar ({parseArpOutput(arpPasteText).length} detectados)
+                   </button>
+                 </div>
+               </div>
+             )}
+ 
+             {/* CONTENT - TAB 2: MANUAL REGISTRATION */}
+             {probeTab === 'manual' && (
+               <div className="space-y-3.5">
+                 <p className="text-[11px] text-slate-350">
+                   Registra tu equipamiento favorito (Cámaras de Seguridad, NVR, Teléfonos, Smart TVs) manualmente. El panel interpretará sus marcas basándose en las tres primeras parejas de la dirección MAC.
+                 </p>
+ 
+                 <div className="grid grid-cols-2 gap-3 bg-slate-950/60 p-4 rounded border border-slate-850">
+                   <div>
+                     <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Dirección IP *</label>
+                     <input
+                       type="text"
+                       value={manualDevIp}
+                       onChange={(e) => setManualDevIp(e.target.value)}
+                       placeholder="Ej: 192.168.1.18"
+                       className="w-full bg-slate-900 border border-slate-800 rounded-sm px-2.5 py-1.5 text-xs text-white font-mono"
+                     />
+                   </div>
+ 
+                   <div>
+                     <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Nombre / Apodo *</label>
+                     <input
+                       type="text"
+                       value={manualDevName}
+                       onChange={(e) => setManualDevName(e.target.value)}
+                       placeholder="Ej: Cámara Patio Hikvision"
+                       className="w-full bg-slate-900 border border-slate-800 rounded-sm px-2.5 py-1.5 text-xs text-white font-mono"
+                     />
+                   </div>
+ 
+                   <div>
+                     <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Dirección MAC (Opcional)</label>
+                     <input
+                       type="text"
+                       value={manualDevMac}
+                       onChange={(e) => setManualDevMac(e.target.value)}
+                       placeholder="Ej: E8-AB-FA-12-34-56"
+                       className="w-full bg-slate-900 border border-slate-800 rounded-sm px-2.5 py-1.5 text-xs text-white font-mono"
+                     />
+                   </div>
+ 
+                   <div>
+                     <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Fabricante (Opcional)</label>
+                     <input
+                       type="text"
+                       value={manualDevVendor}
+                       onChange={(e) => setManualDevVendor(e.target.value)}
+                       placeholder="Ej: Dahua Technology"
+                       className="w-full bg-slate-900 border border-slate-800 rounded-sm px-2.5 py-1.5 text-xs text-white font-mono"
+                     />
+                   </div>
+ 
+                   <div className="col-span-2 flex justify-end">
+                     <button
+                       onClick={() => {
+                         if (!manualDevIp.trim() || !manualDevName.trim()) {
+                           addAlert("⚠️ Campos obligatorios faltantes: IP y Nombre son requeridos.", "warning");
+                           return;
+                         }
+                         const cleanIp = manualDevIp.trim();
+                         const cleanMac = manualDevMac.trim() || "00:00:00:00:00:00";
+                         const cleanVendor = manualDevVendor.trim() || resolveVendorByMac(cleanMac, manualDevName, cleanIp);
+ 
+                         const existingList = [...manualDevicesList];
+                         const isDuplicate = existingList.some(d => d.ip === cleanIp);
+                         
+                         let updatedList = [];
+                         if (isDuplicate) {
+                           updatedList = existingList.map(d => d.ip === cleanIp ? { ...d, hostname: manualDevName, mac: cleanMac, vendor: cleanVendor } : d);
+                         } else {
+                           updatedList = [...existingList, {
+                             ip: cleanIp,
+                             mac: cleanMac,
+                             hostname: manualDevName,
+                             vendor: cleanVendor,
+                             ping: Math.floor(Math.random() * 8) + 1
+                           }];
+                         }
+ 
+                         setManualDevicesList(updatedList);
+                         localStorage.setItem('netmonitor_manual_devices', JSON.stringify(updatedList));
+                         addAlert(`Añadido/Actualizado: ${manualDevName} con IP ${cleanIp}`, "success");
+                         
+                         // Clear state
+                         setManualDevIp('');
+                         setManualDevName('');
+                         setManualDevMac('');
+                         setManualDevVendor('');
+                       }}
+                       className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] px-3.5 py-1.5 rounded-xs transition-colors cursor-pointer"
+                     >
+                       + Registrar Dispositivo
+                     </button>
+                   </div>
+                 </div>
+ 
+                 {/* PREVIEW CONTAINER */}
+                 <div className="max-h-[140px] overflow-y-auto border border-slate-800 rounded divide-y divide-slate-850 bg-slate-950/30">
+                   <div className="bg-slate-900 text-[10px] uppercase font-bold text-slate-400 p-2 tracking-wider flex justify-between">
+                     <span>Dispositivos para Sonda Local ({manualDevicesList.length})</span>
+                     {manualDevicesList.length > 0 && (
+                       <button onClick={clearProbeDevices} className="text-rose-400 hover:underline bg-transparent font-bold">Limpiar Sonda</button>
+                     )}
+                   </div>
+                   {manualDevicesList.length === 0 ? (
+                     <div className="p-3 text-center text-slate-500 text-xs">No tienes dispositivos manuales registrados aún en la sonda.</div>
+                   ) : (
+                     manualDevicesList.map((d, index) => (
+                       <div key={index} className="p-2 flex justify-between items-center text-xs text-slate-350">
+                         <div>
+                           <span className="font-bold text-white font-mono">{d.ip}</span> - <span className="text-cyan-400">{d.hostname}</span>
+                           <span className="text-[10px] text-slate-500 font-mono block">MAC: {d.mac} | {d.vendor}</span>
+                         </div>
+                         <button
+                           onClick={() => {
+                             const filtered = manualDevicesList.filter(dev => dev.ip !== d.ip);
+                             setManualDevicesList(filtered);
+                             localStorage.setItem('netmonitor_manual_devices', JSON.stringify(filtered));
+                             addAlert(`Eliminado de la sonda: Host con IP ${d.ip}`, "info");
+                           }}
+                           className="text-red-400 hover:text-red-200 text-[11px] font-bold bg-transparent"
+                         >
+                           Eliminar
+                         </button>
+                       </div>
+                     ))
+                   )}
+                 </div>
+ 
+                 <div className="flex justify-end gap-2 pt-1 border-t border-slate-800/60">
+                   <button 
+                     onClick={() => setIsLocalHelpModalOpen(false)}
+                     className="bg-slate-800 hover:bg-slate-755 text-slate-300 font-bold text-xs px-4 py-2 rounded-xs cursor-pointer"
+                   >
+                     Cerrar
+                   </button>
+                   <button
+                     disabled={manualDevicesList.length === 0}
+                     onClick={() => handleUploadProbeDevices(manualDevicesList)}
+                     className="bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-slate-950 font-bold text-xs px-5 py-2 rounded-xs shadow-md cursor-pointer flex items-center gap-1"
+                   >
+                     Sincronizar y Ver en Mapa
+                   </button>
+                 </div>
+               </div>
+             )}
+ 
+             {/* CONTENT - TAB 3: RUN LOCAL NODE */}
+             {probeTab === 'local' && (
+               <div className="space-y-4">
+                 <div className="bg-slate-950/90 border border-slate-850 rounded-xs p-3.5 mb-2 font-sans">
+                   <h4 className="text-[11px] font-bold text-cyan-400 mb-2 uppercase tracking-wider">Paso a paso para medición real / física directa:</h4>
+                   <ol className="text-slate-300 text-[11px] space-y-2.5 list-decimal list-inside leading-snug font-sans">
+                     <li>
+                       Haz clic en el menú superior izquierdo/derecho en la barra de herramientas y descarga el código fuente (<span className="text-emerald-400 font-semibold">Export ZIP</span>).
+                     </li>
+                     <li>
+                       Descomprime el archivo en tu portátil o PC de la red LAN que deseas auditar.
+                     </li>
+                     <li>
+                       Abre la consola/terminal en esa carpeta y ejecuta:
+                       <div className="mt-1.5 bg-slate-900 border border-slate-800 text-slate-200 p-1.5 rounded font-mono text-[10px] break-all select-all">
+                         npm install
+                       </div>
+                     </li>
+                     <li>
+                       Inicia la aplicación en tu entorno local físico:
+                       <div className="mt-1.5 bg-slate-900 border border-slate-800 text-cyan-400 p-1.5 rounded font-mono text-[10px] break-all select-all">
+                         npm run dev
+                       </div>
+                     </li>
+                     <li>
+                       Abre <span className="text-white underline font-semibold">http://localhost:3000</span> en tu navegador y ¡listo! El escáner ARP y barrido ICMP se ejecutará directo en tu hardware de red físico, detectando todo al vuelo sin simulación.
+                     </li>
+                   </ol>
+                 </div>
+ 
+                 <p className="text-[10px] text-slate-400 leading-normal mb-1">
+                   💡 <span className="text-amber-400 font-semibold">Tip:</span> Para explorar y probar todas las métricas del panel gráfico en el contenedor en la nube, te recomendamos mantener activado el <span className="text-amber-400 font-semibold">🧪 Modo Demo</span>.
+                 </p>
+ 
+                 <div className="flex justify-end pt-2 border-t border-slate-800/60">
+                   <button 
+                     onClick={() => setIsLocalHelpModalOpen(false)}
+                     className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs px-5 py-2 rounded-xs transition-all cursor-pointer shadow-md"
+                   >
+                     Entendido
+                   </button>
+                 </div>
+               </div>
+             )}
+           </div>
+         </div>
+       )}
 
       {/* BREADCRUMBS SECONDARY ROW */}
       <nav className="bg-[#0B1120] text-[11px] text-slate-400 px-4 py-1.5 border-b border-slate-800 flex items-center justify-between select-none shadow-xs font-medium">
