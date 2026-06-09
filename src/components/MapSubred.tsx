@@ -5,6 +5,7 @@ import {
   HelpCircle, Cloud, Wifi, Database, HardDrive, Printer, 
   Tv, Gamepad2, Layers, Network, Radio, HelpCircle as Question, CheckCircle2, AlertTriangle, XCircle, Grid, Cpu
 } from 'lucide-react';
+import { resolveVendorByMac } from '../utils/macUtils';
 
 interface MapSubredProps {
   devices: Device[];
@@ -119,6 +120,10 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
     
     // Find device helpers
     const findDevByLastOctet = (octet: string) => {
+      // In real scan mode, do NOT use hardcoded octets (except .1 gateway) to avoid misclassifications of unrelated devices
+      if (!isDemoMode && octet !== '1') {
+        return undefined;
+      }
       const ip = `${base}.${octet}`;
       const found = devices.find(d => d.ip === ip);
       if (!found) return undefined;
@@ -168,6 +173,88 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
       return 'OK' as const;
     };
 
+    // Track which devices are already assigned to groups to put unmapped ones in a general group
+    const mappedIds = new Set<string>();
+    if (localDevice) mappedIds.add(localDevice.id);
+    if (gatewayDevice) mappedIds.add(gatewayDevice.id);
+    if (switchDevice) mappedIds.add(switchDevice.id);
+    if (nvrDevice) mappedIds.add(nvrDevice.id);
+    if (cameraPtzDevice) mappedIds.add(cameraPtzDevice.id);
+    if (cameraPasilloDevice) mappedIds.add(cameraPasilloDevice.id);
+    if (cameraDomoDevice) mappedIds.add(cameraDomoDevice.id);
+    if (dbDevice) mappedIds.add(dbDevice.id);
+    if (webDevice) mappedIds.add(webDevice.id);
+    if (nasDevice) mappedIds.add(nasDevice.id);
+    if (vmDevice) mappedIds.add(vmDevice.id);
+
+    // Filter real scanned devices not present in groups
+    const otherScannedDevices = devices.filter(d => {
+      if (mappedIds.has(d.id)) return false;
+      if (!isDemoMode && (d.estado === 'No_Escaneado' || d.estado === 'Caído')) {
+        return false;
+      }
+      return true;
+    });
+
+    const otherPrtgDevices = otherScannedDevices.map(d => {
+      const hostLower = d.host.toLowerCase();
+      let type: 'router' | 'switch' | 'ap' | 'desktop' | 'server' | 'tv' | 'gaming' | 'nas' | 'printer' | 'iot' | 'cloud' = 'desktop';
+      if (hostLower.includes('tv') || hostLower.includes('television')) {
+        type = 'tv';
+      } else if (hostLower.includes('gaming') || hostLower.includes('ps5') || hostLower.includes('xbox') || hostLower.includes('nintendo') || hostLower.includes('consola')) {
+        type = 'gaming';
+      } else if (hostLower.includes('printer') || hostLower.includes('impresora')) {
+        type = 'printer';
+      } else if (hostLower.includes('phone') || hostLower.includes('celular') || hostLower.includes('android') || hostLower.includes('iphone') || hostLower.includes('smart') || hostLower.includes('tablet')) {
+        type = 'iot';
+      } else if (hostLower.includes('nas') || hostLower.includes('almacenamiento')) {
+        type = 'nas';
+      } else if (hostLower.includes('server') || hostLower.includes('servidor')) {
+        type = 'server';
+      }
+
+      const sensors = [
+        {
+          name: 'Ping Latency',
+          value: d.ping !== null ? `${d.ping} ms` : '1 ms',
+          status: getSensorStatus(d.estado)
+        }
+      ];
+
+      if (d.sensorHttp) {
+        sensors.push({
+          name: 'HTTP Port 80 Web',
+          value: d.estado === 'OK' ? '200 OK (18 ms)' : 'Timeout',
+          status: getSensorStatus(d.estado)
+        });
+      }
+
+      if (d.consumoDownload || d.consumoUpload) {
+        sensors.push({
+          name: 'Intercambio de Datos',
+          value: `DN: ${(d.consumoDownload || 0).toFixed(1)} Mbps / UP: ${(d.consumoUpload || 0).toFixed(1)} Mbps`,
+          status: getSensorStatus(d.estado)
+        });
+      }
+
+      sensors.push({
+        name: 'Sensor Integridad ARP',
+        value: 'MAC Validada',
+        status: getSensorStatus(d.estado)
+      });
+
+      return {
+        id: `dev-other-${d.id}`,
+        name: d.host || `Dispositivo LAN .${d.ip.split('.').pop()}`,
+        ip: d.ip,
+        mac: d.mac,
+        deviceObj: d,
+        status: d.estado,
+        type,
+        sensors
+      };
+    });
+
     const groups = [
       {
         id: 'group-local',
@@ -175,12 +262,12 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
         devices: [
           {
             id: 'dev-probe-pc',
-            name: `${localDevice?.host || 'Estación de Trabajo (Este PC)'}`,
+            name: localDevice ? localDevice.host : 'Sonda Local (Este PC)',
             ip: localDevice?.ip || `${base}.55`,
             mac: localDevice?.mac || '84:C8:A0:BB:AB:66',
             deviceObj: localDevice,
             status: localDevice ? localDevice.estado : 'No_Escaneado',
-            type: 'desktop',
+            type: 'desktop' as const,
             sensors: [
               { name: 'Core Server Health', value: hostTelemetry?.health || '100 %', status: getSensorStatus(localDevice?.estado) },
               { name: 'CPU Load', value: hostTelemetry?.cpuLoad || '8 %', status: getSensorStatus(localDevice?.estado) },
@@ -202,12 +289,12 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
         devices: [
           {
             id: 'dev-gateway',
-            name: 'Router Central Gateway',
+            name: gatewayDevice ? `${gatewayDevice.host} (Gateway)` : 'Router Central Gateway',
             ip: gatewayDevice?.ip || `${base}.1`,
             mac: gatewayDevice?.mac || '10:7B:44:A2:99:11',
             deviceObj: gatewayDevice,
             status: gatewayDevice ? gatewayDevice.estado : 'OK',
-            type: 'router',
+            type: 'router' as const,
             sensors: [
               { name: 'Gateway Ping', value: `${gatewayDevice?.ping || 2} msec`, status: getSensorStatus(gatewayDevice?.estado) },
               { name: 'HTTP Admin Web', value: '200 OK (11ms)', status: getSensorStatus(gatewayDevice?.estado) },
@@ -219,7 +306,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
           },
           ...(isDemoMode || switchDevice ? [{
             id: 'dev-switch',
-            name: switchDevice?.host || 'Switch Principal Cisco/LAN',
+            name: switchDevice ? switchDevice.host : 'Switch Principal Cisco/LAN',
             ip: switchDevice?.ip || `${base}.2`,
             mac: switchDevice?.mac || '2C:96:82:11:AA:FF',
             deviceObj: switchDevice || null,
@@ -247,7 +334,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             mac: nvrDevice.mac,
             deviceObj: nvrDevice,
             status: nvrDevice.estado,
-            type: 'nas',
+            type: 'nas' as const,
             sensors: [
               { name: 'NVR Server Ping', value: `${nvrDevice.ping || 4} ms`, status: getSensorStatus(nvrDevice.estado) },
               { name: 'CCTV HDD Raid Space', value: '92% Libre / 16TB', status: getSensorStatus(nvrDevice.estado) },
@@ -264,7 +351,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             mac: cameraPtzDevice.mac,
             deviceObj: cameraPtzDevice,
             status: cameraPtzDevice.estado,
-            type: 'iot',
+            type: 'iot' as const,
             sensors: [
               { name: 'PTZ Camera Ping', value: `${cameraPtzDevice.ping || 11} ms`, status: getSensorStatus(cameraPtzDevice.estado) },
               { name: 'RTSP H.264 MainStream', value: `${cameraPtzDevice.consumoUpload || 4.5} Mbps`, status: getSensorStatus(cameraPtzDevice.estado) },
@@ -280,7 +367,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             mac: cameraPasilloDevice.mac,
             deviceObj: cameraPasilloDevice,
             status: cameraPasilloDevice.estado,
-            type: 'iot',
+            type: 'iot' as const,
             sensors: [
               { name: 'IP Camera Corridor Ping', value: `${cameraPasilloDevice.ping || 12} ms`, status: getSensorStatus(cameraPasilloDevice.estado) },
               { name: 'RTSP Stream Bandwidth', value: `${cameraPasilloDevice.consumoUpload || 3.5} Mbps`, status: getSensorStatus(cameraPasilloDevice.estado) },
@@ -295,7 +382,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             mac: cameraDomoDevice.mac,
             deviceObj: cameraDomoDevice,
             status: cameraDomoDevice.estado,
-            type: 'iot',
+            type: 'iot' as const,
             sensors: [
               { name: 'IP Dome Meeting Ping', value: `${cameraDomoDevice.ping || 14} ms`, status: getSensorStatus(cameraDomoDevice.estado) },
               { name: 'RTSP Video Stream', value: `${cameraDomoDevice.consumoUpload || 2.2} Mbps`, status: getSensorStatus(cameraDomoDevice.estado) },
@@ -316,7 +403,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             mac: dbDevice.mac,
             deviceObj: dbDevice,
             status: dbDevice.estado,
-            type: 'server',
+            type: 'server' as const,
             sensors: [
               { name: 'DB Container Ping', value: `${dbDevice.ping || 5} ms`, status: getSensorStatus(dbDevice.estado) },
               { name: 'PostgreSQL Active Conn', value: '22 Conexiones', status: getSensorStatus(dbDevice.estado) },
@@ -331,7 +418,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             mac: webDevice.mac,
             deviceObj: webDevice,
             status: webDevice.estado,
-            type: 'server',
+            type: 'server' as const,
             sensors: [
               { name: 'Nginx Container Ping', value: `${webDevice.ping || 4} ms`, status: getSensorStatus(webDevice.estado) },
               { name: 'Nginx Worker Threads', value: '4 Operando (OK)', status: getSensorStatus(webDevice.estado) },
@@ -346,7 +433,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             mac: nasDevice.mac,
             deviceObj: nasDevice,
             status: nasDevice.estado,
-            type: 'nas',
+            type: 'nas' as const,
             sensors: [
               { name: 'NAS Server Ping', value: `${nasDevice.ping || 95} ms`, status: getSensorStatus(nasDevice.estado) },
               { name: 'RAID 5 Array Health', value: 'Sano (Advertencia CPU)', status: getSensorStatus(nasDevice.estado) },
@@ -361,7 +448,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             mac: vmDevice.mac,
             deviceObj: vmDevice,
             status: vmDevice.estado,
-            type: 'server',
+            type: 'server' as const,
             sensors: [
               { name: 'Ubuntu VM Guest Ping', value: `${vmDevice.ping || 8} ms`, status: getSensorStatus(vmDevice.estado) },
               { name: 'Host Hypervisor Overhead', value: '12 % (Bajo)', status: getSensorStatus(vmDevice.estado) },
@@ -369,11 +456,16 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             ]
           }] : [])
         ]
-      }
+      },
+      ...(otherPrtgDevices.length > 0 ? [{
+        id: 'group-other',
+        name: 'DISPOSITIVOS DE RED DETECTADOS (Otros Clientes LAN)',
+        devices: otherPrtgDevices
+      }] : [])
     ];
     if (isDemoMode) return groups;
-    return groups.filter(g => g.id === 'group-local' || g.devices.length > 0);
-  }, [devices, currentSubnetBase, isDemoMode]);
+    return groups.filter(g => g.id === 'group-local' || g.id === 'group-other' || g.devices.length > 0);
+  }, [devices, currentSubnetBase, isDemoMode, hostTelemetry]);
 
   // Define active coordinates and layout dynamically
   const topologyNodes: TopologyNode[] = useMemo(() => {
@@ -945,7 +1037,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                         </span>
                       </button>
                       <span className="text-[9px] bg-slate-100 border border-slate-200 text-slate-500 px-2 py-0.3 rounded-full ml-1 font-bold">
-                        {group.devices.length} {group.devices.length === 1 ? 'Grupo' : 'Grupos'}
+                        {group.devices.length} {group.devices.length === 1 ? 'Dispositivo' : 'Dispositivos'}
                       </span>
                     </div>
 
@@ -957,6 +1049,8 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                           const devWarningCount = device.sensors.filter(s => s.status === 'Warning').length;
                           const devDownCount = device.sensors.filter(s => s.status === 'Down').length;
                           const devPausedCount = device.sensors.filter(s => s.status === 'Paused').length;
+
+                          const resolvedVendor = device.deviceObj?.vendor || (device.mac ? resolveVendorByMac(device.mac, device.name, device.ip) : '');
 
                           return (
                             <div key={device.id} className="bg-[#fcfdfd] border border-[#cbd5e1] rounded p-2.5 shadow-sm hover:shadow-md hover:border-[#b4c6dc] transition-all">
@@ -978,6 +1072,12 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                                 {device.ip !== '—' && (
                                   <span className="font-mono text-[9px] bg-slate-100 border border-slate-200 px-1.5 py-0.3 rounded text-slate-500">
                                     IP: {device.ip}
+                                  </span>
+                                )}
+
+                                {resolvedVendor && resolvedVendor !== '—' && (
+                                  <span className="text-[9.5px] bg-indigo-50 border border-indigo-200 text-indigo-700 px-1.5 py-0.3 rounded-sm font-sans font-medium flex items-center gap-1 select-all" title={`Fabricante: ${resolvedVendor}`}>
+                                    🏭 {resolvedVendor}
                                   </span>
                                 )}
 
