@@ -172,12 +172,7 @@ export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean,
         102: { host: 'Impresora LaserJet (HP de Oficina)', mac: 'EC:FA:BC:11:22:33', ping: 35, estado: 'OK' as const, consumoDownload: 0.1, consumoUpload: 0.1, totalConsumido: 12 }
       };
     } else {
-      activePresets = {
-        1: { host: 'Gateway de Red (Router)', mac: '10:7B:44:A2:99:11', ping: 2, estado: 'OK' as const, sensorHttp: true, consumoDownload: 1.5, consumoUpload: 0.5, totalConsumido: 450 },
-        55: { host: 'Laptop de Trabajo (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 1, estado: 'OK' as const, sensorHttp: true, consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120 },
-        81: { host: 'Grabadora NVR Seguridad IP (Dahua)', mac: 'BC:32:AC:EF:22:91', ping: 5, estado: 'OK' as const, sensorHttp: true, consumoDownload: 0.8, consumoUpload: 75.2, totalConsumido: 15480 },
-        82: { host: 'Cámara Exterior PTZ (Hikvision)', mac: '00:40:3F:81:AA:BF', ping: 11, estado: 'OK' as const, consumoDownload: 0.05, consumoUpload: 4.5, totalConsumido: 940 }
-      };
+      activePresets = {};
     }
   }
 

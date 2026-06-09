@@ -2851,7 +2851,7 @@ export default function App() {
 
               {/* MAPA DE SUBRED GRID */}
               <div className="w-full">
-                <MapSubred devices={mapDevices} onSelectDevice={setSelectedDevice} />
+                <MapSubred devices={mapDevices} onSelectDevice={setSelectedDevice} isDemoMode={isDemoMode} />
               </div>
 
             </div>

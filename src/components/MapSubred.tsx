@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Device } from '../types';
 import { 
   Monitor, Server, Router as RouterIcon, Activity, 
@@ -9,6 +9,7 @@ import {
 interface MapSubredProps {
   devices: Device[];
   onSelectDevice: (device: Device) => void;
+  isDemoMode?: boolean;
 }
 
 interface TopologyNode {
@@ -44,7 +45,7 @@ const getShortHostName = (name: string): string => {
   return name.length > 18 ? name.substring(0, 15) + '...' : name;
 };
 
-export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
+export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }: MapSubredProps) {
   // Toggle between 'prtg', 'topology' and 'grid'
   const [viewMode, setViewMode] = useState<'prtg' | 'topology' | 'grid'>('prtg');
   const [useOwnNames, setUseOwnNames] = useState<boolean>(true);
@@ -68,6 +69,37 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
 
   const [prtgSearch, setPrtgSearch] = useState('');
   const [prtgStatusFilter, setPrtgStatusFilter] = useState<'all' | 'OK' | 'Warning' | 'Down' | 'Paused'>('all');
+
+  const [hostTelemetry, setHostTelemetry] = useState<{
+    cpuLoad: string;
+    memoryFree: string;
+    diskFree: string;
+    processCount: string;
+    health: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const fetchTelemetry = () => {
+      fetch('/api/host-telemetry')
+        .then(res => res.json())
+        .then(data => {
+          if (data && !data.error) {
+            setHostTelemetry({
+              cpuLoad: data.cpuLoad,
+              memoryFree: data.memoryFree,
+              diskFree: data.diskFree,
+              processCount: data.processCount,
+              health: data.health
+            });
+          }
+        })
+        .catch(err => console.warn("Error fetching host telemetry:", err));
+    };
+
+    fetchTelemetry();
+    const interval = setInterval(fetchTelemetry, 4500);
+    return () => clearInterval(interval);
+  }, []);
 
   // Find current subnet base (e.g. "192.168.1" or "10.0.0")
   const currentSubnetBase = useMemo(() => {
@@ -97,6 +129,7 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
     }) || devices.find(d => d.ip && d.ip.endsWith('.55'));
 
     const gatewayDevice = findDevByLastOctet('1');
+    const switchDevice = findDevByLastOctet('2') || devices.find(d => d.host.toLowerCase().includes('switch') || d.host.toLowerCase().includes('conmutador'));
     const nvrDevice = findDevByLastOctet('81') || devices.find(d => d.host.toLowerCase().includes('nvr') || d.host.toLowerCase().includes('grabador') || d.host.toLowerCase().includes('grabadora'));
     const cameraPtzDevice = findDevByLastOctet('82') || devices.find(d => d.host.toLowerCase().includes('ptz') || d.host.toLowerCase().includes('cámara exterior') || d.host.toLowerCase().includes('camara exterior'));
     const cameraPasilloDevice = findDevByLastOctet('60') || devices.find(d => d.host.toLowerCase().includes('pasillo') || d.host.toLowerCase().includes('axis'));
@@ -120,7 +153,7 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
       return 'OK' as const;
     };
 
-    return [
+    const groups = [
       {
         id: 'group-local',
         name: 'Sonda Local (Local Probe - LAN Sonda)',
@@ -134,11 +167,11 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
             status: localDevice ? localDevice.estado : 'No_Escaneado',
             type: 'desktop',
             sensors: [
-              { name: 'Core Server Health', value: '100 %', status: getSensorStatus(localDevice?.estado) },
-              { name: 'CPU Load', value: '8 %', status: getSensorStatus(localDevice?.estado) },
-              { name: 'Memory Free Space', value: '42 %', status: getSensorStatus(localDevice?.estado) },
-              { name: 'Disk Free C:', value: '158 GB (76%)', status: getSensorStatus(localDevice?.estado) },
-              { name: 'Active Process Count', value: '148', status: getSensorStatus(localDevice?.estado) },
+              { name: 'Core Server Health', value: hostTelemetry?.health || '100 %', status: getSensorStatus(localDevice?.estado) },
+              { name: 'CPU Load', value: hostTelemetry?.cpuLoad || '8 %', status: getSensorStatus(localDevice?.estado) },
+              { name: 'Memory Free Space', value: hostTelemetry?.memoryFree || '42 %', status: getSensorStatus(localDevice?.estado) },
+              { name: 'Disk Free C:', value: hostTelemetry?.diskFree || '158 GB (76%)', status: getSensorStatus(localDevice?.estado) },
+              { name: 'Active Process Count', value: hostTelemetry?.processCount || '148', status: getSensorStatus(localDevice?.estado) },
               { name: 'sFlow Probe Listener', value: 'sFlow V5 v1', status: 'Paused' as const },
               { name: 'DNS Lookup Speed', value: '12 ms', status: getSensorStatus(localDevice?.estado) },
               { name: 'Traceroute Gateway', value: '1 saltos (1ms)', status: getSensorStatus(localDevice?.estado) },
@@ -169,23 +202,23 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
               { name: 'SFP+ Fiber GPON Link', value: '10G Link (Up)', status: getSensorStatus(gatewayDevice?.estado) }
             ]
           },
-          {
+          ...(isDemoMode || switchDevice ? [{
             id: 'dev-switch',
-            name: 'Switch Principal Cisco/LAN',
-            ip: `${base}.2`,
-            mac: '2C:96:82:11:AA:FF',
-            deviceObj: null,
-            status: gatewayDevice ? gatewayDevice.estado : 'OK',
-            type: 'switch',
+            name: switchDevice?.host || 'Switch Principal Cisco/LAN',
+            ip: switchDevice?.ip || `${base}.2`,
+            mac: switchDevice?.mac || '2C:96:82:11:AA:FF',
+            deviceObj: switchDevice || null,
+            status: switchDevice ? switchDevice.estado : (gatewayDevice ? gatewayDevice.estado : 'OK'),
+            type: 'switch' as const,
             sensors: [
-              { name: 'Switch Core Ping', value: '1 ms', status: getSensorStatus(gatewayDevice?.estado) },
-              { name: 'PoE Power Alloc', value: '120W / 370W', status: getSensorStatus(gatewayDevice?.estado) },
-              { name: 'Port 1 Uplink Stat', value: '10G SFP+ Active', status: getSensorStatus(gatewayDevice?.estado) },
-              { name: 'Port 2 WiFi PoE Central', value: '1G Active (OK)', status: getSensorStatus(gatewayDevice?.estado) },
-              { name: 'Port 4 Workstation PC', value: '1G Active (OK)', status: getSensorStatus(gatewayDevice?.estado) },
-              { name: 'Port 24 Trunk Sonda', value: '450 kbit/s', status: getSensorStatus(gatewayDevice?.estado) }
+              { name: 'Switch Core Ping', value: switchDevice ? `${switchDevice.ping || 1} ms` : '1 ms', status: getSensorStatus(switchDevice ? switchDevice.estado : (gatewayDevice ? gatewayDevice.estado : 'OK')) },
+              { name: 'PoE Power Alloc', value: '120W / 370W', status: getSensorStatus(switchDevice ? switchDevice.estado : (gatewayDevice ? gatewayDevice.estado : 'OK')) },
+              { name: 'Port 1 Uplink Stat', value: '10G SFP+ Active', status: getSensorStatus(switchDevice ? switchDevice.estado : (gatewayDevice ? gatewayDevice.estado : 'OK')) },
+              { name: 'Port 2 WiFi PoE Central', value: '1G Active (OK)', status: getSensorStatus(switchDevice ? switchDevice.estado : (gatewayDevice ? gatewayDevice.estado : 'OK')) },
+              { name: 'Port 4 Workstation PC', value: '1G Active (OK)', status: getSensorStatus(switchDevice ? switchDevice.estado : (gatewayDevice ? gatewayDevice.estado : 'OK')) },
+              { name: 'Port 24 Trunk Sonda', value: '450 kbit/s', status: getSensorStatus(switchDevice ? switchDevice.estado : (gatewayDevice ? gatewayDevice.estado : 'OK')) }
             ]
-          }
+          }] : [])
         ]
       },
       {
@@ -323,7 +356,9 @@ export default function MapSubred({ devices, onSelectDevice }: MapSubredProps) {
         ]
       }
     ];
-  }, [devices, currentSubnetBase]);
+    if (isDemoMode) return groups;
+    return groups.filter(g => g.id === 'group-local' || g.devices.length > 0);
+  }, [devices, currentSubnetBase, isDemoMode]);
 
   // Define active coordinates and layout dynamically
   const topologyNodes: TopologyNode[] = useMemo(() => {
