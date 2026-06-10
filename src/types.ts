@@ -13,6 +13,7 @@ export interface Device {
   totalConsumido?: number;   // Accumulated data in MB
   interfaz?: string;        // Active interface name
   segmento?: string;        // Connected subnet segment
+  vendor?: string;          // Brand/Manufacturer name
 }
 
 export interface Sensor {

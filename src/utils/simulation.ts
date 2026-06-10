@@ -162,14 +162,7 @@ export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean,
     if (isCloudHost) {
       activePresets = {
         1: { host: 'Gateway / Router principal (Huawei ONT)', mac: '10:7B:44:A2:99:11', ping: 2, estado: 'OK' as const, sensorHttp: true, consumoDownload: 1.5, consumoUpload: 0.5, totalConsumido: 450 },
-        12: { host: 'iPhone de Papá (Apple Móvil)', mac: '90:72:40:7C:E1:9F', ping: 15, estado: 'OK' as const, consumoDownload: 3.2, consumoUpload: 0.4, totalConsumido: 180 },
-        15: { host: 'Servidor NAS de Copias (Synology)', mac: '00:11:32:8F:A1:AC', ping: 6, estado: 'OK' as const, consumoDownload: 0.8, consumoUpload: 45.3, totalConsumido: 11450 },
-        38: { host: 'Smart TV Living (Samsung)', mac: 'D4:E4:C4:F3:11:80', ping: 22, estado: 'OK' as const, consumoDownload: 18.5, consumoUpload: 1.2, totalConsumido: 1245 },
-        40: { host: 'Consola PS5 (Sony PlayStation)', mac: 'FE:33:DE:82:11:1C', ping: 48, estado: 'OK' as const, consumoDownload: 42.8, consumoUpload: 3.5, totalConsumido: 5410 },
-        55: { host: 'Laptop de Trabajo (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 1, estado: 'OK' as const, sensorHttp: true, consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120 },
-        81: { host: 'Grabadora NVR Seguridad IP (Dahua Technology)', mac: 'BC:32:AC:EF:22:91', ping: 5, estado: 'OK' as const, sensorHttp: true, consumoDownload: 0.8, consumoUpload: 75.2, totalConsumido: 15480 },
-        82: { host: 'Cámara Exterior PTZ (Hikvision CCTV)', mac: '00:40:3F:81:AA:BF', ping: 11, estado: 'OK' as const, consumoDownload: 0.05, consumoUpload: 4.5, totalConsumido: 940 },
-        102: { host: 'Impresora LaserJet (HP de Oficina)', mac: 'EC:FA:BC:11:22:33', ping: 35, estado: 'OK' as const, consumoDownload: 0.1, consumoUpload: 0.1, totalConsumido: 12 }
+        55: { host: 'Laptop de Trabajo (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 1, estado: 'OK' as const, sensorHttp: true, consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120 }
       };
     } else {
       activePresets = {};

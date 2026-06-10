@@ -993,7 +993,8 @@ export default function App() {
                     consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
                     totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
                     interfaz: selectedInterface,
-                    segmento: rSubnet
+                    segmento: rSubnet,
+                    vendor: r.vendor
                   };
 
                   if (idx !== -1) {
