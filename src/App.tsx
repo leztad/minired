@@ -121,6 +121,7 @@ export default function App() {
   const [selectedInterface, setSelectedInterface] = useState<string>('Intel Wi-Fi 6E AX211 @ 802.11ax');
   const [serverInterfaces, setServerInterfaces] = useState<any[]>([]);
   const [isHostedInCloud, setIsHostedInCloud] = useState<boolean>(false);
+  const [mobileAccessTab, setMobileAccessTab] = useState<'cloud' | 'local'>('cloud');
   const [isLocalHelpModalOpen, setIsLocalHelpModalOpen] = useState<boolean>(false);
 
   // Probe UI States
@@ -139,6 +140,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       const isCloud = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       setIsHostedInCloud(isCloud);
+      setMobileAccessTab(isCloud ? 'cloud' : 'local');
     }
   }, []);
 
@@ -1397,9 +1399,9 @@ export default function App() {
   };
 
   const copyCellUrl = () => {
-    const url = isHostedInCloud && typeof window !== 'undefined' 
+    const url = mobileAccessTab === 'cloud' && typeof window !== 'undefined' 
       ? window.location.origin 
-      : `http://${activeWorkstationInfo.localIp}:8080`;
+      : `http://${activeWorkstationInfo.localIp}:3000`;
     navigator.clipboard.writeText(url);
     setCopiedSuccess(true);
     setTimeout(() => setCopiedSuccess(false), 2000);
@@ -2327,35 +2329,89 @@ export default function App() {
               <Monitor className="h-3.5 w-3.5 text-cyan-400" />
               Acceso desde celular
             </h5>
-            <p className="text-[10px] text-slate-500 mt-1">
-              {isHostedInCloud 
-                ? 'Escanea con tu cámara o abre el enlace en tu móvil:' 
-                : 'Misma red Wi-Fi que este PC (servidor):'}
+            
+            {/* Split selectors to handle any context gracefully */}
+            <div className="flex border border-slate-800 rounded-sm overflow-hidden p-0.5 bg-slate-900 mt-2 text-[9px] font-bold">
+              <button 
+                type="button"
+                onClick={() => setMobileAccessTab('cloud')}
+                className={`flex-1 py-1 text-center rounded-xs cursor-pointer transition-colors ${
+                  mobileAccessTab === 'cloud' 
+                    ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' 
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                Modo Nube (Cloud)
+              </button>
+              <button 
+                type="button"
+                onClick={() => setMobileAccessTab('local')}
+                className={`flex-1 py-1 text-center rounded-xs cursor-pointer transition-colors ${
+                  mobileAccessTab === 'local' 
+                    ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' 
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                PC Local (Wi-Fi)
+              </button>
+            </div>
+
+            <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+              {mobileAccessTab === 'cloud' 
+                ? 'Accede al entorno actual ejecutándose en Google Cloud:' 
+                : 'Para cuando ejecutas RedMonitor localmente en tu PC:'}
             </p>
-            <div className="mt-2 text-cyan-400 font-mono font-medium truncate select-all text-[10px] bg-[#0c1222] p-1.5 rounded-sm border border-slate-850">
-              {isHostedInCloud && typeof window !== 'undefined' 
+            
+            <div className="mt-1.5 text-cyan-400 font-mono font-medium truncate select-all text-[10px] bg-[#0c1222] p-1.5 rounded-sm border border-slate-850">
+              {mobileAccessTab === 'cloud' && typeof window !== 'undefined' 
                 ? window.location.origin 
-                : `http://${activeWorkstationInfo.localIp}:8080`}
+                : `http://${activeWorkstationInfo.localIp}:3000`}
             </div>
 
             {/* Dynamic QR Code generator for extreme convenience on real mobile phones */}
             <div className="mt-2.5 flex flex-col items-center justify-center p-2 bg-slate-900/30 rounded border border-slate-850/80">
               <img 
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&color=22d3ee&bgcolor=090e1a&data=${encodeURIComponent(
-                  isHostedInCloud && typeof window !== 'undefined' 
+                  mobileAccessTab === 'cloud' && typeof window !== 'undefined' 
                     ? window.location.origin 
-                    : `http://${activeWorkstationInfo.localIp}:8080`
+                    : `http://${activeWorkstationInfo.localIp}:3000`
                 )}`}
                 alt="QR de Acceso Móvil"
                 className="w-24 h-24 border border-cyan-500/10 rounded p-1 bg-[#090e1a]"
                 referrerPolicy="no-referrer"
               />
-              <span className="text-[8px] text-slate-500 uppercase font-mono mt-1 tracking-wider text-center block">Escanea para ver en celular</span>
+              <span className="text-[8px] text-slate-500 uppercase font-mono mt-1 tracking-wider text-center block">
+                {mobileAccessTab === 'cloud' ? 'Escanear URL de Nube' : 'Escanear URL Local (PC)'}
+              </span>
+            </div>
+
+            {/* Troubleshooting notes inside the card to guide the user */}
+            <div className="mt-2 space-y-1.5 text-[9px] text-slate-500 leading-tight">
+              {mobileAccessTab === 'cloud' ? (
+                <>
+                  <p>
+                    <span className="text-amber-500/80 font-bold font-sans">⚠️ NOTA DE SEGURIDAD:</span> El navegador de tu celular debe estar logueado con tu cuenta Google <strong className="text-slate-400 font-sans">aszaps53@gmail.com</strong> para pasar el sistema de protección o usar el link compartido público "Shared App URL".
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    <span className="text-cyan-500/80 font-bold font-sans">📶 REQUISITOS WI-FI:</span> Tu celular y tu PC deben estar conectados al mismo enrutador Wi-Fi.
+                  </p>
+                  <p>
+                    <span className="text-cyan-500/80 font-bold font-sans">🔌 PUERTO 3000:</span> Corregimos el puerto local (el servidor utiliza el puerto 3000 por defecto en vez de 8080).
+                  </p>
+                  <p>
+                    <span className="text-amber-500/80 font-bold font-sans">🛡️ CORTAFUEGOS:</span> Si no carga, asegúrate de permitir conexiones entrantes en el firewall de Windows para Node.js / el puerto 3000.
+                  </p>
+                </>
+              )}
             </div>
 
             <button 
+              type="button"
               onClick={copyCellUrl}
-              className="w-full mt-2.5 bg-slate-900 hover:bg-slate-850 active:scale-95 text-slate-300 font-semibold py-1 px-2 rounded-xs border border-slate-800 text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-colors"
+              className="w-full mt-2.5 bg-slate-900 hover:bg-slate-850 active:scale-95 text-slate-300 font-semibold py-1.5 px-2 rounded-xs border border-slate-800 text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-colors"
             >
               <Copy className="h-3 w-3" />
               {copiedSuccess ? '¡Enlace copiado!' : 'Copiar enlace'}
