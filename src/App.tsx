@@ -4,7 +4,7 @@ import {
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
   ChevronDown, Monitor, Copy, Plus, Play, Pause, ExternalLink, HelpCircle, 
   ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable,
-  Gauge
+  Gauge, Menu, X
 } from 'lucide-react';
 
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
@@ -242,6 +242,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red'>('vista_general');
   const [sidebarSearch, setSidebarSearch] = useState<string>('');
   const [isLanTreeOpen, setIsLanTreeOpen] = useState<boolean>(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Gemini & Diagnóstico Inteligente API states
   const [aiReport, setAiReport] = useState<string | null>(null);
@@ -1396,7 +1397,10 @@ export default function App() {
   };
 
   const copyCellUrl = () => {
-    navigator.clipboard.writeText(`http://${activeWorkstationInfo.localIp}:8080`);
+    const url = isHostedInCloud && typeof window !== 'undefined' 
+      ? window.location.origin 
+      : `http://${activeWorkstationInfo.localIp}:8080`;
+    navigator.clipboard.writeText(url);
     setCopiedSuccess(true);
     setTimeout(() => setCopiedSuccess(false), 2000);
   };
@@ -1406,6 +1410,15 @@ export default function App() {
       {/* HEADER BAR (Geometric Balance Theme) */}
       <header className="bg-[#0B1120] text-slate-300 px-4 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-md z-40">
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="md:hidden flex items-center justify-center p-2 rounded-xs bg-[#0f172a]/95 border border-slate-800 hover:bg-slate-900 text-slate-300 hover:text-cyan-400 focus:outline-hidden cursor-pointer transition-colors"
+            title="Alternar navegación"
+            id="mobile-nav-toggle-btn"
+          >
+            {isMobileMenuOpen ? <X className="h-4.5 w-4.5" /> : <Menu className="h-4.5 w-4.5" />}
+          </button>
+
           <div className="bg-[#0f172a]/80 text-white px-2.5 py-1.5 rounded-xs font-semibold flex items-center gap-2.5 border border-slate-850 shadow-inner">
             <div className="w-6 h-6 bg-cyan-500 rounded-sm flex items-center justify-center">
               <div className="w-3 h-3 border border-slate-900 bg-[#0F172A]" />
@@ -2040,7 +2053,7 @@ export default function App() {
       {/* THREE VIEW SPLIT CONTENT CONTAINER */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
         {/* LEFT SIDEBAR NAVBAR */}
-        <aside className="w-full md:w-64 bg-[#0B1120] text-slate-300 p-3.5 border-r border-slate-850 flex flex-col gap-4 select-none flex-shrink-0">
+        <aside className={`${isMobileMenuOpen ? 'flex' : 'hidden'} md:flex w-full md:w-64 bg-[#0B1120] text-slate-300 p-3.5 border-r border-slate-850 flex-col gap-4 select-none flex-shrink-0`}>
           
           {/* SENSOR SEARCH BOX */}
           <div className="relative">
@@ -2060,7 +2073,7 @@ export default function App() {
             <ul className="space-y-1 text-xs">
               <li>
                 <button 
-                  onClick={() => setActiveView('vista_general')}
+                  onClick={() => { setActiveView('vista_general'); setIsMobileMenuOpen(false); }}
                   className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
                     activeView === 'vista_general' 
                       ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
@@ -2073,7 +2086,7 @@ export default function App() {
               </li>
               <li>
                 <button 
-                  onClick={() => setActiveView('sensores')}
+                  onClick={() => { setActiveView('sensores'); setIsMobileMenuOpen(false); }}
                   className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
                     activeView === 'sensores' 
                       ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
@@ -2086,7 +2099,7 @@ export default function App() {
               </li>
               <li>
                 <button 
-                  onClick={() => setActiveView('dispositivos')}
+                  onClick={() => { setActiveView('dispositivos'); setIsMobileMenuOpen(false); }}
                   className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
                     activeView === 'dispositivos' 
                       ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
@@ -2099,7 +2112,7 @@ export default function App() {
               </li>
               <li>
                 <button 
-                  onClick={() => setActiveView('ancho_banda')}
+                  onClick={() => { setActiveView('ancho_banda'); setIsMobileMenuOpen(false); }}
                   className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
                     activeView === 'ancho_banda' 
                       ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
@@ -2113,7 +2126,7 @@ export default function App() {
               </li>
               <li>
                 <button 
-                  onClick={() => setActiveView('testeo')}
+                  onClick={() => { setActiveView('testeo'); setIsMobileMenuOpen(false); }}
                   className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
                     activeView === 'testeo' 
                       ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
@@ -2127,7 +2140,7 @@ export default function App() {
               </li>
               <li>
                 <button 
-                  onClick={() => setActiveView('ai_diagnostic')}
+                  onClick={() => { setActiveView('ai_diagnostic'); setIsMobileMenuOpen(false); }}
                   className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
                     activeView === 'ai_diagnostic' 
                       ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
@@ -2141,7 +2154,7 @@ export default function App() {
               </li>
               <li>
                 <button 
-                  onClick={() => setActiveView('speed_test')}
+                  onClick={() => { setActiveView('speed_test'); setIsMobileMenuOpen(false); }}
                   className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
                     activeView === 'speed_test' 
                       ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
@@ -2155,7 +2168,7 @@ export default function App() {
               </li>
               <li>
                 <button 
-                  onClick={() => setActiveView('auditorias_red')}
+                  onClick={() => { setActiveView('auditorias_red'); setIsMobileMenuOpen(false); }}
                   className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
                     activeView === 'auditorias_red' 
                       ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
@@ -2314,13 +2327,35 @@ export default function App() {
               <Monitor className="h-3.5 w-3.5 text-cyan-400" />
               Acceso desde celular
             </h5>
-            <p className="text-[10px] text-slate-500 mt-1">Misma red Wi-Fi que este PC (servidor)</p>
-            <div className="mt-2 text-cyan-400 font-mono font-medium truncate select-all">
-              http://{activeWorkstationInfo.localIp}:8080
+            <p className="text-[10px] text-slate-500 mt-1">
+              {isHostedInCloud 
+                ? 'Escanea con tu cámara o abre el enlace en tu móvil:' 
+                : 'Misma red Wi-Fi que este PC (servidor):'}
+            </p>
+            <div className="mt-2 text-cyan-400 font-mono font-medium truncate select-all text-[10px] bg-[#0c1222] p-1.5 rounded-sm border border-slate-850">
+              {isHostedInCloud && typeof window !== 'undefined' 
+                ? window.location.origin 
+                : `http://${activeWorkstationInfo.localIp}:8080`}
             </div>
+
+            {/* Dynamic QR Code generator for extreme convenience on real mobile phones */}
+            <div className="mt-2.5 flex flex-col items-center justify-center p-2 bg-slate-900/30 rounded border border-slate-850/80">
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&color=22d3ee&bgcolor=090e1a&data=${encodeURIComponent(
+                  isHostedInCloud && typeof window !== 'undefined' 
+                    ? window.location.origin 
+                    : `http://${activeWorkstationInfo.localIp}:8080`
+                )}`}
+                alt="QR de Acceso Móvil"
+                className="w-24 h-24 border border-cyan-500/10 rounded p-1 bg-[#090e1a]"
+                referrerPolicy="no-referrer"
+              />
+              <span className="text-[8px] text-slate-500 uppercase font-mono mt-1 tracking-wider text-center block">Escanea para ver en celular</span>
+            </div>
+
             <button 
               onClick={copyCellUrl}
-              className="w-full mt-2 bg-slate-900 hover:bg-slate-850 active:scale-95 text-slate-300 font-semibold py-1 px-2 rounded-xs border border-slate-800 text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-colors"
+              className="w-full mt-2.5 bg-slate-900 hover:bg-slate-850 active:scale-95 text-slate-300 font-semibold py-1 px-2 rounded-xs border border-slate-800 text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-colors"
             >
               <Copy className="h-3 w-3" />
               {copiedSuccess ? '¡Enlace copiado!' : 'Copiar enlace'}
