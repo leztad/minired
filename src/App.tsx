@@ -825,6 +825,18 @@ export default function App() {
             const isThisPc = r.ip === currentInterfaceObj.ip;
             
             let nameLabel = r.hostname || r.vendor || 'Dispositivo LAN';
+            const cleanMac = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
+            const labelLower = nameLabel.toLowerCase();
+            if (
+              labelLower.includes('genérico') || 
+              labelLower.includes('generico') || 
+              labelLower.includes('dispositivo lan') || 
+              labelLower.includes('dispositivo de red') || 
+              labelLower.includes('sonda de red') || 
+              nameLabel === '—'
+            ) {
+              nameLabel = resolveDeviceNameByMac(cleanMac, r.hostname, r.ip);
+            }
             let hostNameStr = nameLabel;
             if (isThisPc) {
               hostNameStr = `Este PC (${nameLabel})`;
@@ -953,7 +965,15 @@ export default function App() {
           const isThisPc = r.ip === currentInterfaceObj.ip;
           
           let nameLabel = r.hostname || r.vendor || 'Dispositivo LAN';
-          if (nameLabel === 'Dispositivo LAN' || nameLabel === 'Dispositivo Genérico' || nameLabel === 'Sonda de Red Genérica') {
+          const labelLower = nameLabel.toLowerCase();
+          if (
+            labelLower.includes('genérico') || 
+            labelLower.includes('generico') || 
+            labelLower.includes('dispositivo lan') || 
+            labelLower.includes('dispositivo de red') || 
+            labelLower.includes('sonda de red') || 
+            nameLabel === '—'
+          ) {
             nameLabel = resolveDeviceNameByMac(r.mac, r.hostname, r.ip);
           }
           let hostNameStr = nameLabel;
@@ -1078,7 +1098,15 @@ export default function App() {
                   const isThisPc = r.ip === currentInterfaceObj.ip;
                   
                   let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
-                  if (nameLabel === 'Dispositivo Genérico' || nameLabel === 'Dispositivo LAN' || nameLabel === 'Sonda de Red Genérica') {
+                  const labelLower = nameLabel.toLowerCase();
+                  if (
+                    labelLower.includes('genérico') || 
+                    labelLower.includes('generico') || 
+                    labelLower.includes('dispositivo lan') || 
+                    labelLower.includes('dispositivo de red') || 
+                    labelLower.includes('sonda de red') || 
+                    nameLabel === '—'
+                  ) {
                     nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
                   }
                   let hostNameStr = nameLabel;
@@ -1282,7 +1310,17 @@ export default function App() {
                 
                 // Choose the resolved hostname if retrieved, fallback to MAC manufacturer vendor
                 let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
-                
+                const labelLower = nameLabel.toLowerCase();
+                if (
+                  labelLower.includes('genérico') || 
+                  labelLower.includes('generico') || 
+                  labelLower.includes('dispositivo lan') || 
+                  labelLower.includes('dispositivo de red') || 
+                  labelLower.includes('sonda de red') || 
+                  nameLabel === '—'
+                ) {
+                  nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
+                }
                 let hostNameStr = nameLabel;
                 if (isThisPc) {
                   hostNameStr = `Este PC (${nameLabel})`;
