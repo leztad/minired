@@ -3453,7 +3453,9 @@ export default function App() {
                         <div className="col-span-2 border-t border-slate-850/60 pt-2 mt-1">
                            <span className="text-slate-500 block text-[9px] text-left">ESTIMACIÓN MARCA / FABRICANTE</span>
                            <span className="text-cyan-400 font-semibold block text-left font-sans">
-                             {resolveVendorByMac(activeDiagDevice.mac, activeDiagDevice.host, activeDiagDevice.ip)}
+                             {activeDiagDevice.vendor && activeDiagDevice.vendor !== '—' && !activeDiagDevice.vendor.toLowerCase().includes('genérico') && !activeDiagDevice.vendor.toLowerCase().includes('generico') && activeDiagDevice.vendor !== 'Dispositivo de Red Activo'
+                               ? activeDiagDevice.vendor
+                               : resolveVendorByMac(activeDiagDevice.mac, activeDiagDevice.host, activeDiagDevice.ip)}
                            </span>
                         </div>
                       </div>

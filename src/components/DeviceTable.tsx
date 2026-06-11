@@ -24,7 +24,9 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
       }
 
       // Metric match
-      const brandName = resolveVendorByMac(d.mac, d.host, d.ip);
+      const brandName = d.vendor && d.vendor !== '—' && !d.vendor.toLowerCase().includes('genérico') && !d.vendor.toLowerCase().includes('generico') && d.vendor !== 'Dispositivo de Red Activo'
+        ? d.vendor
+        : resolveVendorByMac(d.mac, d.host, d.ip);
       const deviceName = resolveDeviceNameByMac(d.mac, d.host, d.ip);
       const matchesSearch = 
         d.ip.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -151,7 +153,7 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
                    pingText = '—';
                 }
 
-                const brandName = resolveVendorByMac(d.mac, d.host, d.ip);
+                const brandName = d.vendor && d.vendor !== '—' && !d.vendor.toLowerCase().includes('genérico') && !d.vendor.toLowerCase().includes('generico') && d.vendor !== 'Dispositivo de Red Activo' ? d.vendor : resolveVendorByMac(d.mac, d.host, d.ip);
 
                 let brandStyle = 'text-slate-400';
                 if (brandName.includes('Hikvision')) brandStyle = 'text-orange-400 font-bold';

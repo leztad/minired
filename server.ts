@@ -16,27 +16,149 @@ const PORT = 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// In-memory cache for MAC address OUI vendor mappings
+const vendorCache: Record<string, string> = {};
+
+// Comprehensive map of common MAC OUIs and manufacturers
+const OUI_MAP: Record<string, string> = {
+  "001132": "Synology Inc.",
+  "0011D9": "TiVo Device",
+  "001788": "Philips Hue Bridge",
+  "001A22": "Ubiquiti Networks",
+  "2C9682": "Cisco Systems",
+  "44D9E7": "Ubiquiti Networks",
+  "080027": "Oracle (VirtualBox)",
+  "0242AC": "Docker Virtual Bridge",
+  "FC51A4": "Samsung Electronics",
+  "E4E4C4": "Sony Interactive (PlayStation)",
+  "D4E4C4": "Sony Electronics",
+  "F01898": "Apple Inc.",
+  "9C287B": "Apple Inc.",
+  "A4123F": "Dahua Technology",
+  "84C8A0": "Ubiquiti Networks",
+  "18E829": "Ubiquiti Networks",
+  "788A20": "Ubiquiti Networks",
+  "FCECDA": "Ubiquiti Networks",
+  "FC2A9C": "Ubiquiti Networks",
+  "ECFABC": "Espressif Systems",
+  "240A64": "Espressif Systems",
+  "30AEA4": "Espressif Systems",
+  "7CB0C2": "Apple Inc.",
+  "907240": "Apple Inc.",
+  "88C223": "Apple Inc.",
+  "D84503": "Apple Inc.",
+  "B0C554": "Apple Inc.",
+  "FE33DE": "Sony Interactive (PlayStation)",
+  "001D0D": "Sony Corp.",
+  "001FA7": "Sony Corp.",
+  "BC32AC": "Dahua Technology",
+  "6C11FB": "Dahua Technology",
+  "00403F": "Hikvision Digital Tech",
+  "A040A0": "Hikvision Digital Tech",
+  "E0521D": "Hikvision Digital Tech",
+  "BC1485": "Hikvision Digital Tech",
+  "142FFD": "Hikvision Digital Tech",
+  "48EA63": "Hikvision Digital Tech",
+  "D443EB": "EZVIZ / Hikvision",
+  "E0E2E6": "EZVIZ / Hikvision",
+  "00408C": "Axis Communications",
+  "ACCC8E": "Axis Communications",
+  "60E327": "Reolink Digital",
+  "90E2BA": "Reolink Digital",
+  "00166C": "Hanwha Techwin (Wisenet)",
+  "00508D": "Hanwha Techwin (Wisenet)",
+  "0002D1": "Vivotek Inc.",
+  "001FCA": "Uniview Technologies",
+  "FCA667": "Amazon Technologies",
+  "C44F33": "Amazon Technologies",
+  "A0D05B": "Amazon Technologies",
+  "001EC5": "Google Nest",
+  "20DFB9": "Google Nest",
+  "F4F5D8": "Google LLC",
+  "48D6D5": "Google LLC",
+  "ECAA23": "Samsung Electronics",
+  "949F3E": "Samsung Electronics",
+  "A00BBA": "Samsung Electronics",
+  "107B44": "Huawei Technologies",
+  "503EAA": "Hewlett-Packard (HP)",
+  "3CD92B": "Hewlett-Packard (HP)",
+  "54A72A": "Xiaomi Communications",
+  "6490C1": "Xiaomi Communications",
+  "A4C512": "Intel Corporation",
+  "001F3B": "Intel Corporation",
+  "D0034B": "TP-Link Technologies",
+  "C025E9": "TP-Link Technologies",
+  "E8DE27": "TP-Link Technologies",
+  "B04E26": "TP-Link Technologies",
+  "74DA38": "TP-Link Technologies",
+};
+
 // Simple Helper to map MAC OUI to common network device vendors to make it beautiful
 const getVendorByMac = (mac: string): string => {
   const cleanMac = mac.replace(/[:-]/g, "").toUpperCase();
   const oui = cleanMac.slice(0, 6);
-  const ouiMap: Record<string, string> = {
-    "001132": "Synology NAS",
-    "0011D9": "TiVo Device",
-    "001788": "Philips Hue Bridge",
-    "001A22": "Ubiquiti UniFi AP",
-    "2C9682": "Cisco Enterprise Switch",
-    "44D9E7": "Ubiquiti AP-PRO",
-    "080027": "Oracle VirtualBox VM",
-    "0242AC": "Docker Bridge Container",
-    "FC51A4": "Smart TV Samsung",
-    "E4E4C4": "Sony Interactive console",
-    "9C287B": "Apple Device",
-    "F01898": "Apple MacBook Pro",
-    "A4123F": "Dahua Security IP Cam",
-    "D4E4C4": "Sony TV"
-  };
-  return ouiMap[oui] || "Dispositivo LAN Genérico";
+  return OUI_MAP[oui] || "Dispositivo de Red Activo";
+};
+
+// Asynchronously looks up MAC vendors online using free APIs with comfortable fallback limits and in-memory cache
+const fetchOnlineVendor = async (mac: string): Promise<string> => {
+  if (!mac || mac === "00:00:00:00:00:00" || mac === "—") {
+    return "Dispositivo de Red Activo";
+  }
+
+  const cleanMac = mac.replace(/[:-]/g, "").toUpperCase().trim();
+  const oui = cleanMac.slice(0, 6);
+
+  // 1. Check in-memory cache first
+  if (vendorCache[oui]) {
+    return vendorCache[oui];
+  }
+
+  // 2. Check local comprehensive list
+  if (OUI_MAP[oui]) {
+    vendorCache[oui] = OUI_MAP[oui];
+    return OUI_MAP[oui];
+  }
+
+  // 3. Online fallback checking free APIs (with short timeout to keep scans snappy and active)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
+
+    const res = await fetch(`https://macvendors.co/api/${mac}`, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data: any = await res.json();
+      if (data && data.result && data.result.company) {
+        const company = data.result.company.trim();
+        vendorCache[oui] = company;
+        return company;
+      }
+    }
+  } catch (err) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+
+      const res = await fetch(`https://api.macvendors.com/${mac}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.trim() && !text.includes("error")) {
+          const company = text.trim();
+          vendorCache[oui] = company;
+          return company;
+        }
+      }
+    } catch (err2) {
+      // Ignore
+    }
+  }
+
+  // 4. Default fallback
+  return "Dispositivo de Red Activo";
 };
 
 // API endpoint to return REAL network interfaces on the machine
@@ -559,8 +681,8 @@ app.get("/api/scan-real-arp", (req, res) => {
       }
       
       const lines = stdout.split("\n");
-      const ipMacRegex = /((?:\d{1,3}\.){3}\d{1,3})[^\d\w]+((?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2})/i;
-      const altRegex = /\(((?:\d{1,3}\.){3}\d{1,3})\) at ((?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2})/i;
+      const ipMacRegex = /((?:\d{1,3}\.){3}\d{1,3})[^\d\w]+((?:[0-9a-fA-F]{1,2}[:-]){5}[0-9a-fA-F]{1,2})/i;
+      const altRegex = /\(((?:\d{1,3}\.){3}\d{1,3})\) at ((?:[0-9a-fA-F]{1,2}[:-]){5}[0-9a-fA-F]{1,2})/i;
       
       // Determine this PC's own network interface IP for the target subnet to prevent missing "Este PC"
       let localPcIp = "";
@@ -593,7 +715,12 @@ app.get("/api/scan-real-arp", (req, res) => {
         
         if (match) {
           const ip = match[1];
-          let mac = match[2].replace(/-/g, ":").toUpperCase();
+          // Robustly clean and split the MAC address, padding any single hex-digit octets (e.g. "0" -> "00")
+          let mac = match[2]
+            .split(/[:-]/)
+            .map(part => part.length === 1 ? `0${part}` : part)
+            .join(":")
+            .toUpperCase();
           
           if (ip.startsWith("224.") || ip.startsWith("239.") || ip === "255.255.255.255" || ip.endsWith(".255") || ip.startsWith("127.")) {
             return;
@@ -644,9 +771,13 @@ app.get("/api/scan-real-arp", (req, res) => {
       
       const resolvePromises = devices.map(async (device) => {
         const hostname = await resolveHostname(device.ip);
+        const onlineVendor = await fetchOnlineVendor(device.mac);
         return {
           ...device,
-          hostname: hostname || device.hostname || ""
+          hostname: hostname || device.hostname || "",
+          vendor: onlineVendor && onlineVendor !== "Dispositivo de Red Activo"
+            ? onlineVendor
+            : (device["vendor"] || "Dispositivo de Red Activo")
         };
       });
 
