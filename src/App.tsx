@@ -222,7 +222,29 @@ export default function App() {
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           setServerInterfaces(data);
-          addAlert(`Plataforma en la nube: Detectadas ${data.length} interfaces de hardware en el contenedor de ejecución.`, 'info');
+          
+          // Automática detección de segmento de red física activa (priorizando Wi-Fi y LAN)
+          const physical = data.filter((i: any) => 
+            i.type !== 'Virtual' && 
+            i.ip && 
+            !i.ip.startsWith('127.') && 
+            !i.ip.startsWith('169.254.')
+          );
+          
+          const best = physical.find((i: any) => i.type === 'Wi-Fi') || 
+                       physical.find((i: any) => i.type === 'LAN') || 
+                       physical[0] || 
+                       data[0];
+                       
+          if (best) {
+            setSelectedInterface(best.name);
+            if (best.subnet) {
+              setSubnetSegment(best.subnet);
+              addAlert(`Red detectada: Conectado a la interfaz "${best.originalName || best.name}" (IP: ${best.ip}), segmento de red: ${best.subnet}`, 'success');
+            }
+          } else {
+            addAlert(`Plataforma en la nube: Detectadas ${data.length} interfaces de hardware en el contenedor de ejecución.`, 'info');
+          }
         }
       })
       .catch(err => {
@@ -1257,9 +1279,53 @@ export default function App() {
     scanTimerRef.current = timer;
   };
 
-  // Preset Segment scan autofills
-  const handleAutoSegment = () => {
-    setSubnetSegment('192.168.1.0/24');
+  // Preset Segment scan autofills with real-time hardware dynamic detection
+  const handleAutoSegment = async (showNotification = true) => {
+    try {
+      const res = await fetch('/api/interfaces');
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setServerInterfaces(data);
+        
+        // Find genuine physical interfaces (Wi-Fi or LAN that have a non-loopback IP)
+        const physical = data.filter((i: any) => 
+          i.type !== 'Virtual' && 
+          i.ip && 
+          !i.ip.startsWith('127.') && 
+          !i.ip.startsWith('169.254.')
+        );
+        
+        // Prioritize Wi-Fi, then LAN, then any
+        const best = physical.find((i: any) => i.type === 'Wi-Fi') || 
+                     physical.find((i: any) => i.type === 'LAN') || 
+                     physical[0] || 
+                     data[0];
+                     
+        if (best) {
+          setSelectedInterface(best.name);
+          if (best.subnet) {
+            setSubnetSegment(best.subnet);
+            if (showNotification) {
+              addAlert(`¡Subred detectada con éxito! Segmento activo: ${best.subnet} en la interfaz "${best.originalName || best.name}" (${best.type}, IP: ${best.ip}).`, 'success');
+            }
+          }
+        }
+      } else {
+        const currentActiveObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+        if (currentActiveObj && currentActiveObj.subnet) {
+          setSubnetSegment(currentActiveObj.subnet);
+          if (showNotification) {
+            addAlert(`Segmento restablecido a la interfaz activa: ${currentActiveObj.subnet}.`, 'info');
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      const currentActiveObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+      if (currentActiveObj && currentActiveObj.subnet) {
+        setSubnetSegment(currentActiveObj.subnet);
+      }
+    }
   };
 
   // Helper values filtered by the active, viewed segment
@@ -1444,7 +1510,15 @@ export default function App() {
               <span className="text-slate-500 font-medium">Interfaz</span>
               <select 
                 value={selectedInterface}
-                onChange={(e) => setSelectedInterface(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedInterface(val);
+                  const matched = activeInterfacesList.find(i => i.name === val);
+                  if (matched && matched.subnet) {
+                    setSubnetSegment(matched.subnet);
+                    addAlert(`Se cambió la interfaz de red a "${val}". Segmento sugerido: ${matched.subnet}.`, 'info');
+                  }
+                }}
                 className="bg-slate-950 text-slate-200 border border-slate-850 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-medium"
               >
                 {activeInterfacesList.map(i => (
@@ -1579,7 +1653,7 @@ export default function App() {
                 className="bg-slate-950 text-slate-200 text-center border border-slate-850 rounded-l-xs w-32 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-mono font-medium"
               />
               <button 
-                onClick={handleAutoSegment}
+                onClick={() => handleAutoSegment(true)}
                 className="bg-slate-800 hover:bg-slate-755 text-cyan-400 font-semibold text-[10px] px-2 rounded-r-xs py-1 border-t border-r border-b border-slate-800 cursor-pointer transition-colors"
               >
                 Auto
