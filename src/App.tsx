@@ -32,6 +32,60 @@ const extractSubnetFromIp = (ip: string): string => {
   return '';
 };
 
+const detectWebRTCLocalIP = (): Promise<string | null> => {
+  return new Promise((resolve) => {
+    try {
+      const RTCPeerConnection =
+        window.RTCPeerConnection ||
+        (window as any).webkitRTCPeerConnection ||
+        (window as any).mozRTCPeerConnection;
+      if (!RTCPeerConnection) {
+        resolve(null);
+        return;
+      }
+
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      pc.createDataChannel('');
+      
+      let resolved = false;
+      const done = (ip: string | null) => {
+        if (!resolved) {
+          resolved = true;
+          try {
+            pc.close();
+          } catch (e) {}
+          resolve(ip);
+        }
+      };
+
+      pc.onicecandidate = (e) => {
+        if (!e.candidate) {
+          done(null);
+          return;
+        }
+        const candidate = e.candidate.candidate;
+        const ipRegex = /([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/;
+        const match = ipRegex.exec(candidate);
+        if (match) {
+          const ip = match[1];
+          if (ip !== '0.0.0.0' && !ip.startsWith('127.') && !ip.startsWith('169.254.')) {
+            done(ip);
+          }
+        }
+      };
+
+      pc.createOffer()
+        .then((offer) => pc.setLocalDescription(offer))
+        .catch(() => done(null));
+
+      // Quick timeout fallback as many browsers mask or disable it for privacy reasons
+      setTimeout(() => done(null), 1200);
+    } catch {
+      resolve(null);
+    }
+  });
+};
+
 export default function App() {
   // User physical / manual laptop IP override setup
   const [deviceManualIp, setDeviceManualIp] = useState<string>(() => {
@@ -217,33 +271,52 @@ export default function App() {
   }, [serverInterfaces, deviceManualIp, subnetSegment]);
 
   useEffect(() => {
+    const isCloud = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+
+    if (isCloud) {
+      detectWebRTCLocalIP().then(ip => {
+        if (ip) {
+          setDeviceManualIp(ip);
+          setTempIpVal(ip);
+          localStorage.setItem('netmonitor_manual_ip', ip);
+          const detectedSegment = extractSubnetFromIp(ip);
+          if (detectedSegment) {
+            setSubnetSegment(detectedSegment);
+          }
+          addAlert(`🔒 Red privada: ¡IP real de tu portátil detectada vía WebRTC: ${ip}! Sincronizando segmento de red local a ${detectedSegment || 'Auto'}.`, 'success');
+        } else {
+          addAlert('Estás usando la versión en la Nube. Debido a políticas de privacidad, ingresa la IP de tu portátil manualmente en "Mi IP: Simulada" o corre RedMonitor localmente.', 'info');
+        }
+      });
+    }
+
     fetch('/api/interfaces')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           setServerInterfaces(data);
           
-          // Automática detección de segmento de red física activa (priorizando Wi-Fi y LAN)
-          const physical = data.filter((i: any) => 
-            i.type !== 'Virtual' && 
-            i.ip && 
-            !i.ip.startsWith('127.') && 
-            !i.ip.startsWith('169.254.')
-          );
-          
-          const best = physical.find((i: any) => i.type === 'Wi-Fi') || 
-                       physical.find((i: any) => i.type === 'LAN') || 
-                       physical[0] || 
-                       data[0];
-                       
-          if (best) {
-            setSelectedInterface(best.name);
-            if (best.subnet) {
-              setSubnetSegment(best.subnet);
-              addAlert(`Red detectada: Conectado a la interfaz "${best.originalName || best.name}" (IP: ${best.ip}), segmento de red: ${best.subnet}`, 'success');
+          if (!isCloud) {
+            // Automática detección de segmento de red física activa (priorizando Wi-Fi y LAN)
+            const physical = data.filter((i: any) => 
+              i.type !== 'Virtual' && 
+              i.ip && 
+              !i.ip.startsWith('127.') && 
+              !i.ip.startsWith('169.254.')
+            );
+            
+            const best = physical.find((i: any) => i.type === 'Wi-Fi') || 
+                         physical.find((i: any) => i.type === 'LAN') || 
+                         physical[0] || 
+                         data[0];
+                         
+            if (best) {
+              setSelectedInterface(best.name);
+              if (best.subnet) {
+                setSubnetSegment(best.subnet);
+                addAlert(`Red detectada: Conectado a la interfaz "${best.originalName || best.name}" (IP: ${best.ip}), segmento de red: ${best.subnet}`, 'success');
+              }
             }
-          } else {
-            addAlert(`Plataforma en la nube: Detectadas ${data.length} interfaces de hardware en el contenedor de ejecución.`, 'info');
           }
         }
       })
@@ -1281,6 +1354,40 @@ export default function App() {
 
   // Preset Segment scan autofills with real-time hardware dynamic detection
   const handleAutoSegment = async (showNotification = true) => {
+    const isCloud = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    
+    if (isCloud) {
+      if (showNotification) {
+        addAlert("🔍 Leyendo adaptadores de red de tu portátil por tecnología WebRTC...", "info");
+      }
+      try {
+        const ip = await detectWebRTCLocalIP();
+        if (ip) {
+          setDeviceManualIp(ip);
+          setTempIpVal(ip);
+          localStorage.setItem('netmonitor_manual_ip', ip);
+          const detectedSegment = extractSubnetFromIp(ip);
+          if (detectedSegment) {
+            setSubnetSegment(detectedSegment);
+            if (showNotification) {
+              addAlert(`¡Sonda exitosa! Tu portátil tiene la dirección IP local ${ip}. Sintonizamos el segmento de escaneo en: ${detectedSegment}`, 'success');
+            }
+          }
+        } else {
+          if (showNotification) {
+            addAlert('⚠️ Tu navegador oculta las IPs por privacidad. No te preocupes: escribe la IP de tu portátil manualmente en el campo "IP" arriba o inicia el programa de forma local.', 'warning');
+          }
+          setIsEditingRealIp(true); // Open edit mode automatically to allow typing
+        }
+      } catch (e) {
+        if (showNotification) {
+          addAlert('No se pudo determinar el adaptador de tu portátil. Escribe la IP manualmente.', 'warning');
+        }
+        setIsEditingRealIp(true);
+      }
+      return;
+    }
+
     try {
       const res = await fetch('/api/interfaces');
       const data = await res.json();
@@ -1530,7 +1637,16 @@ export default function App() {
             </div>
 
             {/* Glowing Laptop IP Badge */}
-            <div className="flex items-center gap-1 bg-[#0f172a]/90 px-2 py-1 rounded-sm border border-cyan-500/20 text-cyan-400 font-mono text-[11px] h-[24px]">
+            <div className={`flex items-center gap-1 bg-[#0f172a]/90 px-2 py-1 rounded-sm text-cyan-400 font-mono text-[11px] h-[24px] border ${
+              isHostedInCloud && !deviceManualIp 
+                ? 'border-amber-500/55 animate-pulse bg-amber-955/10' 
+                : 'border-cyan-500/20'
+            }`}
+              title={isHostedInCloud && !deviceManualIp 
+                ? "Atención: RedMonitor corre en Google Cloud. Haz clic aquí para ingresar la IP PRIVADA de tu portátil y así escudriñar tu LAN real."
+                : "Dirección IP activa de detección de tu portátil."
+              }
+            >
               <span className="text-slate-500 text-[10px]">Mi IP:</span>
               {isEditingRealIp ? (
                 <div className="flex items-center gap-1">
@@ -1539,7 +1655,7 @@ export default function App() {
                     value={tempIpVal}
                     placeholder="ej: 192.168.1.134"
                     onChange={(e) => setTempIpVal(e.target.value)}
-                    className="bg-slate-900 border border-cyan-500/50 rounded text-slate-200 px-1 py-0 w-28 text-[9px] focus:outline-hidden font-mono"
+                    className="bg-slate-900 border border-cyan-500/50 rounded text-slate-200 px-1 py-0 w-28 text-[9px] focus:outline-hidden font-mono text-center"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleSaveCustomIp();
                       if (e.key === 'Escape') setIsEditingRealIp(false);
@@ -1565,19 +1681,36 @@ export default function App() {
                   </button>
                 </div>
               ) : (
-                <span 
-                  onClick={() => {
-                    setTempIpVal(deviceManualIp || activeWorkstationInfo.localIp);
-                    setIsEditingRealIp(true);
-                  }}
-                  className="cursor-pointer hover:underline text-cyan-400 font-bold hover:text-cyan-300 select-all flex items-center gap-1 group leading-none"
-                  title="Haz clic para ingresar la dirección IP real de tu portátil"
-                >
-                  {activeWorkstationInfo.localIp}
-                  <span className="text-[8px] text-[#06b6d4] px-1 py-0.5 bg-cyan-950/40 rounded group-hover:bg-cyan-900/60 font-sans font-normal border border-cyan-900/30">
-                    {deviceManualIp ? 'Propia' : 'Simulada (Editar)'}
+                <div className="flex items-center gap-1">
+                  <span 
+                    onClick={() => {
+                      setTempIpVal(deviceManualIp || activeWorkstationInfo.localIp);
+                      setIsEditingRealIp(true);
+                    }}
+                    className="cursor-pointer hover:underline text-cyan-400 font-bold hover:text-cyan-300 select-all flex items-center gap-1 group leading-none"
+                    title="Haz clic para ingresar la dirección IP real de tu portátil"
+                  >
+                    {activeWorkstationInfo.localIp}
+                    <span className={`text-[8px] px-1 py-0.5 rounded font-sans font-normal border ${
+                      deviceManualIp 
+                        ? 'text-emerald-400 bg-emerald-950/40 border-emerald-900/30' 
+                        : 'text-amber-400 bg-amber-950/40 border-amber-900/30 font-bold animate-pulse'
+                    }`}>
+                      {deviceManualIp ? 'Propia' : 'Simulada (Clic para cambiar)'}
+                    </span>
                   </span>
-                </span>
+                  
+                  {/* WebRTC quick detector button */}
+                  {isHostedInCloud && (
+                    <button
+                      onClick={() => handleAutoSegment(true)}
+                      className="ml-1 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 hover:text-cyan-300 border border-cyan-900/35 hover:border-cyan-700 p-0.5 rounded cursor-pointer transition-colors"
+                      title="Intentar auto-detectar la IP local de tu portátil vía WebRTC"
+                    >
+                      <Search className="h-2.5 w-2.5" />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -2401,7 +2534,7 @@ export default function App() {
           <div className="bg-slate-950 p-3 rounded-md border border-slate-850 mt-auto shadow-inner text-slate-300">
             <h5 className="font-semibold text-slate-200 flex items-center gap-1.5 text-[11px] font-display">
               <Monitor className="h-3.5 w-3.5 text-cyan-400" />
-              Acceso desde celular
+              Acceso desde Celular (QR)
             </h5>
             
             {/* Split selectors to handle any context gracefully */}
@@ -2415,7 +2548,7 @@ export default function App() {
                     : 'text-slate-500 hover:text-slate-300'
                 }`}
               >
-                Modo Nube (Cloud)
+                Público (Nube)
               </button>
               <button 
                 type="button"
@@ -2426,36 +2559,36 @@ export default function App() {
                     : 'text-slate-500 hover:text-slate-300'
                 }`}
               >
-                PC Local (Wi-Fi)
+                Servidor (Local)
               </button>
             </div>
 
             <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
               {mobileAccessTab === 'cloud' 
-                ? 'Accede al entorno actual ejecutándose en Google Cloud:' 
-                : 'Para cuando ejecutas RedMonitor localmente en tu PC:'}
+                ? 'Enlace público compartido sin restricciones de inicio de sesión de Google (Carga en cualquier celular):' 
+                : 'Para cuando descargas y ejecutas RedMonitor localmente en tu red Wi-Fi real:'}
             </p>
             
             <div className="mt-1.5 text-cyan-400 font-mono font-medium truncate select-all text-[10px] bg-[#0c1222] p-1.5 rounded-sm border border-slate-850">
               {mobileAccessTab === 'cloud' && typeof window !== 'undefined' 
-                ? window.location.origin 
+                ? window.location.origin.replace('-dev-', '-pre-') 
                 : `http://${activeWorkstationInfo.localIp}:3000`}
             </div>
 
             {/* Dynamic QR Code generator for extreme convenience on real mobile phones */}
             <div className="mt-2.5 flex flex-col items-center justify-center p-2 bg-slate-900/30 rounded border border-slate-850/80">
               <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&color=22d3ee&bgcolor=090e1a&data=${encodeURIComponent(
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&color=22d3ee&bgcolor=090e1a&data=${encodeURIComponent(
                   mobileAccessTab === 'cloud' && typeof window !== 'undefined' 
-                    ? window.location.origin 
+                    ? window.location.origin.replace('-dev-', '-pre-') 
                     : `http://${activeWorkstationInfo.localIp}:3000`
                 )}`}
                 alt="QR de Acceso Móvil"
-                className="w-24 h-24 border border-cyan-500/10 rounded p-1 bg-[#090e1a]"
+                className="w-28 h-28 border border-cyan-500/10 rounded p-1.5 bg-[#090e1a] hover:scale-105 transition-transform"
                 referrerPolicy="no-referrer"
               />
-              <span className="text-[8px] text-slate-500 uppercase font-mono mt-1 tracking-wider text-center block">
-                {mobileAccessTab === 'cloud' ? 'Escanear URL de Nube' : 'Escanear URL Local (PC)'}
+              <span className="text-[8px] text-cyan-400 uppercase font-mono mt-1.5 tracking-wider text-center block font-bold animate-pulse">
+                {mobileAccessTab === 'cloud' ? '¡ESCANEAR ESTE CON TU CELULAR!' : 'ESCANEAR LOCAL (SÓLO LOCAL)'}
               </span>
             </div>
 
@@ -2464,7 +2597,7 @@ export default function App() {
               {mobileAccessTab === 'cloud' ? (
                 <>
                   <p>
-                    <span className="text-amber-500/80 font-bold font-sans">⚠️ NOTA DE SEGURIDAD:</span> El navegador de tu celular debe estar logueado con tu cuenta Google <strong className="text-slate-400 font-sans">aszaps53@gmail.com</strong> para pasar el sistema de protección o usar el link compartido público "Shared App URL".
+                    <span className="text-emerald-400 font-bold font-sans">✔️ RECOMENDADO:</span> Convertimos el enlace al protocolo público <strong className="text-slate-350">Shared App preview (-pre-)</strong>. Esto evita las cookies e inicio de sesión de Google Cloud y carga al instante en cualquier navegador móvil.
                   </p>
                 </>
               ) : (
@@ -2473,10 +2606,7 @@ export default function App() {
                     <span className="text-cyan-500/80 font-bold font-sans">📶 REQUISITOS WI-FI:</span> Tu celular y tu PC deben estar conectados al mismo enrutador Wi-Fi.
                   </p>
                   <p>
-                    <span className="text-cyan-500/80 font-bold font-sans">🔌 PUERTO 3000:</span> Corregimos el puerto local (el servidor utiliza el puerto 3000 por defecto en vez de 8080).
-                  </p>
-                  <p>
-                    <span className="text-amber-500/80 font-bold font-sans">🛡️ CORTAFUEGOS:</span> Si no carga, asegúrate de permitir conexiones entrantes en el firewall de Windows para Node.js / el puerto 3000.
+                    <span className="text-amber-500/80 font-bold font-sans">🛡️ CORTAFUEGOS:</span> Ejecuta la app localmente en tu PC y habilita el puerto 3000 en tu Firewall para que responda a dispositivos de tu hogar.
                   </p>
                 </>
               )}
@@ -2484,11 +2614,18 @@ export default function App() {
 
             <button 
               type="button"
-              onClick={copyCellUrl}
+              onClick={() => {
+                const url = mobileAccessTab === 'cloud' && typeof window !== 'undefined' 
+                  ? window.location.origin.replace('-dev-', '-pre-') 
+                  : `http://${activeWorkstationInfo.localIp}:3000`;
+                navigator.clipboard.writeText(url);
+                setCopiedSuccess(true);
+                setTimeout(() => setCopiedSuccess(false), 2000);
+              }}
               className="w-full mt-2.5 bg-slate-900 hover:bg-slate-850 active:scale-95 text-slate-300 font-semibold py-1.5 px-2 rounded-xs border border-slate-800 text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-colors"
             >
               <Copy className="h-3 w-3" />
-              {copiedSuccess ? '¡Enlace copiado!' : 'Copiar enlace'}
+              {copiedSuccess ? '¡Enlace copiado!' : 'Copiar enlace público'}
             </button>
           </div>
 
