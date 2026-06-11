@@ -251,3 +251,112 @@ export const resolveVendorByMac = (mac?: string, hostname?: string, ip?: string)
 
   return 'Sonda de Red Genérica';
 };
+
+/**
+ * Resolves a highly descriptive name for the device based on its MAC address, vendor, and existing host/IP.
+ */
+export const resolveDeviceNameByMac = (mac?: string, hostname?: string, ip?: string): string => {
+  const vendor = resolveVendorByMac(mac, hostname, ip);
+  
+  // If the hostname is already a highly specific name chosen by the user (like "Este PC", "Mi portátil", etc.), keep it.
+  if (hostname && hostname !== '—' && !hostname.startsWith('Equipo Activo IP') && !hostname.startsWith('Dispositivo LAN') && !hostname.startsWith('Dispositivo Genérico') && !hostname.startsWith('Sonda de Red Genérica')) {
+    return hostname;
+  }
+
+  const vLower = vendor.toLowerCase();
+  
+  if (vLower.includes('apple')) {
+    if (hostname?.toLowerCase().includes('macbook')) return 'MacBook / Mac de Trabajo';
+    if (hostname?.toLowerCase().includes('ipad')) return 'Apple iPad tablet';
+    return 'iPhone / Dispositivo Apple';
+  }
+  if (vLower.includes('playstation') || vLower.includes('sony interactive')) {
+    return 'Consola Sony PlayStation';
+  }
+  if (vLower.includes('sony')) {
+    return 'Sony Smart TV / Audio';
+  }
+  if (vLower.includes('samsung techwin') || vLower.includes('wisenet')) {
+    return 'Cámara Domo Profesional (Wisenet)';
+  }
+  if (vLower.includes('hikvision') || vLower.includes('ezviz')) {
+    if (hostname?.toLowerCase().includes('nvr') || hostname?.toLowerCase().includes('grabador')) {
+      return 'Soporte Grabador NVR (Hikvision)';
+    }
+    return 'Cámara Vigilancia IP CCTV (Hikvision)';
+  }
+  if (vLower.includes('dahua')) {
+    if (hostname?.toLowerCase().includes('nvr') || hostname?.toLowerCase().includes('grabador')) {
+      return 'Soporte Grabador NVR (Dahua)';
+    }
+    return 'Cámara IP Domo CCTV (Dahua)';
+  }
+  if (vLower.includes('axis')) {
+    return 'Cámara IP Alta Gama (Axis CCTV)';
+  }
+  if (vLower.includes('uniview') || vLower.includes('unv')) {
+    return 'Cámara de Seguridad IP (Uniview)';
+  }
+  if (vLower.includes('reolink')) {
+    return 'Cámara WiFi Residencial (Reolink)';
+  }
+  if (vLower.includes('vivotek')) {
+    return 'Cámara Perimetral CCTV (Vivotek)';
+  }
+  if (vLower.includes('espressif')) {
+    return 'Sensor Domótico IoT (Espressif ESP32)';
+  }
+  if (vLower.includes('amazon') || vLower.includes('echo')) {
+    return 'Asistente de Voz Inteligente (Amazon Echo/Alexa)';
+  }
+  if (vLower.includes('nest') || vLower.includes('google nest')) {
+    return 'Termostato o Chromecast (Google Nest)';
+  }
+  if (vLower.includes('google')) {
+    return 'Dispositivo Cast / Google Pixel';
+  }
+  if (vLower.includes('samsung')) {
+    if (hostname?.toLowerCase().includes('tv') || hostname?.toLowerCase().includes('smarttv')) return 'Samsung Smart TV 4K';
+    return 'Smartphone Samsung Galaxy';
+  }
+  if (vLower.includes('hp') || vLower.includes('hewlett-packard')) {
+    return 'Impresora Multifuncional de Oficina (HP)';
+  }
+  if (vLower.includes('docker')) {
+    return 'Contenedor Virtual Interno (Docker)';
+  }
+  if (vLower.includes('synology')) {
+    return 'Base Servidor NAS Storage (Synology)';
+  }
+  if (vLower.includes('ubiquiti')) {
+    return 'Punto de Acceso WiFi (Ubiquiti UniFi AP)';
+  }
+  if (vLower.includes('cisco')) {
+    if (hostname?.toLowerCase().includes('switch')) return 'Switch Administrable Giga L3 (Cisco)';
+    return 'Router Profesional de Acceso (Cisco)';
+  }
+  if (vLower.includes('tp-link')) {
+    return 'Switch L2 o Router Hogar (TP-Link)';
+  }
+  if (vLower.includes('xiaomi')) {
+    return 'Dispositivo Móvil o Domótica (Xiaomi)';
+  }
+  if (vLower.includes('motorola')) {
+    return 'Smartphone Android (Motorola)';
+  }
+  if (vLower.includes('virtualbox') || vLower.includes('oracle')) {
+    return 'Máquina Virtual de Servidor (Oracle VirtualBox)';
+  }
+  if (vLower.includes('huawei')) {
+    if (hostname?.toLowerCase().includes('ont') || hostname?.toLowerCase().includes('modem') || hostname?.toLowerCase().includes('router')) return 'Módem Router Fibra Óptica (Huawei ONT)';
+    return 'Smartphone / Dispositivo Huawei';
+  }
+
+  // Fallback to IP matching clues
+  if (ip) {
+    if (ip.endsWith('.1') || ip.endsWith('.254')) return 'Gateway Router Principal';
+    if (ip.endsWith('.55')) return 'Computadora Principal (Este PC)';
+  }
+
+  return 'Dispositivo de Red Genérico';
+};

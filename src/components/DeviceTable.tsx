@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Device } from '../types';
 import { Search, ChevronLeft, ChevronRight, Sliders, Monitor, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
-import { resolveVendorByMac } from '../utils/macUtils';
+import { resolveVendorByMac, resolveDeviceNameByMac } from '../utils/macUtils';
 
 interface DeviceTableProps {
   devices: Device[];
@@ -24,9 +24,13 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
       }
 
       // Metric match
+      const brandName = resolveVendorByMac(d.mac, d.host, d.ip);
+      const deviceName = resolveDeviceNameByMac(d.mac, d.host, d.ip);
       const matchesSearch = 
         d.ip.toLowerCase().includes(searchTerm.toLowerCase()) ||
         d.host.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        deviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        brandName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         d.mac.toLowerCase().includes(searchTerm.toLowerCase());
 
       if (!matchesSearch) return false;
@@ -176,7 +180,7 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
                       <span className={`w-3.5 h-3.5 rounded-xs ${indicatorColor} inline-block`} />
                     </td>
                     <td className="py-2 px-3 font-semibold text-slate-300 font-sans max-w-xs truncate">
-                      {d.host}
+                      {resolveDeviceNameByMac(d.mac, d.host, d.ip)}
                     </td>
                     <td className="py-2 px-3 font-mono font-medium text-cyan-400">
                       {d.ip}

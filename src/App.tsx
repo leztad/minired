@@ -10,7 +10,7 @@ import {
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
 import { generateFullSubnet, generateSensorsForDevices, INTERFACES_CONFIG } from './utils/simulation';
 import { calculateSubnetDetails } from './utils/subnetMath';
-import { resolveVendorByMac } from './utils/macUtils';
+import { resolveVendorByMac, resolveDeviceNameByMac } from './utils/macUtils';
 import MapSubred from './components/MapSubred';
 import HistorialHosts from './components/HistorialHosts';
 import DeviceTable from './components/DeviceTable';
@@ -953,6 +953,9 @@ export default function App() {
           const isThisPc = r.ip === currentInterfaceObj.ip;
           
           let nameLabel = r.hostname || r.vendor || 'Dispositivo LAN';
+          if (nameLabel === 'Dispositivo LAN' || nameLabel === 'Dispositivo Genérico' || nameLabel === 'Sonda de Red Genérica') {
+            nameLabel = resolveDeviceNameByMac(r.mac, r.hostname, r.ip);
+          }
           let hostNameStr = nameLabel;
           if (isThisPc) {
             hostNameStr = `Este PC (${nameLabel})`;
@@ -1075,6 +1078,9 @@ export default function App() {
                   const isThisPc = r.ip === currentInterfaceObj.ip;
                   
                   let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
+                  if (nameLabel === 'Dispositivo Genérico' || nameLabel === 'Dispositivo LAN' || nameLabel === 'Sonda de Red Genérica') {
+                    nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
+                  }
                   let hostNameStr = nameLabel;
                   if (isThisPc) {
                     hostNameStr = `Este PC (${nameLabel})`;

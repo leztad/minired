@@ -5,7 +5,7 @@ import {
   HelpCircle, Cloud, Wifi, Database, HardDrive, Printer, 
   Tv, Gamepad2, Layers, Network, Radio, HelpCircle as Question, CheckCircle2, AlertTriangle, XCircle, Grid, Cpu
 } from 'lucide-react';
-import { resolveVendorByMac } from '../utils/macUtils';
+import { resolveVendorByMac, resolveDeviceNameByMac } from '../utils/macUtils';
 
 interface MapSubredProps {
   devices: Device[];
@@ -1065,7 +1065,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                                     className="text-left font-extrabold text-[#192231] hover:text-[#2563eb] cursor-pointer hover:underline outline-hidden"
                                     title="Haga clic para expandir monitoreo en vivo"
                                   >
-                                    {device.name}
+                                    {resolveDeviceNameByMac(device.mac, device.name, device.ip)}
                                   </button>
                                 </span>
                                 
