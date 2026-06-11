@@ -312,9 +312,14 @@ export default function App() {
                          
             if (best) {
               setSelectedInterface(best.name);
+              if (best.ip) {
+                setDeviceManualIp(best.ip);
+                setTempIpVal(best.ip);
+                localStorage.setItem('netmonitor_manual_ip', best.ip);
+              }
               if (best.subnet) {
                 setSubnetSegment(best.subnet);
-                addAlert(`Red detectada: Conectado a la interfaz "${best.originalName || best.name}" (IP: ${best.ip}), segmento de red: ${best.subnet}`, 'success');
+                addAlert(`Red detectada con éxito: Conectado a la interfaz "${best.originalName || best.name}" (IP de tu portátil: ${best.ip}), segmento de red: ${best.subnet}`, 'success');
               }
             }
           }
@@ -1410,10 +1415,15 @@ export default function App() {
                      
         if (best) {
           setSelectedInterface(best.name);
+          if (best.ip) {
+            setDeviceManualIp(best.ip);
+            setTempIpVal(best.ip);
+            localStorage.setItem('netmonitor_manual_ip', best.ip);
+          }
           if (best.subnet) {
             setSubnetSegment(best.subnet);
             if (showNotification) {
-              addAlert(`¡Subred detectada con éxito! Segmento activo: ${best.subnet} en la interfaz "${best.originalName || best.name}" (${best.type}, IP: ${best.ip}).`, 'success');
+              addAlert(`¡Localización de red exitosa! IP de tu portátil: ${best.ip}, segmento de red: ${best.subnet} en la interfaz "${best.originalName || best.name}" (${best.type}).`, 'success');
             }
           }
         }
@@ -1700,16 +1710,17 @@ export default function App() {
                     </span>
                   </span>
                   
-                  {/* WebRTC quick detector button */}
-                  {isHostedInCloud && (
-                    <button
-                      onClick={() => handleAutoSegment(true)}
-                      className="ml-1 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 hover:text-cyan-300 border border-cyan-900/35 hover:border-cyan-700 p-0.5 rounded cursor-pointer transition-colors"
-                      title="Intentar auto-detectar la IP local de tu portátil vía WebRTC"
-                    >
-                      <Search className="h-2.5 w-2.5" />
-                    </button>
-                  )}
+                  {/* Real-time hardware auto-discovery button (always visible) */}
+                  <button
+                    onClick={() => handleAutoSegment(true)}
+                    className="ml-1 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 hover:text-cyan-300 border border-cyan-900/35 hover:border-cyan-700 p-0.5 rounded cursor-pointer transition-colors flex items-center justify-center h-[18px] w-[18px]"
+                    title={isHostedInCloud 
+                      ? "Intentar auto-detectar la IP local de tu portátil vía WebRTC"
+                      : "Auto-detectar los adaptadores de red y la IP activa de este PC"
+                    }
+                  >
+                    <Search className="h-2.5 w-2.5" />
+                  </button>
                 </div>
               )}
             </div>
