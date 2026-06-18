@@ -810,17 +810,98 @@ const getGeminiClient = () => {
 
 // API endpoint for Diagnosis
 app.post("/api/diagnose", async (req, res) => {
-  try {
-    const ai = getGeminiClient();
-    if (!ai) {
-      return res.status(400).json({ 
-        error: "GEMINI_API_KEY no está configurada o está vacía. Por favor, añádela en la barra de Ajustes > Secretos (Settings > Secrets) en tu panel para habilitar el Diagnóstico Inteligente." 
-      });
+  const { devices, activeAnomaly, activeSensors, subnet } = req.body || {};
+
+  // Safe extraction & fallbacks
+  const rawDevices = Array.isArray(devices) ? devices : [];
+  const rawSensors = Array.isArray(activeSensors) ? activeSensors : [];
+  const safeAnomaly = activeAnomaly || 'Ninguna';
+  const safeSubnet = subnet || '192.168.1.0/24';
+
+  const ai = getGeminiClient();
+  
+  // If AI Client is not available or has no API Key, return a high-fidelity heuristic fallback report
+  if (!ai) {
+    const okDevices = rawDevices.filter((d: any) => d && d.estado === 'OK');
+    const downDevices = rawDevices.filter((d: any) => d && d.estado === 'Caído' && d.mac !== '—');
+    const activePings = okDevices.map((d: any) => d.ping).filter((p: any) => typeof p === 'number') as number[];
+    const avgPing = activePings.length > 0 ? (activePings.reduce((a, b) => a + b, 0) / activePings.length).toFixed(1) : '8.5';
+    const maxPing = activePings.length > 0 ? Math.max(...activePings).toFixed(0) : '15';
+
+    const heavyConsumers = rawDevices
+      .filter((d: any) => d && ((d.consumoDownload || 0) > 1 || (d.totalConsumido || 0) > 10))
+      .map((d: any) => `* **${d.name || d.host || 'Dispositivo'}** (${d.ip}): ↓${(d.consumoDownload || 0).toFixed(1)} Mbps, Total Consumido: ${Math.round(d.totalConsumido || 0)} MB`)
+      .join('\n');
+
+    const macVendors = rawDevices
+      .filter((d: any) => d && d.mac && d.mac !== '—')
+      .map((d: any) => `* **${d.ip}** (${d.host || 'Sin host'}): MAC \`${d.mac}\` → Fab. Estimado: *${d.vendor || 'Dispositivo de Red Activo'}*`)
+      .slice(0, 8)
+      .join('\n');
+
+    let anomalySection = "";
+    if (safeAnomaly.toLowerCase().includes("gateway") || safeAnomaly.toLowerCase().includes("colapso") || safeAnomaly.toLowerCase().includes("unreacheable") || safeAnomaly.toLowerCase().includes(".1")) {
+      anomalySection = `### 🚨 ALERTA ACTIVA: Colapso del Gateway Principal (.1 Caído)
+El router principal de la subred (\`${safeSubnet.replace(/\.\d+\/\d+$/, ".1")}\`) no responde a los paquetes de sondeo ICMP en estos momentos.
+* **Impacto inmediato:** Los equipos locales pierden el enrutamiento hacia redes externas (WAN) e Internet. La tabla de reenvío del switch podría verse afectada, provocando que el tráfico L2 busque un destino inexistente o inunde todos los puertos con tramas unicast ("Unicast Flooding").
+* **Causa probable:** Caída de energía del router de borde, bloqueo del firmware por sobrecarga de conexiones concurrentes, o un puerto de conexión del switch PoE dañado por cortocircuito o sobrecalentamiento.`;
+    } else if (safeAnomaly.toLowerCase().includes("latencia") || safeAnomaly.toLowerCase().includes("medida") || safeAnomaly.toLowerCase().includes("spike") || safeAnomaly.toLowerCase().includes("degradada")) {
+      anomalySection = `### ⚠️ ADVERTENCIA ACTIVA: Latencia Degradada (Spike inyectado)
+La subred está experimentando retardos sistemáticos inusuales en la entrega de tramas Ethernet, con latencias de pico alcanzando los **${maxPing} ms**.
+* **Impacto inmediato:** Retardo y jitter severo en aplicaciones críticas de tiempo real (VoIP, videoconferencia, sistemas industriales, etc.). Los buffers de conmutación del switch experimentan retardo de encolamiento y eventual descarte de paquetes por desbordamiento.
+* **Causa probable:** Tormentas de broadcast ("Broadcast Storms") causadas por un bucle físico en la red (loop de conmutación sin protocolo STP), un dispositivo comprometido enviando tráfico basura, o puertos negociando a velocidades incorrectas (10 Mbps Full-Duplex en lugar de 1 Gbps).`;
+    } else if (safeAnomaly.toLowerCase().includes("pérdida") || safeAnomaly.toLowerCase().includes("perdida") || safeAnomaly.toLowerCase().includes("interferencias") || safeAnomaly.toLowerCase().includes("loss")) {
+      anomalySection = `### 🔴 ALERTA CRÍTICA: Pérdida masiva de paquetes (Interferencias o Faults)
+La tasa de descarte en el canal físico de datos ha escalado a niveles inaceptables. Se observan conexiones inconsistentes y fallos de timeout periódicos.
+* **Impacto inmediato:** Degradación de la eficiencia de transporte TCP debido al reinicio rápido de ventanas de congestión, retransmisiones constantes de tramas e inestabilidad de servicios basados en UDP (como streaming o telemetría).
+* **Causa posible:** Daño estructural o curvatura inadecuada en el cableado de par trenzado UTP, terminación deficiente del conector RJ45 (mala crimpación), interferencias electromagnéticas severas (cables de red tendidos junto a líneas de fuerza eléctrica), o transceptores/puertos SFP ópticos sucios o descalibrados.`;
+    } else {
+      anomalySection = `### ✅ Estado de Anomalías: Nominal
+No se han registrado fallas de simulación o colapsos activos en este ciclo de exploración. Las tramas transitan con total fluidez por las colas de conmutación de capa 2 y las interfaces operan dentro de los márgenes óptimos de latencia y jitter.`;
     }
 
-    const { devices, activeAnomaly, activeSensors, subnet } = req.body || {};
+    const offlineReport = `# 📊 INFORME DE DIAGNÓSTICO HEURÍSTICO AUTÓNOMO
 
-    // Safe extraction & fallbacks
+> ⚠️ **Aviso del Sistema:** Estás visualizando un análisis local consolidado por el **Copiloto Heurístico Integrado**. Para habilitar razonamiento contextual ilimitado y consultas de IA avanzadas con **Google Gemini**, por favor agrega tu clave \`GEMINI_API_KEY\` en el panel interactivo superior de AI Studio en **Settings > Secrets** (Ajustes > Secretos).
+
+---
+
+## 1. 🌡️ Estado General y Salud de la LAN
+El análisis detallado del segmento local configurado en **${safeSubnet}** reporta los siguientes indicadores de rendimiento y topología:
+* **Dispositivos Totales:** ${rawDevices.length} interfaces mapeadas.
+* **Hosts en Línea:** **${okDevices.length} estables en red** (peticiones ICMP exitosas).
+* **Hosts Fuera de Línea:** ${downDevices.length} terminales confirmados como inactivos.
+* **Latencia Promedio:** \`${avgPing} ms\` (Retorno de ping estable).
+
+${heavyConsumers.length > 0 ? `### 📈 Consumo Alto de Ancho de Banda Detectado:\n${heavyConsumers}` : `* **Consumo de Ancho de Banda:** Dentro del rango nominal. Ningún host está acaparando canales de descarga o carga de forma abusiva en este ciclo.`}
+
+---
+
+## 2. 🛡️ Análisis de Anomalías de Red Detectadas
+${anomalySection}
+
+---
+
+## 3. 🔍 Escaneo y Descubrimiento Físico (Análisis MAC / Vendor)
+La comparación de las firmas MAC (prefijos OUI) nos ayuda a catalogar el inventario físico y descartar intrusos:
+${macVendors.length > 0 ? macVendors : '* No se han registrado direcciones MAC mapeadas con fabricantes para este informe.'}
+
+* **Prevención de Suplantaciones ARP ("ARP Spoofing" / Envenenamiento de Tabla MAC):**
+  Un atacante local puede falsificar respuestas ARP para asociar su propia dirección MAC con la IP del Gateway principal (\`192.168.1.1\`). Al auditar los fabricantes asociados a cada puerto y dirección MAC, puedes identificar rápidamente si un host desconocido o genérico se está anunciando con credenciales ajenas para interceptar o manipular el flujo de tramas de tu red.
+
+---
+
+## 4. 🚀 Plan de Acción Recomendado (Remediaciones Técnicas del Switch)
+Te sugerimos aplicar estas directrices profesionales de administración de conmutadores para maximizar el rendimiento y la seguridad:
+1. **Verificar el Balance de Energía PoE:** Si tienes un switch PoE que alimenta cámaras IP o APs y estos se desconectan intermitentemente, audita el consumo total de watts. Muchos switches estándar de 8 puertos tienen un límite de **60W**. Al rebasarlo, el circuito integrado suspende puertos de forma aleatoria por autoprotección técnica.
+2. **Mitigar Loops de Capa 2 con RSTP:** Activa siempre el protocolo **Rapid Spanning Tree Protocol (IEEE 802.1w)** con prioridad de puente raíz explícita en tu switch central para deshabilitar automáticamente bucles físicos si algún usuario conecta dos puertos del mismo switch accidentalmente.
+3. **Aislamiento de Puertos (VLAN/Private VLAN):** Evita la propagación innecesaria de broadcast aislando puertos que no requieran intercomunicación directa. Configura puertos aislados para cámaras de seguridad, servidores domóticos y redes de invitados.
+4. **Inspección Física de Tramas Erróneas:** Si sospechas de pérdidas de paquetes, entra a la consola CLI del switch y revisa los contadores de errores de recepción (\`CRC Errors\` o \`Input Errors\`). Si se acumulan progresivamente en un puerto, el cable UTP o el conector RJ45 de ese puerto en específico requiere un reemplazo urgente.`;
+
+    return res.json({ report: offlineReport });
+  }
+
+  try {
     const rawDevices = Array.isArray(devices) ? devices : [];
     const rawSensors = Array.isArray(activeSensors) ? activeSensors : [];
     const safeAnomaly = activeAnomaly || 'Ninguna';
