@@ -794,8 +794,8 @@ app.get("/api/scan-real-arp", (req, res) => {
 
 // Initialize Gemini safely
 const getGeminiClient = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  const apiKey = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : "";
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey === "") {
     return null;
   }
   return new GoogleGenAI({
@@ -813,12 +813,18 @@ app.post("/api/diagnose", async (req, res) => {
   try {
     const ai = getGeminiClient();
     if (!ai) {
-      return res.status(500).json({ 
+      return res.status(400).json({ 
         error: "GEMINI_API_KEY no está configurada o está vacía. Por favor, añádela en la barra de Ajustes > Secretos (Settings > Secrets) en tu panel para habilitar el Diagnóstico Inteligente." 
       });
     }
 
-    const { devices, activeAnomaly, activeSensors, subnet } = req.body;
+    const { devices, activeAnomaly, activeSensors, subnet } = req.body || {};
+
+    // Safe extraction & fallbacks
+    const rawDevices = Array.isArray(devices) ? devices : [];
+    const rawSensors = Array.isArray(activeSensors) ? activeSensors : [];
+    const safeAnomaly = activeAnomaly || 'Ninguna';
+    const safeSubnet = subnet || '192.168.1.0/24';
 
     const systemInstruction = 
       "Eres un Ingeniero de Ciberseguridad y Especialista de Conectividad de Redes con más de 15 años de experiencia. " +
@@ -826,12 +832,12 @@ app.post("/api/diagnose", async (req, res) => {
       "Proporciona descripciones concisas pero elegantes con apartados útiles. Utiliza formato Markdown limpio y profesional con iconos o emojis coherentes pero discretos.";
 
     const prompt = `Analiza la siguiente configuración de red local:
-Subred actual: ${subnet || '192.168.1.0/24'}
-Anomalía activa en simulación: ${activeAnomaly || 'Ninguna'}
-Total de sensores activos: ${activeSensors ? activeSensors.length : 0}
+Subred actual: ${safeSubnet}
+Anomalía activa en simulación: ${safeAnomaly}
+Total de sensores activos: ${rawSensors.length}
 
 Lista de dispositivos escaneados relevantes (activos y caídos significativos):
-${JSON.stringify(devices.filter((d: any) => d.estado !== 'Caído' || d.mac !== '—'), null, 2)}
+${JSON.stringify(rawDevices.filter((d: any) => d && (d.estado !== 'Caído' || d.mac !== '—')), null, 2)}
 
 Por favor proporciona un informe detallado con el siguiente formato Markdown:
 
@@ -841,7 +847,7 @@ Por favor proporciona un informe detallado con el siguiente formato Markdown:
 Analiza el estado de conectividad promedio. Si hay anomalías o altos pings, coméntalo aquí de forma técnica y descriptiva (ej. saturación, congestión).
 
 ## 2. 🛡️ Análisis de Anomalías de Red Detectadas
-Explica qué es la anomalía activa "${activeAnomaly}" (si hay alguna) y cuáles son las repercusiones inmediatas en la LAN. Si no hay anomalías activas, felicita al administrador y explica brevemente los riesgos comunes de una subred doméstica promedio.
+Explica qué es la anomalía activa "${safeAnomaly}" (si hay alguna) y cuáles son las repercusiones inmediatas en la LAN. Si no hay anomalías activas, felicita al administrador y explica brevemente los riesgos comunes de una subred doméstica promedio.
 
 ## 3. 🔍 Escaneo y Descubrimiento Físico (Análisis MAC / Vendor)
 Examina las direcciones MAC de los hosts principales (Router Gateway, Estación de Trabajo, etc.) y deduce si pertenecen a marcas o fabricantes específicos típicos (como Cisco/Realtek, Huawei, Apple, Sony, Docker Virtual, etc.) y explica el valor de inspeccionar esto para impedir impostores de red ("ARP Spoofing").
@@ -892,9 +898,10 @@ Proporciona 3 a 5 pasos exactos que el usuario puede realizar para mejorar la se
       }
     }
 
-    res.json({ report: response.text });
+    const reportText = response?.text || "No se pudo generar el texto de diagnóstico.";
+    res.json({ report: reportText });
   } catch (error: any) {
-    console.error("Error calling Gemini API:", error);
+    console.error("Error completo en /api/diagnose:", error);
     res.status(500).json({ error: error.message || "Error al procesar el diagnóstico inteligente." });
   }
 });
