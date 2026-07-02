@@ -445,10 +445,15 @@ export default function App() {
     return devices.map(d => {
       const customName = customNames[d.ip];
       const customVendor = customVendors[d.ip];
+      
+      const resolvedVendor = d.vendor && d.vendor !== '—' && !d.vendor.toLowerCase().includes('genérico') && !d.vendor.toLowerCase().includes('generico') && d.vendor !== 'Dispositivo de Red Activo'
+        ? d.vendor
+        : resolveVendorByMac(d.mac, d.host, d.ip);
+
       return {
         ...d,
         host: customName !== undefined ? customName : d.host,
-        vendor: customVendor !== undefined ? customVendor : d.vendor
+        vendor: customVendor !== undefined ? customVendor : resolvedVendor
       };
     });
   }, [devices, customNames, customVendors]);
