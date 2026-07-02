@@ -810,7 +810,7 @@ const getGeminiClient = () => {
 
 // API endpoint for Diagnosis
 app.post("/api/diagnose", async (req, res) => {
-  const { devices, activeAnomaly, activeSensors, subnet } = req.body || {};
+  const { devices, activeAnomaly, activeSensors, subnet, useLocalHeuristics } = req.body || {};
 
   // Safe extraction & fallbacks
   const rawDevices = Array.isArray(devices) ? devices : [];
@@ -820,8 +820,8 @@ app.post("/api/diagnose", async (req, res) => {
 
   const ai = getGeminiClient();
   
-  // If AI Client is not available or has no API Key, return a high-fidelity heuristic fallback report
-  if (!ai) {
+  // If AI Client is not available or has no API Key, or if user explicitly requested local heuristics mode, return a high-fidelity heuristic fallback report
+  if (!ai || useLocalHeuristics) {
     const okDevices = rawDevices.filter((d: any) => d && d.estado === 'OK');
     const downDevices = rawDevices.filter((d: any) => d && d.estado === 'Caído' && d.mac !== '—');
     const activePings = okDevices.map((d: any) => d.ping).filter((p: any) => typeof p === 'number') as number[];

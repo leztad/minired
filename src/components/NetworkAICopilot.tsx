@@ -23,6 +23,7 @@ export default function NetworkAICopilot({
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [loadingStep, setLoadingStep] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
+  const [diagnosticMode, setDiagnosticMode] = useState<'local' | 'gemini'>('local');
 
   const getAnomalyLabel = (type: typeof activeAnomaly) => {
     switch (type) {
@@ -33,19 +34,27 @@ export default function NetworkAICopilot({
     }
   };
 
-  const handleGenerateDiagnostic = async () => {
+  const handleGenerateDiagnostic = async (forcedMode?: 'local' | 'gemini') => {
+    const activeMode = forcedMode || diagnosticMode;
     setLoading(true);
     setReport('');
     setErrorMsg('');
     setLoadingStep('Preparando matriz de dispositivos e identificadores MAC...');
     
-    // Animate fake but helpful status updates
-    const steps = [
-      'Invocando modelo Gemini 3.5 Flash en nodo seguro...',
-      'Deduciendo fabricantes de red mediante análisis heurístico de prefijos MAC...',
-      'Estructurando mapas de latencia y aislamiento del gateway. Exponiendo vulnerabilidades...',
-      'Refinando reporte en formato Markdown técnico profesional...'
-    ];
+    // Animate helpful status updates
+    const steps = activeMode === 'local'
+      ? [
+          'Iniciando Motor Heurístico Autónomo Local...',
+          'Analizando topología de red y cálculo de latencias locales...',
+          'Buscando firmas de fabricantes ARP por prefijos OUI...',
+          'Formateando reporte heurístico interactivo consolidado...'
+        ]
+      : [
+          'Invocando modelo Gemini 3.5 Flash en nodo seguro...',
+          'Deduciendo fabricantes de red mediante análisis heurístico de prefijos MAC...',
+          'Estructurando mapas de latencia y aislamiento del gateway. Exponiendo vulnerabilidades...',
+          'Refinando reporte en formato Markdown técnico profesional...'
+        ];
 
     let currentStep = 0;
     const stepInterval = setInterval(() => {
@@ -55,7 +64,7 @@ export default function NetworkAICopilot({
       } else {
         clearInterval(stepInterval);
       }
-    }, 1800);
+    }, 1200);
 
     try {
       const response = await fetch('/api/diagnose', {
@@ -67,7 +76,8 @@ export default function NetworkAICopilot({
           devices,
           activeAnomaly: getAnomalyLabel(activeAnomaly),
           activeSensors: sensors,
-          subnet: subnetSegment
+          subnet: subnetSegment,
+          useLocalHeuristics: activeMode === 'local'
         })
       });
 
@@ -82,7 +92,7 @@ export default function NetworkAICopilot({
       setReport(data.report || 'No se recibió ningún informe. Comprueba que las configuraciones de red no estén vacías.');
     } catch (err: any) {
       clearInterval(stepInterval);
-      setErrorMsg(err.message || 'Error al conectar con la API de diagnóstico de Gemini.');
+      setErrorMsg(err.message || 'Error al conectar con la API de diagnóstico.');
     } finally {
       setLoading(false);
       setLoadingStep('');
@@ -108,29 +118,57 @@ export default function NetworkAICopilot({
               Copiloto AI Activo
             </span>
           </div>
-          <h2 className="text-lg font-bold font-display text-slate-205 flex items-center gap-2 text-slate-100">
+          <h2 className="text-lg font-bold font-display text-slate-100 flex items-center gap-2">
             Copiloto de Red Inteligente Gemini
           </h2>
           <p className="text-xs text-slate-500 leading-relaxed font-sans max-w-xl">
             Ejecuta diagnósticos heurísticos avanzados utilizando los modelos de lenguaje de Google DeepMind. Analiza la topología actual, busca bucles, predice fabricantes por MAC-prefixes y establece un catálogo de remediación completo.
           </p>
         </div>
-        <div className="shrink-0">
+        <div className="shrink-0 flex flex-col md:items-end gap-2.5">
+          {/* SECTOR CONTROL */}
+          <div className="flex bg-slate-950/60 border border-slate-800/60 p-0.5 rounded-md text-[10px] font-mono self-start md:self-auto">
+            <button
+              onClick={() => setDiagnosticMode('local')}
+              className={`px-2.5 py-1 rounded-sm transition-all cursor-pointer font-bold flex items-center gap-1.5 duration-300 ${
+                diagnosticMode === 'local' 
+                  ? 'bg-purple-600/95 text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Cpu className="h-3 w-3" />
+              Heurístico (100% Gratis)
+            </button>
+            <button
+              onClick={() => setDiagnosticMode('gemini')}
+              className={`px-2.5 py-1 rounded-sm transition-all cursor-pointer font-bold flex items-center gap-1.5 duration-300 ${
+                diagnosticMode === 'gemini' 
+                  ? 'bg-purple-600/95 text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Sparkles className="h-3 w-3" />
+              Gemini AI
+            </button>
+          </div>
+
           <button
-            onClick={handleGenerateDiagnostic}
+            onClick={() => handleGenerateDiagnostic()}
             disabled={loading || devices.length === 0}
-            className={`w-full md:w-auto px-5 py-2.5 rounded-xs font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+            className={`w-full md:w-auto px-5 py-2.5 rounded-md font-bold text-xs flex items-center justify-center gap-2 transition-all ${
               loading 
-                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-755' 
-                : 'bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white shadow-lg shadow-cyan-500/5 hover:scale-[1.01] active:scale-95 cursor-pointer'
+                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-800/30' 
+                : diagnosticMode === 'local'
+                  ? 'bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-lg shadow-emerald-500/5 hover:scale-[1.01] active:scale-95 cursor-pointer'
+                  : 'bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white shadow-lg shadow-cyan-500/5 hover:scale-[1.01] active:scale-95 cursor-pointer'
             }`}
           >
             {loading ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Sparkles className="h-3.5 w-3.5 text-cyan-250 text-cyan-200" />
+              <Sparkles className="h-3.5 w-3.5 text-cyan-200" />
             )}
-            Generar Diagnóstico Completo (IA)
+            {diagnosticMode === 'local' ? 'Generar Informe Gratis' : 'Generar con Gemini AI'}
           </button>
         </div>
       </div>
@@ -149,7 +187,7 @@ export default function NetworkAICopilot({
         </div>
         <div className="bg-slate-900/50 p-3 rounded-xs border border-slate-800/50 text-left">
           <span className="text-[9px] text-slate-500 block uppercase font-bold tracking-wider font-display mb-1">Dispositivos a Examinar</span>
-          <span className="font-mono text-slate-300 text-slate-200 text-xs font-semibold">
+          <span className="font-mono text-slate-200 text-xs font-semibold">
             {devices.filter(d => d.estado !== 'No_Escaneado').length} activos en capa
           </span>
         </div>
@@ -168,7 +206,7 @@ export default function NetworkAICopilot({
             </div>
             <div className="space-y-1.5 px-4">
               <p className="font-mono text-cyan-400 text-xs font-bold font-display uppercase tracking-wider">
-                Analizando con Gemini AI...
+                {diagnosticMode === 'local' ? 'Calculando Heurística Local...' : 'Analizando con Gemini AI...'}
               </p>
               <p className="text-[11px] text-slate-400 leading-relaxed font-sans min-h-[32px] italic">
                 {loadingStep}
@@ -189,21 +227,25 @@ export default function NetworkAICopilot({
               <p className="text-[11px] text-slate-400 leading-relaxed font-mono bg-slate-950 p-3 rounded-xs border border-slate-800/50 select-text text-left w-full">
                 {errorMsg}
               </p>
-              {!(errorMsg.includes("503") || errorMsg.toLowerCase().includes("saturados")) ? (
-                <p className="text-[10px] text-slate-500 font-sans leading-tight pt-1">
-                  Asegúrate de agregar la clave <code className="text-cyan-400 font-mono bg-slate-900 px-1 py-0.2 rounded font-bold">GEMINI_API_KEY</code> en la esquina superior derecha del editor en Settings &gt; Secrets (Ajustes de variables de entorno).
-                </p>
-              ) : (
-                <div className="pt-2">
-                  <button
-                    onClick={handleGenerateDiagnostic}
-                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2 rounded-xs text-xs font-sans active:scale-95 transition-all cursor-pointer shadow-md shadow-purple-500/10 flex items-center gap-1.5"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: '3s' }} />
-                    Re-intentar Diagnóstico ahora
-                  </button>
-                </div>
-              )}
+              
+              <div className="pt-2 flex flex-col gap-2 w-full">
+                <button
+                  onClick={() => {
+                    setDiagnosticMode('local');
+                    handleGenerateDiagnostic('local');
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-550 text-white font-bold px-4 py-2.5 rounded-md text-xs font-sans active:scale-95 transition-all cursor-pointer shadow-md shadow-emerald-500/10 flex items-center justify-center gap-1.5"
+                >
+                  <Cpu className="h-3.5 w-3.5" />
+                  Generar con Modo Heurístico Local (¡100% Gratis!)
+                </button>
+                
+                {!(errorMsg.includes("503") || errorMsg.toLowerCase().includes("saturados")) && (
+                  <p className="text-[10px] text-slate-500 font-sans leading-tight pt-1">
+                    Asegúrate de agregar la clave <code className="text-cyan-400 font-mono bg-slate-900 px-1 py-0.2 rounded font-bold">GEMINI_API_KEY</code> en la esquina superior derecha del editor en Settings &gt; Secrets si deseas usar la IA en la nube.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )}
