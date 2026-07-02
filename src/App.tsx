@@ -441,10 +441,78 @@ export default function App() {
     }
   });
 
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportCustomizations = () => {
+    try {
+      const data = {
+        names: customNames,
+        vendors: customVendors
+      };
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', jsonString);
+      downloadAnchor.setAttribute('download', `RedMonitor_Backup_Inventario_${new Date().toISOString().slice(0, 10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      addAlert("📥 Copia de seguridad del inventario exportada con éxito.", "success");
+    } catch {
+      addAlert("❌ Error al exportar la copia de seguridad.", "error");
+    }
+  };
+
+  const handleImportCustomizations = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader();
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    fileReader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (parsed && (parsed.names || parsed.vendors)) {
+          const newNames = { ...customNames, ...(parsed.names || {}) };
+          const newVendors = { ...customVendors, ...(parsed.vendors || {}) };
+          
+          setCustomNames(newNames);
+          setCustomVendors(newVendors);
+          
+          localStorage.setItem('netmonitor_custom_names', JSON.stringify(newNames));
+          localStorage.setItem('netmonitor_custom_vendors', JSON.stringify(newVendors));
+          
+          addAlert("📤 Inventario personalizado de marcas y apodos importado correctamente.", "success");
+        } else {
+          addAlert("⚠️ Formato de copia de seguridad no válido.", "warning");
+        }
+      } catch {
+        addAlert("❌ Error al parsear el archivo de copia de seguridad JSON.", "error");
+      }
+    };
+    fileReader.readAsText(file);
+    if (importInputRef.current) importInputRef.current.value = '';
+  };
+
+  const handleClearCustomizations = () => {
+    if (confirm("¿Estás seguro de que deseas eliminar TODOS los nombres y marcas personalizadas? Esta acción no se puede deshacer.")) {
+      setCustomNames({});
+      setCustomVendors({});
+      localStorage.removeItem('netmonitor_custom_names');
+      localStorage.removeItem('netmonitor_custom_vendors');
+      addAlert("🗑️ Todas las personalizaciones de red se han restablecido de fábrica.", "success");
+    }
+  };
+
   const processedDevices = useMemo(() => {
     return devices.map(d => {
-      const customName = customNames[d.ip];
-      const customVendor = customVendors[d.ip];
+      // Look up custom name: try MAC first, then IP
+      const customName = (d.mac && d.mac !== '—' && customNames[d.mac]) !== undefined
+        ? customNames[d.mac]
+        : customNames[d.ip];
+
+      // Look up custom vendor: try MAC first, then IP
+      const customVendor = (d.mac && d.mac !== '—' && customVendors[d.mac]) !== undefined
+        ? customVendors[d.mac]
+        : customVendors[d.ip];
       
       const resolvedVendor = d.vendor && d.vendor !== '—' && !d.vendor.toLowerCase().includes('genérico') && !d.vendor.toLowerCase().includes('generico') && d.vendor !== 'Dispositivo de Red Activo'
         ? d.vendor
@@ -515,8 +583,12 @@ export default function App() {
     const targetDevice = devices.find(d => d.id === id);
     if (targetDevice) {
       const ip = targetDevice.ip;
+      const mac = targetDevice.mac;
       setCustomNames(prev => {
         const next = { ...prev, [ip]: finalName };
+        if (mac && mac !== '—') {
+          next[mac] = finalName;
+        }
         localStorage.setItem('netmonitor_custom_names', JSON.stringify(next));
         return next;
       });
@@ -535,8 +607,12 @@ export default function App() {
     const targetDevice = devices.find(d => d.id === id);
     if (targetDevice) {
       const ip = targetDevice.ip;
+      const mac = targetDevice.mac;
       setCustomVendors(prev => {
         const next = { ...prev, [ip]: finalVendor || '—' };
+        if (mac && mac !== '—') {
+          next[mac] = finalVendor || '—';
+        }
         localStorage.setItem('netmonitor_custom_vendors', JSON.stringify(next));
         return next;
       });
@@ -3372,7 +3448,49 @@ export default function App() {
           )}
 
           {activeView === 'dispositivos' && (
-            <DeviceTable devices={segmentFilteredDevices} onSelectDevice={setSelectedDevice} />
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-900/40 p-4 border border-slate-800/60 rounded-md gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-200">Inventario y Personalización L2/L3</h4>
+                  <p className="text-[11px] text-slate-500">
+                    Las asignaciones personalizadas de apodos y marcas se guardan permanentemente en tu navegador vinculadas a la dirección MAC física de cada dispositivo.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleExportCustomizations}
+                    className="text-xs bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-cyan-500/50 text-slate-300 hover:text-cyan-450 font-semibold px-3 py-1.5 rounded transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Exportar copia de seguridad de marcas y apodos editados"
+                  >
+                    📥 Exportar Inventario
+                  </button>
+                  <button
+                    onClick={() => importInputRef.current?.click()}
+                    className="text-xs bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-cyan-500/50 text-slate-300 hover:text-cyan-450 font-semibold px-3 py-1.5 rounded transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Importar copia de seguridad de marcas y apodos editados (.json)"
+                  >
+                    📤 Importar Inventario
+                  </button>
+                  {(Object.keys(customNames).length > 0 || Object.keys(customVendors).length > 0) && (
+                    <button
+                      onClick={handleClearCustomizations}
+                      className="text-xs bg-rose-950/20 hover:bg-rose-950/40 border border-rose-900/30 hover:border-rose-500 text-rose-350 font-semibold px-3 py-1.5 rounded transition-all cursor-pointer flex items-center gap-1.5"
+                      title="Restablecer todas las marcas y nombres personalizados de fábrica"
+                    >
+                      🗑️ Limpiar Todo
+                    </button>
+                  )}
+                  <input
+                    type="file"
+                    ref={importInputRef}
+                    accept=".json"
+                    onChange={handleImportCustomizations}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+              <DeviceTable devices={segmentFilteredDevices} onSelectDevice={setSelectedDevice} />
+            </div>
           )}
 
           {activeView === 'ancho_banda' && (
@@ -3619,41 +3737,55 @@ export default function App() {
                            </span>
                         </div>
                         <div className="col-span-2 border-t border-slate-800/30 pt-2 mt-1">
-                          <span className="text-slate-500 block text-[9px] text-left">MARCA / FABRICANTE DEL DISPOSITIVO</span>
+                          <span className="text-slate-500 block text-[9px] text-left mb-1">MARCA / FABRICANTE DEL DISPOSITIVO</span>
                           {isEditingVendor ? (
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <input
-                                type="text"
-                                placeholder="Escribe marca (ej. Hikvision, Apple, TP-Link)..."
-                                value={tempVendor}
-                                onChange={(e) => setTempVendor(e.target.value)}
-                                className="bg-slate-900 border border-slate-800 text-slate-200 text-[11px] px-2 py-1 rounded focus:outline-hidden focus:border-cyan-500 w-full font-sans"
-                                maxLength={32}
-                                autoFocus
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
+                            <div className="flex flex-col gap-1.5 w-full">
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  placeholder="Escribe marca (ej. Hikvision, Apple, TP-Link)..."
+                                  value={tempVendor}
+                                  onChange={(e) => setTempVendor(e.target.value)}
+                                  className="bg-slate-900 border border-slate-800 text-slate-200 text-[11px] px-2 py-1 rounded focus:outline-hidden focus:border-cyan-500 w-full font-sans animate-none"
+                                  maxLength={32}
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleUpdateDeviceVendor(activeDiagDevice.id, tempVendor);
+                                      setIsEditingVendor(false);
+                                    } else if (e.key === 'Escape') {
+                                      setIsEditingVendor(false);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  onClick={() => {
                                     handleUpdateDeviceVendor(activeDiagDevice.id, tempVendor);
                                     setIsEditingVendor(false);
-                                  } else if (e.key === 'Escape') {
-                                    setIsEditingVendor(false);
-                                  }
-                                }}
-                              />
-                              <button
-                                onClick={() => {
-                                  handleUpdateDeviceVendor(activeDiagDevice.id, tempVendor);
-                                  setIsEditingVendor(false);
-                                }}
-                                className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold px-2 py-1 text-[10px] rounded transition-colors cursor-pointer shrink-0 font-sans"
-                              >
-                                Guardar
-                              </button>
-                              <button
-                                onClick={() => setIsEditingVendor(false)}
-                                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-2 py-1 text-[10px] rounded transition-colors cursor-pointer shrink-0 font-sans"
-                              >
-                                Cancelar
-                              </button>
+                                  }}
+                                  className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold px-2 py-1 text-[10px] rounded transition-colors cursor-pointer shrink-0 font-sans"
+                                >
+                                  Guardar
+                                </button>
+                                <button
+                                  onClick={() => setIsEditingVendor(false)}
+                                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-2 py-1 text-[10px] rounded transition-colors cursor-pointer shrink-0 font-sans"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {['Apple', 'Samsung', 'Huawei', 'Xiaomi', 'Hikvision', 'Dahua', 'EZVIZ', 'Sony', 'TP-Link', 'HP', 'Intel', 'LG', 'Nintendo'].map(brand => (
+                                  <button
+                                    key={brand}
+                                    type="button"
+                                    onClick={() => setTempVendor(brand)}
+                                    className="text-[9px] bg-slate-900 hover:bg-slate-800 hover:text-cyan-400 text-slate-400 border border-slate-800 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                                  >
+                                    {brand}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           ) : (
                             <div className="flex items-center justify-between mt-0.5">
