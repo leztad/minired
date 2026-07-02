@@ -468,7 +468,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
   }, [devices, currentSubnetBase, isDemoMode, hostTelemetry]);
 
   // Define active coordinates and layout dynamically
-  const topologyNodes: TopologyNode[] = useMemo(() => {
+  const { topologyNodes, topologyHeight } = useMemo(() => {
     const base = currentSubnetBase;
 
     // Helper to check device state (returns true if active: 'OK' or 'Advertencia')
@@ -615,11 +615,43 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
       ip: `${base}.1`,
       type: 'router' as const,
       x: 460,
-      y: 100,
+      y: 95,
       parent: 'wan',
       linkType: 'fiber' as const,
       interfaceName: 'WAN SFP+ GPON'
     });
+
+    // Helper to position clients in a balanced multi-row grid so they never overflow the SVG area
+    const positionClientsInPod = (
+      clients: any[],
+      centerX: number,
+      width: number,
+      minY: number,
+      rowHeight: number = 62,
+      maxColsLimit: number = 4
+    ) => {
+      if (clients.length === 0) return;
+
+      const horizontalSpacing = 72;
+      const maxCols = Math.min(maxColsLimit, Math.max(1, Math.floor(width / horizontalSpacing)));
+      const count = clients.length;
+      const cols = Math.min(count, maxCols);
+      
+      clients.forEach((client, idx) => {
+        const row = Math.floor(idx / cols);
+        const col = idx % cols;
+        
+        const colsInThisRow = Math.min(cols, count - row * cols);
+        const startX = centerX - (horizontalSpacing * (colsInThisRow - 1)) / 2;
+        
+        const x = startX + col * horizontalSpacing;
+        const stagger = (col % 2 === 0) ? -4 : 4;
+        const y = minY + row * rowHeight + stagger;
+        
+        client.x = x;
+        client.y = y;
+      });
+    };
 
     // --- POD A: WI-FI AP & CLIENTS (Left pod, centered at x = 190) ---
     if (hasWifi) {
@@ -628,24 +660,14 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
         label: 'WiFi AP Central',
         type: 'ap' as const,
         x: 190,
-        y: 195,
+        y: 180,
         parent: `${base}.1`,
         linkType: 'ethernet' as const,
         interfaceName: 'ETH Port 2 (PoE)'
       });
 
-      const countWifi = activeWifiClients.length;
-      const wifiSpacing = 110; // Increased spacing to spread clients further apart
-      const startXWifi = 190 - (wifiSpacing * (countWifi - 1)) / 2;
-      activeWifiClients.forEach((client, idx) => {
-        // Stagger Y position slightly to prevent horizontal line crowding
-        const staggerY = countWifi > 1 ? (idx % 2 === 0 ? 320 : 348) : 332;
-        nodes.push({
-          ...client,
-          x: startXWifi + idx * wifiSpacing,
-          y: staggerY
-        });
-      });
+      positionClientsInPod(activeWifiClients, 190, 280, 260, 62, 4);
+      activeWifiClients.forEach(client => nodes.push(client));
     }
 
     // --- POD C: DESKTOP & VIRTUAL CLIENTS (Right pod, centered at x = 730) ---
@@ -654,23 +676,13 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
         ...desktopNodeVal,
         id: `${base}.55`,
         x: 730,
-        y: 195,
+        y: 180,
         parent: 'switch',
         linkType: 'ethernet' as const
       });
 
-      const countVM = activeVirtualClients.length;
-      const vmSpacing = 95; // Increased spacing to spread VM clients
-      const startXVM = 730 - (vmSpacing * (countVM - 1)) / 2;
-      activeVirtualClients.forEach((client, idx) => {
-        // Stagger Y position for virtual clients (e.g. alternating higher/lower)
-        const staggerY = countVM > 1 ? (idx % 2 === 0 ? 320 : 348) : 332;
-        nodes.push({
-          ...client,
-          x: startXVM + idx * vmSpacing,
-          y: staggerY
-        });
-      });
+      positionClientsInPod(activeVirtualClients, 730, 280, 260, 62, 4);
+      activeVirtualClients.forEach(client => nodes.push(client));
     }
 
     // --- POD B: SWITCH & ITS CLIENTS (Center pod, centered at x = 460) ---
@@ -679,7 +691,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
       label: 'Switch Principal LAN',
       type: 'switch' as const,
       x: 460,
-      y: 195,
+      y: 180,
       parent: `${base}.1`,
       linkType: 'ethernet' as const,
       interfaceName: 'ETH Port 1 (10G)'
@@ -687,7 +699,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
 
     const switchEndpoints = [...activeSwitchClients];
     if (!hasVirtuals) {
-      // If there are no VM active, Desktop PC is just a direct LAN client of the Switch at Layer 3
+      // If there are no VM active, Desktop PC is just a direct LAN client of the Switch
       switchEndpoints.push({
         ...desktopNodeVal,
         id: `${base}.55`,
@@ -696,22 +708,18 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
       });
     }
 
-    const countSwitchClients = switchEndpoints.length;
-    if (countSwitchClients > 0) {
-      const switchSpacing = 95; // Increased spacing to prevent overlapping
-      const startXSwitch = 460 - (switchSpacing * (countSwitchClients - 1)) / 2;
-      switchEndpoints.forEach((client, idx) => {
-        // Alternate stagger switch clients Y coordinate to prevent overlap
-        const staggerY = countSwitchClients > 1 ? (idx % 2 === 0 ? 348 : 320) : 332;
-        nodes.push({
-          ...client,
-          x: startXSwitch + idx * switchSpacing,
-          y: staggerY
-        });
-      });
-    }
+    positionClientsInPod(switchEndpoints, 460, 240, 260, 62, 3);
+    switchEndpoints.forEach(client => nodes.push(client));
 
-    return nodes;
+    // Dynamic height calculation to fit all rows
+    const wifiRowsCount = hasWifi ? Math.ceil(activeWifiClients.length / 4) : 0;
+    const switchRowsCount = Math.ceil(switchEndpoints.length / 3) || 0;
+    const vmRowsCount = hasVirtuals ? Math.ceil(activeVirtualClients.length / 4) : 0;
+    const maxRowsCount = Math.max(1, wifiRowsCount, switchRowsCount, vmRowsCount);
+    
+    const topologyHeight = Math.max(410, 260 + maxRowsCount * 62 + 30);
+
+    return { topologyNodes: nodes, topologyHeight };
   }, [currentSubnetBase, devices]);
 
   // Compute upstream diagnostic path to highlight route to server
@@ -1336,7 +1344,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             {/* SVG STAGE */}
             <svg 
               className="w-full min-w-[860px]" 
-              viewBox="0 0 920 410" 
+              viewBox={`0 0 920 ${topologyHeight}`} 
               fill="none" 
               xmlns="http://www.w3.org/2000/svg"
             >
