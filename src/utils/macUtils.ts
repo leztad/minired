@@ -277,72 +277,32 @@ export const getStableFallbackVendor = (seed: string): string => {
  * Optionally incorporates hostname and IP clues as intelligent fallbacks if the MAC is unassigned or generic.
  */
 export const resolveVendorByMac = (mac?: string, hostname?: string, ip?: string): string => {
-  if (!mac || mac === '—' || mac.trim() === '') {
-    // If MAC is not available but we have a hostname, attempt to infer the brand from hostname keywords!
-    if (hostname && hostname !== '—') {
-      const hn = hostname.toLowerCase();
-      if (hn.includes('iphone') || hn.includes('ipad') || hn.includes('macbook') || hn.includes('apple') || hn.includes('apple-device')) return 'Apple Inc.';
-      if (hn.includes('samsung') || hn.includes('tv-sala') || hn.includes('smart tv') || hn.includes('smarttv')) return 'Samsung Electronics';
-      if (hn.includes('playstation') || hn.includes('ps5') || hn.includes('sony')) return 'Sony Interactive';
-      if (hn.includes('huawei') || hn.includes('ont')) return 'Huawei Technologies';
-      if (hn.includes('impresora') || hn.includes('printer') || hn.includes('hp') || hn.includes('laserjet')) return 'Hewlett-Packard (HP)';
-      if (hn.includes('nas') || hn.includes('synology') || hn.includes('backup')) return 'Synology Inc.';
-      if (hn.includes('router') || hn.includes('gateway') || hn.includes('modem') || hn.includes('wifi-ont')) return 'Cisco / Huawei ONT';
-      if (hn.includes('docker') || hn.includes('contenedor') || hn.includes('backend') || hn.includes('redis') || hn.includes('postgres')) return 'Docker Virtual Bridge';
-      if (hn.includes('ubiquiti') || hn.includes('unifi') || hn.includes('ap-pro')) return 'Ubiquiti Networks';
-      if (hn.includes('alexa') || hn.includes('echo') || hn.includes('dot') || hn.includes('amazon')) return 'Amazon Technologies';
-      if (hn.includes('iot') || hn.includes('espressif') || hn.includes('sensor') || hn.includes('nodemcu')) return 'Espressif Systems (IoT)';
-      if (hn.includes('virtualbox') || hn.includes('oracle') || hn.includes('vm')) return 'Oracle (VirtualBox)';
-      if (hn.includes('hikvision') || (hn.includes('cctv') && hn.includes('hik'))) return 'Hikvision (CCTV)';
-      if (hn.includes('dahua') || (hn.includes('cctv') && hn.includes('dahua'))) return 'Dahua Technology (CCTV)';
-      if (hn.includes('ezviz')) return 'EZVIZ (Hikvision CCTV IP)';
-      if (hn.includes('reolink')) return 'Reolink Digital Technology';
-      if (hn.includes('axis')) return 'Axis Communications (IP Camera)';
-      if (hn.includes('uniview') || hn.includes('unv')) return 'Uniview Technologies (UNV)';
-      if (hn.includes('wisenet') || hn.includes('hanwha')) return 'Hanwha Techwin (Wisenet CCTV)';
-      if (hn.includes('cctv') || hn.includes('camara') || hn.includes('camera') || hn.includes('grabadora') || hn.includes('nvr') || hn.includes('dvr') || hn.includes('domo')) return 'Cámara IP / NVR (CCTV)';
-      if (hn.includes('workstation') || hn.includes('portatil') || hn.includes('este pc')) return 'Intel Corporation / Dell';
-    }
-    
-    // IP based smart guessing for typical home gateway structures
-    if (ip) {
-      if (ip.endsWith('.1') || ip.endsWith('.254')) return 'Gateway de Enlace (Huawei/ZyXEL)';
-      if (ip.endsWith('.55')) return 'Intel Corp. (Este PC)';
-      return getStableFallbackVendor(ip);
-    }
+  // Normalize MAC to always be clean and normalized
+  const cleanMac = (mac || '').replace(/[:-]/g, '').toUpperCase().trim();
 
-    return 'TP-Link Technologies';
-  }
-
-  // Parse the MAC and retrieve prefix
-  const cleanMac = mac.replace(/[:-]/g, '').toUpperCase().trim();
-  if (cleanMac.length < 6) return getStableFallbackVendor(ip || mac || 'default');
-  
-  // Try 3-octet (6-character) prefix matching
-  const prefix6 = mac.toUpperCase().substring(0, 8); // e.g. "00:1A:2B"
-  if (OUI_DATABASE[prefix6]) {
-    return OUI_DATABASE[prefix6];
-  }
-
-  // Fallback to searching first 3 bytes (6 hex chars)
-  const hex6 = cleanMac.substring(0, 6);
-  for (const [key, val] of Object.entries(OUI_DATABASE)) {
-    const keyClean = key.replace(/[:-]/g, '').toUpperCase();
-    if (keyClean === hex6) {
-      return val;
+  // 1. Try MAC OUI Database lookup first (using normalized 3-octet format: XX:XX:XX)
+  if (cleanMac.length >= 6) {
+    const prefix6 = `${cleanMac.slice(0, 2)}:${cleanMac.slice(2, 4)}:${cleanMac.slice(4, 6)}`;
+    if (OUI_DATABASE[prefix6]) {
+      return OUI_DATABASE[prefix6];
     }
   }
 
-  // If no prefix matched directly, try keyword matching on hostname
-  if (hostname && hostname !== '—') {
+  // 2. Try keyword matching on hostname if present and valid
+  if (hostname && hostname !== '—' && hostname.trim() !== '') {
     const hn = hostname.toLowerCase();
-    if (hn.includes('iphone') || hn.includes('ipad') || hn.includes('macbook') || hn.includes('apple')) return 'Apple Inc.';
-    if (hn.includes('samsung') || hn.includes('tv')) return 'Samsung Electronics';
+    if (hn.includes('iphone') || hn.includes('ipad') || hn.includes('macbook') || hn.includes('apple') || hn.includes('apple-device')) return 'Apple Inc.';
+    if (hn.includes('samsung') || hn.includes('galaxy') || hn.includes('tv-sala') || hn.includes('smart tv') || hn.includes('smarttv')) return 'Samsung Electronics';
     if (hn.includes('playstation') || hn.includes('ps5') || hn.includes('sony')) return 'Sony Interactive';
-    if (hn.includes('huawei')) return 'Huawei Technologies';
-    if (hn.includes('impresora') || hn.includes('laserjet') || hn.includes('hp')) return 'Hewlett-Packard (HP)';
-    if (hn.includes('nas') || hn.includes('synology')) return 'Synology Inc.';
-    if (hn.includes('router') || hn.includes('gateway')) return 'Gateway principal';
+    if (hn.includes('huawei') || hn.includes('ont')) return 'Huawei Technologies';
+    if (hn.includes('impresora') || hn.includes('printer') || hn.includes('hp') || hn.includes('laserjet') || hn.includes('deskjet') || hn.includes('officejet')) return 'Hewlett-Packard (HP)';
+    if (hn.includes('nas') || hn.includes('synology') || hn.includes('backup')) return 'Synology Inc.';
+    if (hn.includes('router') || hn.includes('gateway') || hn.includes('modem') || hn.includes('wifi-ont')) return 'Gateway / Router Principal';
+    if (hn.includes('docker') || hn.includes('contenedor') || hn.includes('backend') || hn.includes('redis') || hn.includes('postgres')) return 'Docker Virtual Bridge';
+    if (hn.includes('ubiquiti') || hn.includes('unifi') || hn.includes('ap-pro')) return 'Ubiquiti Networks';
+    if (hn.includes('alexa') || hn.includes('echo') || hn.includes('dot') || hn.includes('amazon')) return 'Amazon Technologies';
+    if (hn.includes('iot') || hn.includes('espressif') || hn.includes('sensor') || hn.includes('nodemcu')) return 'Espressif Systems (IoT)';
+    if (hn.includes('virtualbox') || hn.includes('oracle') || hn.includes('vm')) return 'Oracle (VirtualBox)';
     if (hn.includes('hikvision') || (hn.includes('cctv') && hn.includes('hik'))) return 'Hikvision (CCTV)';
     if (hn.includes('dahua') || (hn.includes('cctv') && hn.includes('dahua'))) return 'Dahua Technology (CCTV)';
     if (hn.includes('ezviz')) return 'EZVIZ (Hikvision CCTV IP)';
@@ -351,9 +311,22 @@ export const resolveVendorByMac = (mac?: string, hostname?: string, ip?: string)
     if (hn.includes('uniview') || hn.includes('unv')) return 'Uniview Technologies (UNV)';
     if (hn.includes('wisenet') || hn.includes('hanwha')) return 'Hanwha Techwin (Wisenet CCTV)';
     if (hn.includes('cctv') || hn.includes('camara') || hn.includes('camera') || hn.includes('grabadora') || hn.includes('nvr') || hn.includes('dvr') || hn.includes('domo')) return 'Cámara IP / NVR (CCTV)';
+    if (hn.includes('workstation') || hn.includes('portatil') || hn.includes('este pc') || hn.includes('desktop') || hn.includes('laptop')) return 'Intel Corporation / PC';
+    if (hn.includes('dell')) return 'Dell Inc.';
+    if (hn.includes('lenovo') || hn.includes('thinkpad')) return 'Lenovo';
+    if (hn.includes('asus')) return 'ASUSTeK Computer';
+    if (hn.includes('xiaomi') || hn.includes('redmi') || hn.includes('poco')) return 'Xiaomi Communications';
   }
 
-  return getStableFallbackVendor(mac || ip || 'default');
+  // 3. Fallback based on typical IP structure (Gateway addresses)
+  if (ip) {
+    if (ip.endsWith('.1') || ip.endsWith('.254')) {
+      return 'Gateway / Router Principal';
+    }
+  }
+
+  // 4. Genuine fallback: return "Dispositivo Genérico" instead of guessing popular brands incorrectly
+  return 'Dispositivo Genérico';
 };
 
 /**
