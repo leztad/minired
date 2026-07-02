@@ -164,6 +164,76 @@ const OUI_DATABASE: Record<string, string> = {
   'A4:50:46': 'Xiaomi Communications',
   'E4:47:90': 'Xiaomi Communications',
   '30:F7:72': 'Xiaomi Communications',
+  '1C:99:4C': 'Xiaomi Communications',
+  '28:6C:07': 'Xiaomi',
+  '34:80:B3': 'Xiaomi',
+  '3C:12:AA': 'Xiaomi',
+  '50:04:B8': 'Xiaomi',
+  '5C:E4:3B': 'Xiaomi',
+  'AC:F1:DF': 'Xiaomi',
+  'FC:E5:52': 'Xiaomi (Móvil)',
+
+  // TP-Link
+  'D8:47:3C': 'TP-Link Technologies',
+  'D4:6E:0E': 'TP-Link Technologies',
+  'BC:3C:D5': 'TP-Link Technologies',
+  'A8:57:4E': 'TP-Link Technologies',
+  '9C:A5:C5': 'TP-Link Technologies',
+  '90:F6:52': 'TP-Link Technologies',
+  '84:16:F9': 'TP-Link Technologies',
+  '50:C7:BF': 'TP-Link Technologies',
+  '40:16:9F': 'TP-Link Technologies',
+  '3C:84:3D': 'TP-Link Technologies',
+  '30:B5:C2': 'TP-Link Technologies',
+  '18:A6:F7': 'TP-Link Technologies',
+  '14:CF:92': 'TP-Link Technologies',
+  '10:27:BE': 'TP-Link Technologies',
+  '0C:80:63': 'TP-Link Technologies',
+  '04:56:E5': 'TP-Link Technologies',
+
+  // Netgear
+  '00:09:5B': 'Netgear',
+  '00:14:6C': 'Netgear',
+  '00:18:4D': 'Netgear Router',
+  '00:1F:33': 'Netgear Switch',
+  '00:26:F2': 'Netgear ProSafe',
+  '84:1B:5E': 'Netgear NightHawk',
+
+  // D-Link
+  '00:0D:88': 'D-Link Systems',
+  '00:15:E9': 'D-Link Systems',
+  '00:17:9A': 'D-Link Systems',
+  '18:62:2C': 'D-Link Router',
+
+  // Lenovo / Dell / Asus / HP Exts
+  '00:12:FE': 'Lenovo Mobile',
+  '00:15:58': 'Lenovo Workstation',
+  '14:36:C6': 'Lenovo Laptop',
+  '00:06:5B': 'Dell Inc.',
+  '00:0F:1F': 'Dell Server',
+  '18:03:73': 'Dell Workstation',
+  '24:B6:FD': 'Dell Inc.',
+  '08:60:6E': 'ASUSTek Computer (Asus)',
+  '10:BF:48': 'ASUSTek Computer (Asus)',
+  '54:A0:50': 'ASUSTek Computer (Asus)',
+  '04:09:73': 'Hewlett-Packard (HP)',
+  '30:85:A9': 'Hewlett-Packard (HP)',
+  '74:27:EA': 'Hewlett-Packard (HP)',
+  '80:C1:6E': 'Hewlett-Packard (HP)',
+  '98:4B:4A': 'Hewlett-Packard (HP)',
+
+  // Realtek
+  '00:E0:4C': 'Realtek Semiconductor',
+  '52:54:00': 'QEMU Virtual / Realtek NIC',
+
+  // LG Electronics
+  '00:1C:62': 'LG Electronics (Smart TV)',
+  '3C:BD:C5': 'LG Electronics',
+  'D8:C0:A6': 'LG Electronics',
+
+  // Nintendo (Consoles)
+  '00:1F:32': 'Nintendo Co., Ltd.',
+  '98:B6:E9': 'Nintendo Switch',
 
   // SDN Custom Sandbox Gateway
   '0A:B1:C2': 'SDN Gatekeeper Sandbox Controller'

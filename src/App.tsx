@@ -421,6 +421,37 @@ export default function App() {
   // Data pools
   const [devices, setDevices] = useState<Device[]>([]);
   const [sensors, setSensors] = useState<Sensor[]>([]);
+
+  // Persistent user overrides for device nicknames and brands
+  const [customNames, setCustomNames] = useState<Record<string, string>>(() => {
+    try {
+      const cached = localStorage.getItem('netmonitor_custom_names');
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const [customVendors, setCustomVendors] = useState<Record<string, string>>(() => {
+    try {
+      const cached = localStorage.getItem('netmonitor_custom_vendors');
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const processedDevices = useMemo(() => {
+    return devices.map(d => {
+      const customName = customNames[d.ip];
+      const customVendor = customVendors[d.ip];
+      return {
+        ...d,
+        host: customName !== undefined ? customName : d.host,
+        vendor: customVendor !== undefined ? customVendor : d.vendor
+      };
+    });
+  }, [devices, customNames, customVendors]);
   
   // History point database (preload with realistic past records)
   const [historyData, setHistoryData] = useState<HistoryPoint[]>([
@@ -445,42 +476,67 @@ export default function App() {
   const [copiedSuccess, setCopiedSuccess] = useState<boolean>(false);
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
   const [tempName, setTempName] = useState<string>('');
+  const [isEditingVendor, setIsEditingVendor] = useState<boolean>(false);
+  const [tempVendor, setTempVendor] = useState<string>('');
   const [modalTab, setModalTab] = useState<'info' | 'ports'>('info');
   const [activeAnomaly, setActiveAnomaly] = useState<'none' | 'latency' | 'gateway' | 'loss'>('none');
 
-  // Synchronize renaming fields on selecting a device or state change
+  // Synchronize renaming and brand fields on selecting a device or state change
   useEffect(() => {
     if (!selectedDevice) {
       setIsEditingName(false);
       setTempName('');
+      setIsEditingVendor(false);
+      setTempVendor('');
       setModalTab('info');
       setPortScanStatus('idle');
       setPortScanProgress(0);
       setPortScanResults([]);
       setActiveScanningPort(null);
     } else {
-      const activeDevice = devices.find(d => d.id === selectedDevice.id);
+      const activeDevice = processedDevices.find(d => d.id === selectedDevice.id);
       if (activeDevice) {
         setTempName(activeDevice.host !== '—' ? activeDevice.host : '');
+        const currentBrand = activeDevice.vendor && activeDevice.vendor !== '—' && !activeDevice.vendor.toLowerCase().includes('genérico') && !activeDevice.vendor.toLowerCase().includes('generico') && activeDevice.vendor !== 'Dispositivo de Red Activo'
+          ? activeDevice.vendor
+          : resolveVendorByMac(activeDevice.mac, activeDevice.host, activeDevice.ip);
+        setTempVendor(currentBrand === 'Sonda de Red Genérica' ? '' : currentBrand);
       }
     }
-  }, [selectedDevice, devices]);
+  }, [selectedDevice, processedDevices]);
 
   const handleRenameDevice = (id: string, newName: string) => {
     const finalName = newName.trim() || '—';
-    setDevices(prev => {
-      const targetDevice = prev.find(d => d.id === id);
-      if (targetDevice) {
-        addAlert(`Apodo de dispositivo con IP ${targetDevice.ip} cambiado a "${finalName}".`, 'info');
-        setSensors(sPrev => sPrev.map(s => {
-          if (s.ip === targetDevice.ip) {
-            return { ...s, dispositivo: finalName };
-          }
-          return s;
-        }));
-      }
-      return prev.map(d => d.id === id ? { ...d, host: finalName } : d);
-    });
+    const targetDevice = devices.find(d => d.id === id);
+    if (targetDevice) {
+      const ip = targetDevice.ip;
+      setCustomNames(prev => {
+        const next = { ...prev, [ip]: finalName };
+        localStorage.setItem('netmonitor_custom_names', JSON.stringify(next));
+        return next;
+      });
+      addAlert(`Apodo de dispositivo con IP ${ip} cambiado a "${finalName}".`, 'info');
+      setSensors(sPrev => sPrev.map(s => {
+        if (s.ip === ip) {
+          return { ...s, dispositivo: finalName };
+        }
+        return s;
+      }));
+    }
+  };
+
+  const handleUpdateDeviceVendor = (id: string, newVendor: string) => {
+    const finalVendor = newVendor.trim();
+    const targetDevice = devices.find(d => d.id === id);
+    if (targetDevice) {
+      const ip = targetDevice.ip;
+      setCustomVendors(prev => {
+        const next = { ...prev, [ip]: finalVendor || '—' };
+        localStorage.setItem('netmonitor_custom_vendors', JSON.stringify(next));
+        return next;
+      });
+      addAlert(`Fabricante de dispositivo con IP ${ip} cambiado a "${finalVendor || 'Autodetectado'}".`, 'info');
+    }
   };
 
   const handleStartPortScan = (deviceIp: string) => {
@@ -1530,18 +1586,18 @@ export default function App() {
 
   // Helper values filtered by the active, viewed segment
   const segmentFilteredDevices = useMemo(() => {
-    if (viewedSegmentFilter === 'all') return devices;
-    return devices.filter(d => d.segmento === viewedSegmentFilter);
-  }, [devices, viewedSegmentFilter]);
+    if (viewedSegmentFilter === 'all') return processedDevices;
+    return processedDevices.filter(d => d.segmento === viewedSegmentFilter);
+  }, [processedDevices, viewedSegmentFilter]);
 
   const mapDevices = useMemo(() => {
     if (viewedSegmentFilter === 'all') {
       const activeObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
       const primarySeg = activeObj.segments[0] || subnetSegment;
-      return devices.filter(d => d.segmento === primarySeg);
+      return processedDevices.filter(d => d.segmento === primarySeg);
     }
-    return devices.filter(d => d.segmento === viewedSegmentFilter);
-  }, [devices, viewedSegmentFilter, selectedInterface, subnetSegment, activeInterfacesList]);
+    return processedDevices.filter(d => d.segmento === viewedSegmentFilter);
+  }, [processedDevices, viewedSegmentFilter, selectedInterface, subnetSegment, activeInterfacesList]);
 
   const counts = useMemo<ScanStats>(() => {
     if (!lastScanDone && !isScanning) {
@@ -3316,7 +3372,7 @@ export default function App() {
 
           {activeView === 'ancho_banda' && (
             <BandwidthMonitor 
-              devices={devices}
+              devices={processedDevices}
               isScanning={isScanning}
               onSelectDevice={setSelectedDevice}
               onTriggerTraffic={handleTriggerTraffic}
@@ -3328,7 +3384,7 @@ export default function App() {
 
           {activeView === 'testeo' && (
             <TestingCenter 
-              devices={devices} 
+              devices={processedDevices} 
               sensors={sensors}
               setDevices={setDevices}
               setSensors={setSensors}
@@ -3342,7 +3398,7 @@ export default function App() {
 
           {activeView === 'ai_diagnostic' && (
             <NetworkAICopilot 
-              devices={devices}
+              devices={processedDevices}
               activeAnomaly={activeAnomaly}
               subnetSegment={subnetSegment}
               sensors={sensors}
@@ -3354,7 +3410,7 @@ export default function App() {
           )}
 
           {activeView === 'auditorias_red' && (
-            <NetworkAudit devices={devices} onAddLog={addAlert} />
+            <NetworkAudit devices={processedDevices} onAddLog={addAlert} />
           )}
 
           {activeView === 'wiki_soporte' && (
@@ -3399,7 +3455,7 @@ export default function App() {
 
       {/* FLOAT MODE DIAGNOSTIC MODAL */}
       {selectedDevice && (() => {
-        const activeDiagDevice = devices.find(d => d.id === selectedDevice.id) || selectedDevice;
+        const activeDiagDevice = processedDevices.find(d => d.id === selectedDevice.id) || selectedDevice;
         return (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
             <div className="bg-[#0F172A] rounded-xs border border-slate-800 w-full max-w-sm shadow-2xl overflow-hidden font-sans">
@@ -3558,12 +3614,65 @@ export default function App() {
                            </span>
                         </div>
                         <div className="col-span-2 border-t border-slate-800/30 pt-2 mt-1">
-                           <span className="text-slate-500 block text-[9px] text-left">ESTIMACIÓN MARCA / FABRICANTE</span>
-                           <span className="text-cyan-400 font-semibold block text-left font-sans">
-                             {activeDiagDevice.vendor && activeDiagDevice.vendor !== '—' && !activeDiagDevice.vendor.toLowerCase().includes('genérico') && !activeDiagDevice.vendor.toLowerCase().includes('generico') && activeDiagDevice.vendor !== 'Dispositivo de Red Activo'
-                               ? activeDiagDevice.vendor
-                               : resolveVendorByMac(activeDiagDevice.mac, activeDiagDevice.host, activeDiagDevice.ip)}
-                           </span>
+                          <span className="text-slate-500 block text-[9px] text-left">MARCA / FABRICANTE DEL DISPOSITIVO</span>
+                          {isEditingVendor ? (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <input
+                                type="text"
+                                placeholder="Escribe marca (ej. Hikvision, Apple, TP-Link)..."
+                                value={tempVendor}
+                                onChange={(e) => setTempVendor(e.target.value)}
+                                className="bg-slate-900 border border-slate-800 text-slate-200 text-[11px] px-2 py-1 rounded focus:outline-hidden focus:border-cyan-500 w-full font-sans"
+                                maxLength={32}
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleUpdateDeviceVendor(activeDiagDevice.id, tempVendor);
+                                    setIsEditingVendor(false);
+                                  } else if (e.key === 'Escape') {
+                                    setIsEditingVendor(false);
+                                  }
+                                }}
+                              />
+                              <button
+                                onClick={() => {
+                                  handleUpdateDeviceVendor(activeDiagDevice.id, tempVendor);
+                                  setIsEditingVendor(false);
+                                }}
+                                className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold px-2 py-1 text-[10px] rounded transition-colors cursor-pointer shrink-0 font-sans"
+                              >
+                                Guardar
+                              </button>
+                              <button
+                                onClick={() => setIsEditingVendor(false)}
+                                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-2 py-1 text-[10px] rounded transition-colors cursor-pointer shrink-0 font-sans"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between mt-0.5">
+                              <span className="text-cyan-400 font-semibold block text-left font-sans">
+                                {activeDiagDevice.vendor && activeDiagDevice.vendor !== '—' && !activeDiagDevice.vendor.toLowerCase().includes('genérico') && !activeDiagDevice.vendor.toLowerCase().includes('generico') && activeDiagDevice.vendor !== 'Dispositivo de Red Activo'
+                                  ? activeDiagDevice.vendor
+                                  : resolveVendorByMac(activeDiagDevice.mac, activeDiagDevice.host, activeDiagDevice.ip)}
+                              </span>
+                              {activeDiagDevice.estado !== 'No_Escaneado' && (
+                                <button
+                                  onClick={() => {
+                                    const curBrand = activeDiagDevice.vendor && activeDiagDevice.vendor !== '—' && !activeDiagDevice.vendor.toLowerCase().includes('genérico') && !activeDiagDevice.vendor.toLowerCase().includes('generico') && activeDiagDevice.vendor !== 'Dispositivo de Red Activo'
+                                      ? activeDiagDevice.vendor
+                                      : resolveVendorByMac(activeDiagDevice.mac, activeDiagDevice.host, activeDiagDevice.ip);
+                                    setTempVendor(curBrand === 'Sonda de Red Genérica' ? '' : curBrand);
+                                    setIsEditingVendor(true);
+                                  }}
+                                  className="text-slate-500 hover:text-cyan-400 text-[10px] font-sans underline transition-colors cursor-pointer"
+                                >
+                                  Editar Marca
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
