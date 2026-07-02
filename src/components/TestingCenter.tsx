@@ -253,7 +253,7 @@ export default function TestingCenter({
         {/* Chaos Engineering Block */}
         <div className="lg:col-span-4 bg-slate-900/50 p-4 border border-slate-800 rounded-md flex flex-col justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-3 border-b border-slate-850 pb-2">
+            <div className="flex items-center gap-2 mb-3 border-b border-slate-800/50 pb-2">
               <Flame className="h-4 w-4 text-orange-500" />
               <h3 className="text-xs font-semibold text-slate-300 font-display uppercase">Chaos Network Injector</h3>
             </div>
@@ -269,7 +269,7 @@ export default function TestingCenter({
                 className={`w-full py-2 px-3 rounded-xs text-[11px] font-semibold font-sans flex items-center justify-between transition-all cursor-pointer ${
                   (activeAnomaly as string) === 'none'
                     ? 'bg-emerald-500/15 border border-emerald-500 text-emerald-400'
-                    : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
+                    : 'bg-slate-950 border border-slate-800/50 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
                 }`}
               >
                 <span className="flex items-center gap-1.5">
@@ -285,7 +285,7 @@ export default function TestingCenter({
                 className={`w-full py-2 px-3 rounded-xs text-[11px] font-semibold font-sans flex items-center justify-between transition-all cursor-pointer ${
                   (activeAnomaly as string) === 'latency'
                     ? 'bg-amber-500/15 border border-amber-500 text-amber-400 font-semibold'
-                    : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
+                    : 'bg-slate-950 border border-slate-800/50 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
                 }`}
               >
                 <span className="flex items-center gap-1.5">
@@ -301,7 +301,7 @@ export default function TestingCenter({
                 className={`w-full py-2 px-3 rounded-xs text-[11px] font-semibold font-sans flex items-center justify-between transition-all cursor-pointer ${
                   (activeAnomaly as string) === 'gateway'
                     ? 'bg-rose-500/15 border border-rose-500 text-rose-400 font-semibold'
-                    : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
+                    : 'bg-slate-950 border border-slate-800/50 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
                 }`}
               >
                 <span className="flex items-center gap-1.5">
@@ -317,7 +317,7 @@ export default function TestingCenter({
                 className={`w-full py-2 px-3 rounded-xs text-[11px] font-semibold font-sans flex items-center justify-between transition-all cursor-pointer ${
                   (activeAnomaly as string) === 'loss'
                     ? 'bg-purple-500/15 border border-purple-500 text-purple-400 font-semibold'
-                    : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
+                    : 'bg-slate-950 border border-slate-800/50 text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
                 }`}
               >
                 <span className="flex items-center gap-1.5">
@@ -329,7 +329,7 @@ export default function TestingCenter({
             </div>
           </div>
 
-          <div className="bg-[#0B1120] p-2.5 rounded-sm border border-slate-850 mt-4 text-[10px] space-y-1 text-slate-500">
+          <div className="bg-[#0B1120] p-2.5 rounded-sm border border-slate-800/50 mt-4 text-[10px] space-y-1 text-slate-500">
             <div className="flex items-center gap-1 text-slate-400 font-semibold">
               <HelpCircle className="h-3 w-3" />
               ¿Qué evalúa esto?
@@ -342,7 +342,7 @@ export default function TestingCenter({
 
         {/* Assertions Test Runner Block */}
         <div className="lg:col-span-8 bg-slate-900/50 p-4 border border-slate-800 rounded-md">
-          <div className="flex items-center justify-between mb-3 border-b border-slate-850 pb-2">
+          <div className="flex items-center justify-between mb-3 border-b border-slate-800/50 pb-2">
             <div className="flex items-center gap-2">
               <PlayCircle className="h-4 w-4 text-cyan-400" />
               <h3 className="text-xs font-semibold text-slate-300 font-display uppercase">Suite de Diagnósticos Integrados</h3>
@@ -371,7 +371,7 @@ export default function TestingCenter({
                   step.status === 'passed' ? 'bg-emerald-500/5 border-emerald-950/30' :
                   step.status === 'failed' ? 'bg-rose-500/5 border-rose-950/30' :
                   step.status === 'running' ? 'bg-cyan-500/5 border-cyan-950/30 animate-pulse' :
-                  'bg-slate-950/40 border-slate-850/80'
+                  'bg-slate-950/40 border-slate-800/40'
                 }`}
               >
                 <div>
@@ -412,7 +412,7 @@ export default function TestingCenter({
                     </span>
                   )}
                   {step.status === 'idle' && (
-                    <span className="bg-slate-900 text-slate-500 border border-slate-850 text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded-xs font-semibold font-sans">
+                    <span className="bg-slate-900 text-slate-500 border border-slate-800/50 text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded-xs font-semibold font-sans">
                       En Pausa
                     </span>
                   )}
@@ -428,7 +428,7 @@ export default function TestingCenter({
               Terminal stdout
             </div>
             
-            <div className="font-mono text-[10.5px] bg-slate-950 p-3 rounded-md border border-slate-850 text-emerald-400 max-h-[140px] overflow-y-auto space-y-1">
+            <div className="font-mono text-[10.5px] bg-slate-950 p-3 rounded-md border border-slate-800/50 text-emerald-400 max-h-[140px] overflow-y-auto space-y-1">
               {diagnosticLogs.map((log, index) => (
                 <div key={index} className="leading-tight">
                   <span className="text-slate-600 mr-1.5">&gt;&gt;</span>
@@ -452,7 +452,7 @@ export default function TestingCenter({
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-          <div className="bg-[#0B1120] p-3 rounded-xs border border-slate-850">
+          <div className="bg-[#0B1120] p-3 rounded-xs border border-slate-800/50">
             <div className="font-mono font-semibold text-slate-300 mb-1">Para ejecutar la Suite de Pruebas:</div>
             <pre className="font-mono text-[11px] text-cyan-400 bg-slate-950 p-2 border border-slate-900 rounded-xs">npm run test</pre>
             <p className="text-[10px] text-slate-500 font-sans mt-1.5 leading-tight">
@@ -460,7 +460,7 @@ export default function TestingCenter({
             </p>
           </div>
 
-          <div className="bg-[#0B1120] p-3 rounded-xs border border-slate-850">
+          <div className="bg-[#0B1120] p-3 rounded-xs border border-slate-800/50">
             <div className="font-mono font-semibold text-slate-300 mb-1">Estructura del archivo cargado:</div>
             <div className="font-mono text-[11px] text-pink-400 bg-slate-950 p-2 border border-slate-900 rounded-s">/src/utils/simulation.test.ts</div>
             <p className="text-[10px] text-slate-500 font-sans mt-1.5 leading-tight">

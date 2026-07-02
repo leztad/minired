@@ -20,6 +20,9 @@ import BandwidthMonitor from './components/BandwidthMonitor';
 import NetworkAICopilot from './components/NetworkAICopilot';
 import SpeedTest from './components/SpeedTest';
 import NetworkAudit from './components/NetworkAudit';
+import NetworkWiki from './components/NetworkWiki';
+import EventLogger from './components/EventLogger';
+import NetworkEnterpriseTools from './components/NetworkEnterpriseTools';
 
 const extractSubnetFromIp = (ip: string): string => {
   const parts = ip.trim().split('.');
@@ -341,7 +344,7 @@ export default function App() {
   const [calcCidr, setCalcCidr] = useState<number>(24);
   
   // Navigation
-  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red'>('vista_general');
+  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red' | 'wiki_soporte' | 'event_logger' | 'diseno_red'>('vista_general');
   const [sidebarSearch, setSidebarSearch] = useState<string>('');
   const [isLanTreeOpen, setIsLanTreeOpen] = useState<boolean>(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
@@ -352,9 +355,9 @@ export default function App() {
   const [aiError, setAiError] = useState<string | null>(null);
 
   // Live Alerts & Log center state
-  const [liveAlerts, setLiveAlerts] = useState<{ id: string; time: string; msg: string; type: 'success' | 'warning' | 'error' | 'info' }[]>([
-    { id: 'start', time: '23:39:10', msg: 'Monitor local asignado a interfaz Realtek PCIe Controller.', type: 'info' },
-    { id: 'ready', time: '23:39:55', msg: 'Socket Listener ICMP DHCP montado en puerto virtual. Esperando barrido inicial.', type: 'success' }
+  const [liveAlerts, setLiveAlerts] = useState<{ id: string; time: string; msg: string; type: 'success' | 'warning' | 'error' | 'info'; category?: string; code?: string }[]>([
+    { id: 'start', time: '09:30:10', msg: 'Monitor local asignado a interfaz Realtek PCIe Controller L2.', type: 'info', category: 'Sistema', code: 'SYS-100' },
+    { id: 'ready', time: '09:30:55', msg: 'Socket Listener ICMP DHCP montado en puerto virtual. Esperando barrido inicial.', type: 'success', category: 'Capa Enlace', code: 'LNK-200' }
   ]);
 
   // Port Scanner States
@@ -363,12 +366,48 @@ export default function App() {
   const [portScanResults, setPortScanResults] = useState<{ port: number; service: string; status: 'open' | 'closed'; risk: 'low' | 'medium' | 'high'; desc: string }[]>([]);
   const [activeScanningPort, setActiveScanningPort] = useState<number | null>(null);
 
-  const addAlert = (msg: string, type: 'success' | 'warning' | 'error' | 'info' = 'info') => {
+  const addAlert = (
+    msg: string, 
+    type: 'success' | 'warning' | 'error' | 'info' = 'info', 
+    category?: string, 
+    code?: string
+  ) => {
     const timestamp = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    
+    // Auto-detect category & code if not provided
+    let finalCategory = category;
+    let finalCode = code;
+    
+    if (!finalCategory || !finalCode) {
+      const lowerMsg = msg.toLowerCase();
+      if (lowerMsg.includes('sonda') || lowerMsg.includes('arp') || lowerMsg.includes('filtrado')) {
+        finalCategory = finalCategory || 'Sonda Real';
+        finalCode = finalCode || 'SND-401';
+      } else if (lowerMsg.includes('puerto') || lowerMsg.includes('escan') || lowerMsg.includes('seguridad') || lowerMsg.includes('intruso') || lowerMsg.includes('conflicto') || lowerMsg.includes('spoofing')) {
+        finalCategory = finalCategory || 'Seguridad';
+        finalCode = finalCode || 'SEC-302';
+      } else if (lowerMsg.includes('enlace') || lowerMsg.includes('cable') || lowerMsg.includes('física') || lowerMsg.includes('wifi') || lowerMsg.includes('desconectado') || lowerMsg.includes('poe')) {
+        finalCategory = finalCategory || 'Capa Física';
+        finalCode = finalCode || 'PHY-101';
+      } else if (lowerMsg.includes('demo') || lowerMsg.includes('simula') || lowerMsg.includes('simulado')) {
+        finalCategory = finalCategory || 'Simulación';
+        finalCode = finalCode || 'SIM-202';
+      } else if (lowerMsg.includes('icmp') || lowerMsg.includes('barrido') || lowerMsg.includes('ping')) {
+        finalCategory = finalCategory || 'Capa Red';
+        finalCode = finalCode || 'NET-201';
+      } else if (lowerMsg.includes('rstp') || lowerMsg.includes('convergencia') || lowerMsg.includes('tráfico') || lowerMsg.includes('switch') || lowerMsg.includes('puente')) {
+        finalCategory = finalCategory || 'Capa Enlace';
+        finalCode = finalCode || 'LNK-201';
+      } else {
+        finalCategory = finalCategory || 'Sistema';
+        finalCode = finalCode || 'SYS-101';
+      }
+    }
+
     setLiveAlerts(prev => [
-      { id: Math.random().toString(36).substring(2, 9), time: timestamp, msg, type },
+      { id: Math.random().toString(36).substring(2, 9), time: timestamp, msg, type, category: finalCategory, code: finalCode },
       ...prev
-    ].slice(0, 35)); // hold last 35 logs
+    ].slice(0, 50)); // hold last 50 logs
   };
 
   // Scan states
@@ -1635,9 +1674,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0F172A] font-sans text-xs text-slate-300">
+    <div className="min-h-screen flex flex-col bg-[#0B0F19] tech-grid font-sans text-xs text-slate-300">
       {/* HEADER BAR (Geometric Balance Theme) */}
-      <header className="bg-[#0B1120] text-slate-300 px-4 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-md z-40">
+      <header className="bg-[#070A13]/90 backdrop-blur-md text-slate-300 px-4 py-2.5 border-b border-slate-900/80 flex flex-wrap items-center justify-between gap-3 shadow-md z-40">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -1648,7 +1687,7 @@ export default function App() {
             {isMobileMenuOpen ? <X className="h-4.5 w-4.5" /> : <Menu className="h-4.5 w-4.5" />}
           </button>
 
-          <div className="bg-[#0f172a]/80 text-white px-2.5 py-1.5 rounded-xs font-semibold flex items-center gap-2.5 border border-slate-850 shadow-inner">
+          <div className="bg-[#0f172a]/80 text-white px-2.5 py-1.5 rounded-xs font-semibold flex items-center gap-2.5 border border-slate-800/50 shadow-inner">
             <div className="w-6 h-6 bg-cyan-500 rounded-sm flex items-center justify-center">
               <div className="w-3 h-3 border border-slate-900 bg-[#0F172A]" />
             </div>
@@ -1680,7 +1719,7 @@ export default function App() {
                     addAlert(`Se cambió la interfaz de red a "${val}". Segmento sugerido: ${matched.subnet}.`, 'info');
                   }
                 }}
-                className="bg-slate-950 text-slate-200 border border-slate-850 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-medium"
+                className="bg-slate-950 text-slate-200 border border-slate-800/50 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-medium"
               >
                 {activeInterfacesList.map(i => (
                   <option key={i.name} value={i.name}>
@@ -1718,7 +1757,7 @@ export default function App() {
                   />
                   <button 
                     onClick={handleSaveCustomIp} 
-                    className="text-emerald-450 hover:text-emerald-300 font-bold px-0.5 cursor-pointer text-[12px]"
+                    className="text-emerald-400 hover:text-emerald-300 font-bold px-0.5 cursor-pointer text-[12px]"
                     title="Confirmar IP real"
                   >
                     ✓
@@ -1802,7 +1841,7 @@ export default function App() {
                 localStorage.setItem('netmonitor_demo_mode', String(checked));
                 addAlert(checked ? "Modo Simulación DEMO activado: El escáner generará datos demostrativos y alarmas ficticias." : "Modo ESCANEO REAL activado: El escáner ahora mostrará con precisión quirúrgica únicamente tus dispositivos reales físicamente conectados mediante ARP y barrido ICMP.", "warning");
               }}
-              className="rounded-xs border-slate-850 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-amber-500"
+              className="rounded-xs border-slate-800/50 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-amber-500"
             />
             <span className="select-none text-[11px] font-bold font-sans">🧪 Modo Demo</span>
           </label>
@@ -1813,7 +1852,7 @@ export default function App() {
               type="checkbox" 
               checked={includeVirtuals}
               onChange={handleVirtualsChange}
-              className="rounded-xs border-slate-850 text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-cyan-500"
+              className="rounded-xs border-slate-800/50 text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-cyan-500"
             />
             <span className="select-none text-[11px] font-medium">Virtuales</span>
           </label>
@@ -1824,7 +1863,7 @@ export default function App() {
               type="checkbox" 
               checked={scanAllSegments}
               onChange={(e) => setScanAllSegments(e.target.checked)}
-              className="rounded-xs border-slate-850 text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-cyan-500"
+              className="rounded-xs border-slate-800/50 text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-cyan-500"
             />
             <span className="select-none text-[11px] font-medium text-cyan-400/90 font-bold">Escaneo Multi-Red</span>
           </label>
@@ -1838,7 +1877,7 @@ export default function App() {
                 value={subnetSegment}
                 onChange={(e) => setSubnetSegment(e.target.value)}
                 placeholder="192.168.1.0/24"
-                className="bg-slate-950 text-slate-200 text-center border border-slate-850 rounded-l-xs w-32 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-mono font-medium"
+                className="bg-slate-950 text-slate-200 text-center border border-slate-800/50 rounded-l-xs w-32 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-mono font-medium"
               />
               <button 
                 onClick={() => handleAutoSegment(true)}
@@ -1855,7 +1894,7 @@ export default function App() {
             <select 
               value={selectedInterval}
               onChange={(e) => setSelectedInterval(e.target.value)}
-              className="bg-slate-950 text-slate-300 border border-slate-850 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-sans"
+              className="bg-slate-950 text-slate-300 border border-slate-800/50 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-sans"
             >
               <option value="30 segundos">30 segundos</option>
               <option value="1 minuto">1 minuto</option>
@@ -1891,7 +1930,7 @@ export default function App() {
           </div>
 
           {/* CLOCK */}
-          <div className="border-l border-slate-850 pl-3 font-mono font-bold text-[13px] tracking-wider text-cyan-400 drop-shadow-sm w-20 text-right shrink-0">
+          <div className="border-l border-slate-800/50 pl-3 font-mono font-bold text-[13px] tracking-wider text-cyan-400 drop-shadow-sm w-20 text-right shrink-0">
             {currentTime || '9:34:52'}
           </div>
         </div>
@@ -1991,7 +2030,7 @@ export default function App() {
              {/* CONTENT - TAB 1: ARP-A PASTE */}
              {probeTab === 'arp' && (
                <div className="space-y-3.5">
-                 <div className="bg-slate-950/80 p-3 rounded border border-slate-850 text-[11px] leading-relaxed text-slate-300">
+                 <div className="bg-slate-950/80 p-3 rounded border border-slate-800/50 text-[11px] leading-relaxed text-slate-300">
                    <p className="font-semibold text-cyan-400 mb-1">💡 ¿Cómo funciona este método?</p>
                    Puedes sondear de forma pasiva tu red sin descargar nada. Abre la consola de tu ordenador, extrae la caché ARP de tu LAN en un segundo, y pégala aquí:
                    <ol className="list-decimal list-inside space-y-1 mt-2 text-slate-400 font-sans">
@@ -2063,7 +2102,7 @@ export default function App() {
                    Registra tu equipamiento favorito (Cámaras de Seguridad, NVR, Teléfonos, Smart TVs) manualmente. El panel interpretará sus marcas basándose en las tres primeras parejas de la dirección MAC.
                  </p>
  
-                 <div className="grid grid-cols-2 gap-3 bg-slate-950/60 p-4 rounded border border-slate-850">
+                 <div className="grid grid-cols-2 gap-3 bg-slate-950/60 p-4 rounded border border-slate-800/50">
                    <div>
                      <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Dirección IP *</label>
                      <input
@@ -2153,7 +2192,7 @@ export default function App() {
                  </div>
  
                  {/* PREVIEW CONTAINER */}
-                 <div className="max-h-[140px] overflow-y-auto border border-slate-800 rounded divide-y divide-slate-850 bg-slate-950/30">
+                 <div className="max-h-[140px] overflow-y-auto border border-slate-800 rounded divide-y divide-slate-800/30 bg-slate-950/30">
                    <div className="bg-slate-900 text-[10px] uppercase font-bold text-slate-400 p-2 tracking-wider flex justify-between">
                      <span>Dispositivos para Sonda Local ({manualDevicesList.length})</span>
                      {manualDevicesList.length > 0 && (
@@ -2206,7 +2245,7 @@ export default function App() {
              {/* CONTENT - TAB 3: RUN LOCAL NODE */}
              {probeTab === 'local' && (
                <div className="space-y-4">
-                 <div className="bg-slate-950/90 border border-slate-850 rounded-xs p-3.5 mb-2 font-sans">
+                 <div className="bg-slate-950/90 border border-slate-800/50 rounded-xs p-3.5 mb-2 font-sans">
                    <h4 className="text-[11px] font-bold text-cyan-400 mb-2 uppercase tracking-wider">Paso a paso para medición real / física directa:</h4>
                    <ol className="text-slate-300 text-[11px] space-y-2.5 list-decimal list-inside leading-snug font-sans">
                      <li>
@@ -2261,7 +2300,14 @@ export default function App() {
           </li>
           <li className="text-slate-600">›</li>
           <li className="bg-slate-800 px-2 py-0.5 rounded-sm text-slate-300 font-bold leading-none text-[10px] uppercase">
-            {activeView === 'vista_general' ? 'Vista general' : activeView === 'sensores' ? 'Sensores' : activeView === 'dispositivos' ? 'Dispositivos' : activeView === 'ancho_banda' ? 'Ancho de Banda' : 'Pruebas y Diagnóstico'}
+            {activeView === 'vista_general' ? 'Vista general' : 
+             activeView === 'sensores' ? 'Sensores' : 
+             activeView === 'dispositivos' ? 'Dispositivos' : 
+             activeView === 'ancho_banda' ? 'Ancho de Banda' : 
+             activeView === 'wiki_soporte' ? 'Wiki y Soporte' :
+             activeView === 'event_logger' ? 'Consola de Eventos' :
+             activeView === 'diseno_red' ? 'Herramientas L2/L3' :
+             'Pruebas y Diagnóstico'}
           </li>
         </ul>
 
@@ -2276,48 +2322,48 @@ export default function App() {
       </nav>
 
       {/* COLOR COUNTERS (Sleek Geometric Balance cards) */}
-      <section className="bg-[#0F172A] p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 border-b border-slate-855 shadow-xs">
+      <section className="bg-[#0B0F19] p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 border-b border-slate-900/80 shadow-md">
         {/* GREEN (OK) */}
-        <div className="bg-slate-900/40 border border-emerald-800/40 text-emerald-400 py-2.5 px-4 rounded-xs flex items-center justify-between shadow-xs">
+        <div className="bg-slate-950/30 border border-emerald-500/20 text-emerald-400 py-3.5 px-5 rounded-lg flex items-center justify-between shadow-lg status-breath-ok transition-all hover:bg-slate-950/50 hover:-translate-y-0.5 duration-300">
           <div>
             <div className="text-2xl font-light text-white font-mono leading-none">{counts.ok}</div>
-            <div className="text-[9px] tracking-wider font-semibold opacity-70 mt-1 font-display uppercase text-slate-400">OK</div>
+            <div className="text-[10px] tracking-wider font-semibold opacity-75 mt-1.5 font-display uppercase text-slate-400">OK</div>
           </div>
-          <CheckCircle2 className="h-5 w-5 opacity-50 text-emerald-500" />
+          <CheckCircle2 className="h-5 w-5 opacity-70 text-emerald-400" />
         </div>
 
         {/* YELLOW (Advertencia) */}
-        <div className="bg-slate-900/40 border border-amber-800/40 text-amber-500 py-2.5 px-4 rounded-xs flex items-center justify-between shadow-xs">
+        <div className="bg-slate-950/30 border border-amber-500/20 text-amber-500 py-3.5 px-5 rounded-lg flex items-center justify-between shadow-lg status-breath-warning transition-all hover:bg-slate-950/50 hover:-translate-y-0.5 duration-300">
           <div>
             <div className="text-2xl font-light text-white font-mono leading-none">{counts.advertencia}</div>
-            <div className="text-[9px] tracking-wider font-semibold opacity-70 mt-1 font-display uppercase text-slate-400">Advertencia</div>
+            <div className="text-[10px] tracking-wider font-semibold opacity-75 mt-1.5 font-display uppercase text-slate-400">Advertencia</div>
           </div>
-          <AlertTriangle className="h-5 w-5 opacity-50 text-amber-500" />
+          <AlertTriangle className="h-5 w-5 opacity-70 text-amber-400" />
         </div>
 
         {/* RED (Caído) */}
-        <div className="bg-slate-900/40 border border-rose-800/40 text-rose-500 py-2.5 px-4 rounded-xs flex items-center justify-between shadow-xs">
+        <div className="bg-slate-950/30 border border-rose-500/20 text-rose-500 py-3.5 px-5 rounded-lg flex items-center justify-between shadow-lg status-breath-danger transition-all hover:bg-slate-950/50 hover:-translate-y-0.5 duration-300">
           <div>
             <div className="text-2xl font-light text-white font-mono leading-none">{counts.caido}</div>
-            <div className="text-[9px] tracking-wider font-semibold opacity-70 mt-1 font-display uppercase text-slate-400">Caído</div>
+            <div className="text-[10px] tracking-wider font-semibold opacity-75 mt-1.5 font-display uppercase text-slate-400">Caído</div>
           </div>
-          <XCircle className="h-5 w-5 opacity-50 text-rose-500" />
+          <XCircle className="h-5 w-5 opacity-70 text-rose-400" />
         </div>
 
         {/* BLUE (Total) */}
-        <div className="bg-slate-900/40 border border-slate-800 text-cyan-400 py-2.5 px-4 rounded-xs flex items-center justify-between shadow-xs">
+        <div className="bg-slate-950/30 border border-cyan-500/15 text-cyan-400 py-3.5 px-5 rounded-lg flex items-center justify-between shadow-lg border-glow-cyan transition-all hover:bg-slate-950/50 hover:-translate-y-0.5 duration-300">
           <div>
             <div className="text-2xl font-light text-white font-mono leading-none">{counts.total}</div>
-            <div className="text-[9px] tracking-wider font-semibold opacity-70 mt-1 font-display uppercase text-slate-400">Total</div>
+            <div className="text-[10px] tracking-wider font-semibold opacity-75 mt-1.5 font-display uppercase text-slate-400">Total</div>
           </div>
-          <Layers className="h-5 w-5 opacity-50 text-cyan-500" />
+          <Layers className="h-5 w-5 opacity-70 text-cyan-400" />
         </div>
       </section>
 
       {/* THREE VIEW SPLIT CONTENT CONTAINER */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
         {/* LEFT SIDEBAR NAVBAR */}
-        <aside className={`${isMobileMenuOpen ? 'flex' : 'hidden'} md:flex w-full md:w-64 bg-[#0B1120] text-slate-300 p-3.5 border-r border-slate-850 flex-col gap-4 select-none flex-shrink-0`}>
+        <aside className={`${isMobileMenuOpen ? 'flex' : 'hidden'} md:flex w-full md:w-64 bg-[#070A13]/95 backdrop-blur-md text-slate-300 p-4 border-r border-slate-900/80 flex-col gap-4 select-none flex-shrink-0 transition-all duration-300`}>
           
           {/* SENSOR SEARCH BOX */}
           <div className="relative">
@@ -2326,7 +2372,7 @@ export default function App() {
               placeholder="Filtrar dispositivos..."
               value={sidebarSearch}
               onChange={(e) => setSidebarSearch(e.target.value)}
-              className="w-full bg-slate-950 text-slate-200 pl-8 pr-3 py-1.5 rounded-sm border border-slate-850 text-xs focus:outline-hidden focus:ring-1 focus:ring-cyan-500 font-sans"
+              className="w-full bg-slate-950/50 text-slate-200 pl-8.5 pr-3 py-1.5 rounded-md border border-slate-800/80 text-xs focus:outline-hidden focus:border-cyan-500/80 focus:ring-1 focus:ring-cyan-500/20 font-sans transition-all duration-300"
             />
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
           </div>
@@ -2444,6 +2490,51 @@ export default function App() {
                   <span className="ml-auto bg-emerald-500/10 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20">AUDITOR</span>
                 </button>
               </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveView('diseno_red'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'diseno_red' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-diseno-red-btn"
+                >
+                  <Layers className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Herramientas L2/L3</span>
+                  <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">EMPRESA</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveView('event_logger'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'event_logger' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-event-logger-btn"
+                >
+                  <Terminal className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Consola de Eventos</span>
+                  <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">LOGGER</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => { setActiveView('wiki_soporte'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'wiki_soporte' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-wiki-btn"
+                >
+                  <HelpCircle className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
+                  <span>Wiki y Soporte</span>
+                  <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">WIKI</span>
+                </button>
+              </li>
 
               {/* Collapsible Subnet Folder Entry */}
               <li className="pt-2">
@@ -2454,7 +2545,7 @@ export default function App() {
                   {isLanTreeOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                   <Globe className="h-3.5 w-3.5 text-cyan-400" />
                   <span className="flex-1 truncate">LAN {subnetSegment}</span>
-                  <span className="bg-slate-950 text-cyan-400 font-mono text-[9px] px-1.5 py-0.5 rounded-xs border border-slate-850">
+                  <span className="bg-slate-950 text-cyan-400 font-mono text-[9px] px-1.5 py-0.5 rounded-xs border border-slate-800/50">
                     {sidebarFilteredDevices.length}
                   </span>
                 </div>
@@ -2491,7 +2582,7 @@ export default function App() {
           </div>
 
           {/* PERSONALIZACIÓN DE ADAPTADOR FÍSICO */}
-          <div className="bg-slate-950 p-3 rounded-md border border-slate-850 shadow-inner text-slate-300">
+          <div className="bg-slate-950 p-3 rounded-md border border-slate-800/50 shadow-inner text-slate-300">
             <div className="flex items-center justify-between">
               <h5 className="font-semibold text-slate-200 flex items-center gap-1.5 text-[11px] font-display">
                 <Settings className="h-3.5 w-3.5 text-cyan-400" />
@@ -2586,7 +2677,7 @@ export default function App() {
           </div>
 
           {/* ACCESO DESDE CELULAR (From mockup details, bottom left sidebar) */}
-          <div className="bg-slate-950 p-3 rounded-md border border-slate-850 mt-auto shadow-inner text-slate-300">
+          <div className="bg-slate-950 p-3 rounded-md border border-slate-800/50 mt-auto shadow-inner text-slate-300">
             <h5 className="font-semibold text-slate-200 flex items-center gap-1.5 text-[11px] font-display">
               <Monitor className="h-3.5 w-3.5 text-cyan-400" />
               Acceso desde Celular (QR)
@@ -2624,14 +2715,14 @@ export default function App() {
                 : 'Para cuando descargas y ejecutas RedMonitor localmente en tu red Wi-Fi real:'}
             </p>
             
-            <div className="mt-1.5 text-cyan-400 font-mono font-medium truncate select-all text-[10px] bg-[#0c1222] p-1.5 rounded-sm border border-slate-850">
+            <div className="mt-1.5 text-cyan-400 font-mono font-medium truncate select-all text-[10px] bg-[#0c1222] p-1.5 rounded-sm border border-slate-800/50">
               {mobileAccessTab === 'cloud' && typeof window !== 'undefined' 
                 ? window.location.origin.replace('-dev-', '-pre-') 
                 : `http://${activeWorkstationInfo.localIp}:3000`}
             </div>
 
             {/* Dynamic QR Code generator for extreme convenience on real mobile phones */}
-            <div className="mt-2.5 flex flex-col items-center justify-center p-2 bg-slate-900/30 rounded border border-slate-850/80">
+            <div className="mt-2.5 flex flex-col items-center justify-center p-2 bg-slate-900/30 rounded border border-slate-800/40">
               <img 
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&color=22d3ee&bgcolor=090e1a&data=${encodeURIComponent(
                   mobileAccessTab === 'cloud' && typeof window !== 'undefined' 
@@ -2677,7 +2768,7 @@ export default function App() {
                 setCopiedSuccess(true);
                 setTimeout(() => setCopiedSuccess(false), 2000);
               }}
-              className="w-full mt-2.5 bg-slate-900 hover:bg-slate-850 active:scale-95 text-slate-300 font-semibold py-1.5 px-2 rounded-xs border border-slate-800 text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-colors"
+              className="w-full mt-2.5 bg-slate-900 hover:bg-slate-800/60 active:scale-95 text-slate-300 font-semibold py-1.5 px-2 rounded-xs border border-slate-800 text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-colors"
             >
               <Copy className="h-3 w-3" />
               {copiedSuccess ? '¡Enlace copiado!' : 'Copiar enlace público'}
@@ -2685,7 +2776,7 @@ export default function App() {
           </div>
 
           {/* TECHNICAL META PARAMETERS GRID */}
-          <div className="border-t border-slate-850 pt-3 text-[10px] space-y-1 text-slate-500 font-mono">
+          <div className="border-t border-slate-800/50 pt-3 text-[10px] space-y-1 text-slate-500 font-mono">
             <div className="flex justify-between">
               <span>Modo:</span>
               <span className="text-slate-400">Servidor (este PC)</span>
@@ -2706,7 +2797,7 @@ export default function App() {
         </aside>
 
         {/* WORKSPACE CONTENT AREA */}
-        <main className="flex-1 p-4 lg:p-5 overflow-y-auto space-y-4 bg-[#0F172A]">
+        <main className="flex-1 p-4 lg:p-6 overflow-y-auto space-y-6 bg-transparent">
           
           {/* RENDER CHOSEN COMPONENT PATH */}
           {activeView === 'vista_general' && (
@@ -2729,7 +2820,7 @@ export default function App() {
                     className={`px-3 py-2 rounded transition-all cursor-pointer text-xs font-semibold flex items-center gap-2 border ${
                       viewedSegmentFilter === 'all'
                         ? 'bg-slate-800 text-cyan-400 border-cyan-500/40 shadow-lg shadow-cyan-950/20'
-                        : 'bg-slate-950/50 text-slate-400 border-slate-850 hover:text-white hover:bg-slate-900/30'
+                        : 'bg-slate-950/50 text-slate-400 border-slate-800/50 hover:text-white hover:bg-slate-900/30'
                     }`}
                   >
                     <Globe className="h-3.5 w-3.5" />
@@ -2766,7 +2857,7 @@ export default function App() {
                           className={`px-3 py-2 rounded transition-all cursor-pointer text-xs font-semibold flex items-center gap-2 border ${
                             isActive
                               ? 'bg-slate-800 text-cyan-450 text-cyan-400 border-cyan-500/40 shadow-lg shadow-cyan-950/20'
-                              : 'bg-slate-950/50 text-slate-400 border-slate-855 hover:text-white hover:bg-slate-900/30'
+                              : 'bg-slate-950/50 text-slate-400 border-slate-800/60 hover:text-white hover:bg-slate-900/30'
                           }`}
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -2892,7 +2983,7 @@ export default function App() {
                 {/* LATEST STATUS PANEL */}
                 <div className="lg:col-span-4 bg-slate-900/50 p-4 border border-slate-800 shadow-xs flex flex-col justify-between rounded-md">
                   <div>
-                    <h3 className="text-xs font-semibold uppercase text-slate-400 font-display border-b border-slate-850 pb-2 mb-2 flex items-center gap-1.5">
+                    <h3 className="text-xs font-semibold uppercase text-slate-400 font-display border-b border-slate-800/50 pb-2 mb-2 flex items-center gap-1.5">
                       <Settings className="h-4 w-4 text-cyan-404 text-cyan-400" />
                       Último Diagnóstico
                     </h3>
@@ -2926,7 +3017,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-4 border-t border-slate-850 flex items-center gap-2">
+                  <div className="mt-4 pt-4 border-t border-slate-800/50 flex items-center gap-2">
                     <div className="p-1 px-1.5 bg-cyan-500/10 text-cyan-400 rounded-sm font-mono text-[9px] border border-cyan-800/30 uppercase tracking-widest font-bold">
                       INFO
                     </div>
@@ -2943,7 +3034,7 @@ export default function App() {
                 {/* ADVANCED SUBNET CALCULATOR */}
                 <div className="bg-slate-900/50 p-4 border border-slate-800 rounded-md shadow-xs flex flex-col justify-between">
                   <div>
-                    <h3 className="text-xs font-bold uppercase text-slate-400 font-display mb-3 border-b border-slate-850 pb-2 flex items-center gap-1.5">
+                    <h3 className="text-xs font-bold uppercase text-slate-400 font-display mb-3 border-b border-slate-800/50 pb-2 flex items-center gap-1.5">
                       <Sliders className="h-4 w-4 text-cyan-400" />
                       Calculadora de Subred IP e Inyección LAN
                     </h3>
@@ -2956,7 +3047,7 @@ export default function App() {
                           value={calcIp}
                           onChange={(e) => setCalcIp(e.target.value)}
                           placeholder="192.168.1.0"
-                          className="w-full bg-slate-950 text-slate-200 border border-slate-850 rounded px-2.5 py-1 text-xs font-mono focus:outline-hidden focus:border-cyan-500"
+                          className="w-full bg-slate-950 text-slate-200 border border-slate-800/50 rounded px-2.5 py-1 text-xs font-mono focus:outline-hidden focus:border-cyan-500"
                         />
                       </div>
                       <div>
@@ -2964,7 +3055,7 @@ export default function App() {
                         <select
                           value={calcCidr}
                           onChange={(e) => setCalcCidr(Number(e.target.value))}
-                          className="w-full bg-slate-950 text-slate-200 border border-slate-850 rounded px-2.5 py-1 text-xs font-mono focus:outline-hidden focus:border-cyan-500"
+                          className="w-full bg-slate-950 text-slate-200 border border-slate-800/50 rounded px-2.5 py-1 text-xs font-mono focus:outline-hidden focus:border-cyan-500"
                         >
                           <option value="30">/30 (4 hosts, 2 usables)</option>
                           <option value="29">/29 (8 hosts, 6 usables)</option>
@@ -2989,7 +3080,7 @@ export default function App() {
                         );
                       }
                       return (
-                        <div className="space-y-2 bg-slate-950/70 p-3 rounded-xs border border-slate-850 font-mono text-[10.5px]">
+                        <div className="space-y-2 bg-slate-950/70 p-3 rounded-xs border border-slate-800/50 font-mono text-[10.5px]">
                           <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-400">
                             <div className="flex justify-between border-b border-slate-900/40 py-0.5">
                               <span className="text-slate-500">Máscara:</span>
@@ -3019,8 +3110,8 @@ export default function App() {
                           
                           {/* Binary mask rendering to look extremely pro */}
                           <div className="border-t border-slate-900 pt-2 text-[9px] text-slate-500 leading-tight space-y-0.5 font-semibold">
-                            <div className="truncate"><span className="text-slate-550 font-sans mr-2">IP (Binario):</span>{ans.binaryIp}</div>
-                            <div className="truncate"><span className="text-slate-550 font-sans mr-2">Netmask (Bin):</span>{ans.binaryMask}</div>
+                            <div className="truncate"><span className="text-slate-500 font-sans mr-2">IP (Binario):</span>{ans.binaryIp}</div>
+                            <div className="truncate"><span className="text-slate-500 font-sans mr-2">Netmask (Bin):</span>{ans.binaryMask}</div>
                           </div>
                         </div>
                       );
@@ -3049,7 +3140,7 @@ export default function App() {
                 {/* LIVE ALERTS AND LOG REPORT PANEL */}
                 <div className="bg-slate-900/50 p-4 border border-slate-800 rounded-md shadow-xs flex flex-col justify-between w-full">
                   <div>
-                    <div className="flex justify-between items-center border-b border-slate-850 pb-2 mb-2">
+                    <div className="flex justify-between items-center border-b border-slate-800/50 pb-2 mb-2">
                       <h3 className="text-xs font-bold uppercase text-slate-400 font-display flex items-center gap-1.5">
                         <Terminal className="h-4 w-4 text-emerald-400 animate-pulse" />
                         Registro de Actividad y Alertas de Red
@@ -3077,7 +3168,7 @@ export default function App() {
                               alert.type === 'success' ? 'bg-emerald-500/5 border-emerald-950/20 text-emerald-350' :
                               alert.type === 'warning' ? 'bg-amber-500/5 border-amber-950/20 text-amber-300' :
                               alert.type === 'error' ? 'bg-red-500/5 border-red-950/20 text-red-350' :
-                              'bg-slate-950/50 border-slate-850/60 text-slate-400'
+                              'bg-slate-950/50 border-slate-800/30 text-slate-400'
                             }`}
                           >
                             <span className="text-[9px] text-slate-500 select-none font-semibold whitespace-nowrap pt-0.5">{alert.time}</span>
@@ -3090,7 +3181,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="text-[9px] text-slate-500 font-mono text-left pt-2 border-t border-slate-850/40 mt-3 flex items-center gap-1">
+                  <div className="text-[9px] text-slate-500 font-mono text-left pt-2 border-t border-slate-800/20 mt-3 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping shrink-0" />
                     <span>Syslog de red activo escuchando tráfico en Loopback local y ARP.</span>
                   </div>
@@ -3104,7 +3195,7 @@ export default function App() {
                 {/* TOP LATENCIA */}
                 <div className="bg-slate-900/50 p-4 border border-slate-800 rounded-md shadow-xs flex flex-col justify-between">
                   <div>
-                    <h3 className="text-xs font-semibold uppercase text-slate-400 font-display mb-3 border-b border-slate-850 pb-2 flex items-center gap-1.5">
+                    <h3 className="text-xs font-semibold uppercase text-slate-400 font-display mb-3 border-b border-slate-800/50 pb-2 flex items-center gap-1.5">
                       <AlertTriangle className="h-4 w-4 text-amber-550 text-amber-500" />
                       Top Latencias Activas
                     </h3>
@@ -3122,7 +3213,7 @@ export default function App() {
                             <li 
                               key={d.id} 
                               onClick={() => setSelectedDevice(d)}
-                              className="flex items-center justify-between p-2 rounded-xs bg-slate-950/40 border border-slate-855 hover:border-cyan-500/30 hover:bg-slate-900/50 cursor-pointer text-xs transition-all"
+                              className="flex items-center justify-between p-2 rounded-xs bg-slate-950/40 border border-slate-800/60 hover:border-cyan-500/30 hover:bg-slate-900/50 cursor-pointer text-xs transition-all"
                             >
                               <div className="flex items-center gap-2">
                                 <span className="font-mono text-slate-600">#{index+1}</span>
@@ -3145,7 +3236,7 @@ export default function App() {
                 {/* DISPOSITIVOS RECIENTES */}
                 <div className="bg-slate-900/50 p-4 border border-slate-800 rounded-md shadow-xs flex flex-col justify-between">
                   <div>
-                    <h3 className="text-xs font-semibold uppercase text-slate-400 font-display mb-3 border-b border-slate-850 pb-2 flex items-center gap-1.5">
+                    <h3 className="text-xs font-semibold uppercase text-slate-400 font-display mb-3 border-b border-slate-800/50 pb-2 flex items-center gap-1.5">
                       <Server className="h-4 w-4 text-cyan-400" />
                       Servidores & Host Encontrados
                     </h3>
@@ -3185,14 +3276,14 @@ export default function App() {
                 {/* SIMULACION MANUAL SETTINGS HELP */}
                 <div className="bg-slate-900/50 p-4 border border-slate-800 rounded-md shadow-xs flex flex-col justify-between">
                   <div>
-                    <h3 className="text-xs font-semibold uppercase text-slate-400 font-display mb-2 border-b border-slate-850 pb-2 flex items-center gap-1.5">
+                    <h3 className="text-xs font-semibold uppercase text-slate-400 font-display mb-2 border-b border-slate-800/50 pb-2 flex items-center gap-1.5">
                       <HelpCircle className="h-4 w-4 text-slate-500" />
                       Información de Conectividad
                     </h3>
                     <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
                       RedMonitor escanea simultáneamente múltiples sockets utilizando subprocesos ICMP. Para inspeccionar en detalle el estado de cualquier sistema, haz clic en el mapa de subred o navega a la sección de sensores individuales.
                     </p>
-                    <div className="bg-[#0B1120] p-2.5 border border-slate-850 rounded-xs mt-3 font-mono text-[10px] leading-tight space-y-1">
+                    <div className="bg-[#0B1120] p-2.5 border border-slate-800/50 rounded-xs mt-3 font-mono text-[10px] leading-tight space-y-1">
                       <div className="flex justify-between text-slate-500">
                         <span>Peticiones:</span>
                         <span className="text-slate-350">Ping ICMP ECHO</span>
@@ -3266,11 +3357,27 @@ export default function App() {
             <NetworkAudit devices={devices} onAddLog={addAlert} />
           )}
 
+          {activeView === 'wiki_soporte' && (
+            <NetworkWiki />
+          )}
+
+          {activeView === 'event_logger' && (
+            <EventLogger 
+              logs={liveAlerts} 
+              onAddLog={addAlert} 
+              onClearLogs={() => setLiveAlerts([])} 
+            />
+          )}
+
+          {activeView === 'diseno_red' && (
+            <NetworkEnterpriseTools />
+          )}
+
         </main>
       </div>
 
       {/* FOOTER BAR CHROME (Correct inspired credit line) */}
-      <footer className="bg-[#0B1120] border-t border-slate-850 px-4 py-2.5 text-[11px] text-slate-500 flex flex-wrap items-center justify-between select-none font-mono z-30">
+      <footer className="bg-[#0B1120] border-t border-slate-800/50 px-4 py-2.5 text-[11px] text-slate-500 flex flex-wrap items-center justify-between select-none font-mono z-30">
         <div>
           {isScanning ? (
             <span className="text-cyan-400 font-bold flex items-center gap-1">
@@ -3296,7 +3403,7 @@ export default function App() {
         return (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
             <div className="bg-[#0F172A] rounded-xs border border-slate-800 w-full max-w-sm shadow-2xl overflow-hidden font-sans">
-              <div className="bg-[#0B1120] text-slate-100 border-b border-slate-850 px-4 py-3 flex items-center justify-between">
+              <div className="bg-[#0B1120] text-slate-100 border-b border-slate-800/50 px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Cpu className="h-4 w-4 text-cyan-400" />
                   <h3 className="text-xs font-bold uppercase tracking-wide font-display text-cyan-400 text-left">
@@ -3314,7 +3421,7 @@ export default function App() {
               <div className="p-4 space-y-4">
                 
                 {/* Core header of the device state */}
-                <div className="bg-slate-950/40 p-3 rounded-xs border border-slate-850/80 flex items-center gap-4">
+                <div className="bg-slate-950/40 p-3 rounded-xs border border-slate-800/40 flex items-center gap-4">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                     activeDiagDevice.estado === 'OK' ? 'bg-emerald-500/10 text-emerald-400' :
                     activeDiagDevice.estado === 'Advertencia' ? 'bg-amber-500/10 text-amber-500' :
@@ -3330,7 +3437,7 @@ export default function App() {
                           type="text"
                           value={tempName}
                           onChange={(e) => setTempName(e.target.value)}
-                          className="bg-slate-900 border border-slate-750 text-slate-200 text-[11px] px-2 py-0.5 rounded focus:outline-hidden focus:border-cyan-500 w-full"
+                          className="bg-slate-900 border border-slate-800/30 text-slate-200 text-[11px] px-2 py-0.5 rounded focus:outline-hidden focus:border-cyan-500 w-full"
                           maxLength={32}
                           autoFocus
                           onKeyDown={(e) => {
@@ -3394,7 +3501,7 @@ export default function App() {
                 </div>
 
                 {/* TABS SELECTOR IN MODAL */}
-                <div className="flex border-b border-slate-850 text-xs">
+                <div className="flex border-b border-slate-800/50 text-xs">
                   <button
                     onClick={() => setModalTab('info')}
                     className={`flex-1 py-1.5 font-bold tracking-wide uppercase transition-all duration-150 text-center cursor-pointer ${
@@ -3424,7 +3531,7 @@ export default function App() {
                       <h5 className="font-bold uppercase text-slate-500 text-[10px] tracking-wider font-display text-left">
                         PARÁMETROS DEL HOST
                       </h5>
-                      <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xs border border-slate-850/50 font-mono text-[11px] text-slate-300">
+                      <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xs border border-slate-800/25 font-mono text-[11px] text-slate-300">
                         <div>
                           <span className="text-slate-500 block text-[9px] text-left">MAC ADDRESS</span>
                           <span className="text-slate-200 font-semibold font-mono text-left block">{activeDiagDevice.mac}</span>
@@ -3450,7 +3557,7 @@ export default function App() {
                              {activeDiagDevice.totalConsumido !== undefined ? `${Math.round(activeDiagDevice.totalConsumido)} MB` : '0 MB'}
                            </span>
                         </div>
-                        <div className="col-span-2 border-t border-slate-850/60 pt-2 mt-1">
+                        <div className="col-span-2 border-t border-slate-800/30 pt-2 mt-1">
                            <span className="text-slate-500 block text-[9px] text-left">ESTIMACIÓN MARCA / FABRICANTE</span>
                            <span className="text-cyan-400 font-semibold block text-left font-sans">
                              {activeDiagDevice.vendor && activeDiagDevice.vendor !== '—' && !activeDiagDevice.vendor.toLowerCase().includes('genérico') && !activeDiagDevice.vendor.toLowerCase().includes('generico') && activeDiagDevice.vendor !== 'Dispositivo de Red Activo'
@@ -3471,7 +3578,7 @@ export default function App() {
                       ) : (
                         <div className="space-y-2">
                           {/* Ping Sensor row */}
-                          <div className="flex items-center justify-between p-2 rounded-xs bg-slate-950/25 border border-slate-850/60 text-slate-300">
+                          <div className="flex items-center justify-between p-2 rounded-xs bg-slate-950/25 border border-slate-800/30 text-slate-300">
                             <div className="text-left">
                               <div className="font-semibold text-slate-300 text-left">Sensor Ping ICMP</div>
                               <span className="text-[10px] text-slate-500 font-mono text-left block">Verifica respuesta de eco</span>
@@ -3507,7 +3614,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="space-y-3.5 text-xs text-slate-300">
-                    <div className="flex justify-between items-center border-b border-slate-850 pb-1.5">
+                    <div className="flex justify-between items-center border-b border-slate-800/50 pb-1.5">
                       <h5 className="font-bold uppercase text-slate-500 text-[10px] tracking-wider font-display text-left">
                         EXPLORADOR DE PUERTOS LOCAL
                       </h5>
@@ -3520,7 +3627,7 @@ export default function App() {
 
                     {portScanStatus === 'idle' && (
                       <div className="text-center py-5 space-y-3">
-                        <Terminal className="h-8 w-8 text-slate-550 mx-auto opacity-40 text-slate-500" />
+                        <Terminal className="h-8 w-8 text-slate-500 mx-auto opacity-40 text-slate-500" />
                         <p className="text-[11px] text-slate-400 leading-relaxed font-sans max-w-xs mx-auto">
                           Inspeccione los puertos TCP más comunes de este sistema para buscar configuraciones vulnerables o servicios expuestos.
                         </p>
@@ -3540,13 +3647,13 @@ export default function App() {
                           <span>Progreso de Escaneo TCP...</span>
                           <span>{portScanProgress}%</span>
                         </div>
-                        <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-850">
+                        <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800/50">
                           <div 
                             className="bg-cyan-400 h-full transition-all duration-200 ease-out shadow-inner"
                             style={{ width: `${portScanProgress}%` }}
                           />
                         </div>
-                        <div className="max-h-[160px] overflow-y-auto space-y-1.5 bg-slate-950/40 p-2 border border-slate-850 rounded-xs pr-1">
+                        <div className="max-h-[160px] overflow-y-auto space-y-1.5 bg-slate-950/40 p-2 border border-slate-800/50 rounded-xs pr-1">
                           {portScanResults.map(r => (
                             <div key={r.port} className="flex justify-between items-center p-1 font-mono text-[10px] border-b border-slate-900/40">
                               <span className="text-slate-300">{r.port}/tcp ({r.service})</span>
@@ -3555,7 +3662,7 @@ export default function App() {
                                 r.status === 'open' 
                                   ? r.risk === 'high' ? 'bg-rose-500/15 text-rose-450 text-rose-400 border border-rose-500/20' 
                                     : r.risk === 'medium' ? 'bg-amber-500/15 text-amber-500 border border-amber-500/20'
-                                    : 'bg-emerald-500/10 text-emerald-450 text-emerald-400'
+                                    : 'bg-emerald-500/10 text-emerald-400 text-emerald-400'
                                   : 'bg-slate-900 text-slate-600'
                               }`}>
                                 {r.status === 'open' ? 'Abierto' : 'Cerrado'}
@@ -3582,7 +3689,7 @@ export default function App() {
                           </button>
                         </div>
                         
-                        <div className="max-h-[165px] overflow-y-auto space-y-1 bg-slate-950 p-2.5 rounded-xs border border-slate-850 pr-1">
+                        <div className="max-h-[165px] overflow-y-auto space-y-1 bg-slate-950 p-2.5 rounded-xs border border-slate-800/50 pr-1">
                           {portScanResults.map(r => (
                             <div key={r.port} className="flex items-center justify-between p-1 border-b border-slate-900 text-[10.5px]">
                               <div className="text-left">
@@ -3638,7 +3745,7 @@ export default function App() {
               </div>
 
               {/* Modal action Buttons footer */}
-              <div className="bg-slate-900 px-4 py-3 border-t border-slate-850 flex justify-end gap-2">
+              <div className="bg-slate-900 px-4 py-3 border-t border-slate-800/50 flex justify-end gap-2">
                 <button 
                   onClick={() => setSelectedDevice(null)}
                   className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 text-xs font-bold font-sans py-1.5 px-6 rounded-xs cursor-pointer transition-colors"

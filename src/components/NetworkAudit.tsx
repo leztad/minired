@@ -465,7 +465,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
             onClick={copyAsMarkdown}
-            className="bg-slate-900 hover:bg-slate-850 active:scale-95 text-slate-300 font-semibold py-1.5 px-3 rounded-xs border border-slate-800 text-[11px] flex items-center gap-1.5 cursor-pointer transition-colors"
+            className="bg-slate-900 hover:bg-slate-800/60 active:scale-95 text-slate-300 font-semibold py-1.5 px-3 rounded-xs border border-slate-800 text-[11px] flex items-center gap-1.5 cursor-pointer transition-colors"
             title="Copiar reporte Markdown completo para email o documentación"
           >
             <Copy className="h-3.5 w-3.5 text-cyan-400" />
@@ -505,7 +505,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         
         {/* Nivel de Seguridad Shield */}
-        <div className="bg-slate-900/50 p-4 border border-slate-800 hover:border-slate-750 rounded-md flex items-center gap-4 transition-all">
+        <div className="bg-slate-900/50 p-4 border border-slate-800 hover:border-slate-800/30 rounded-md flex items-center gap-4 transition-all">
           <div className="p-3 bg-cyan-950/20 text-cyan-405 border border-cyan-800/20 text-cyan-400 rounded-sm shrink-0">
             {totals.score > 80 ? (
               <ShieldCheck className="h-7 w-7 text-emerald-400" />
@@ -525,7 +525,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         </div>
 
         {/* Total Direcciones MAC resolubles */}
-        <div className="bg-slate-900/50 p-4 border border-slate-800 hover:border-slate-750 rounded-md flex items-center gap-4 transition-all">
+        <div className="bg-slate-900/50 p-4 border border-slate-800 hover:border-slate-800/30 rounded-md flex items-center gap-4 transition-all">
           <div className="p-3 bg-amber-955/20 text-amber-500/20 text-amber-400 border border-amber-950 rounded-sm shrink-0">
             <Terminal className="h-7 w-7" />
           </div>
@@ -541,7 +541,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         </div>
 
         {/* Sonda General */}
-        <div className="bg-slate-900/50 p-4 border border-slate-800 hover:border-slate-750 rounded-md flex items-center gap-4 transition-all">
+        <div className="bg-slate-900/50 p-4 border border-slate-800 hover:border-slate-800/30 rounded-md flex items-center gap-4 transition-all">
           <div className="p-3 bg-purple-950/20 text-purple-400 border border-purple-900 rounded-sm shrink-0">
             <Network className="h-7 w-7" />
           </div>
@@ -559,7 +559,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       </div>
 
       {/* FILTER CONTROLS BAR */}
-      <div className="bg-slate-900/30 p-3 rounded-md border border-slate-850 flex flex-col sm:flex-row items-center gap-3 justify-between">
+      <div className="bg-slate-900/30 p-3 rounded-md border border-slate-800/50 flex flex-col sm:flex-row items-center gap-3 justify-between">
         
         {/* Search Field */}
         <div className="relative w-full sm:max-w-xs">
@@ -569,7 +569,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por IP, MAC o Host..."
-            className="w-full bg-slate-950 text-slate-200 border border-slate-850 rounded pl-8 pr-3 py-1.5 text-xs font-semibold focus:outline-hidden focus:border-cyan-500 font-sans"
+            className="w-full bg-slate-950 text-slate-200 border border-slate-800/50 rounded pl-8 pr-3 py-1.5 text-xs font-semibold focus:outline-hidden focus:border-cyan-500 font-sans"
           />
         </div>
 
@@ -580,7 +580,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
           <select
             value={filterSegment}
             onChange={(e) => setFilterSegment(e.target.value)}
-            className="bg-slate-950 border border-slate-850 text-slate-350 rounded px-2.5 py-1 text-xs font-semibold focus:outline-hidden focus:border-cyan-500"
+            className="bg-slate-950 border border-slate-800/50 text-slate-350 rounded px-2.5 py-1 text-xs font-semibold focus:outline-hidden focus:border-cyan-500"
           >
             <option value="all">Ver Todos los Segmentos</option>
             {activeSegments.map(seg => (
@@ -596,7 +596,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#0B1120] text-slate-400 text-[10px] font-mono border-b border-slate-850 uppercase select-none">
+              <tr className="bg-[#0B1120] text-slate-400 text-[10px] font-mono border-b border-slate-800/50 uppercase select-none">
                 <th className="p-3">Estado</th>
                 <th className="p-3">Dirección IP</th>
                 <th className="p-3">Dirección MAC</th>
@@ -606,7 +606,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                 <th className="p-3">Segmento Local</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-850 font-sans text-xs text-slate-300">
+            <tbody className="divide-y divide-slate-800/30 font-sans text-xs text-slate-300">
               {filteredDevices.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-10 text-center text-slate-500 italic max-w-sm">
@@ -641,7 +641,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                       </td>
 
                       {/* MAC ADDRESS CLIENT HIGHLIGHTED */}
-                      <td className="p-3 font-mono font-semibold tracking-wide text-slate-200 select-all border-l border-slate-850 bg-slate-950/20">
+                      <td className="p-3 font-mono font-semibold tracking-wide text-slate-200 select-all border-l border-slate-800/50 bg-slate-950/20">
                         {d.mac}
                       </td>
 

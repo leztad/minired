@@ -97,10 +97,10 @@ export default function NetworkAICopilot({
   };
 
   return (
-    <div className="bg-[#0B1120] p-4 md:p-6 rounded-xs border border-slate-850 flex-1 flex flex-col gap-6 animate-fade-in text-slate-100 max-w-4xl mx-auto w-full">
+    <div className="bg-[#0B1120] p-4 md:p-6 rounded-xs border border-slate-800/50 flex-1 flex flex-col gap-6 animate-fade-in text-slate-100 max-w-4xl mx-auto w-full">
       
       {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-850 pb-4 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800/50 pb-4 gap-4">
         <div className="text-left">
           <div className="flex items-center gap-2 mb-1">
             <Brain className="h-5 w-5 text-purple-400 animate-pulse" />
@@ -137,26 +137,26 @@ export default function NetworkAICopilot({
 
       {/* CORE ENVIRONMENT VALUES READ */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-slate-900/50 p-3 rounded-xs border border-slate-850 text-left">
+        <div className="bg-slate-900/50 p-3 rounded-xs border border-slate-800/50 text-left">
           <span className="text-[9px] text-slate-500 block uppercase font-bold tracking-wider font-display mb-1">Subred Monitoreada</span>
           <span className="font-mono text-cyan-400 text-xs font-semibold">{subnetSegment}</span>
         </div>
-        <div className="bg-slate-900/50 p-3 rounded-xs border border-slate-850 text-left">
+        <div className="bg-slate-900/50 p-3 rounded-xs border border-slate-800/50 text-left">
           <span className="text-[9px] text-slate-500 block uppercase font-bold tracking-wider font-display mb-1">Anomalía Inyectada</span>
           <span className={`text-xs font-semibold font-sans ${activeAnomaly !== 'none' ? 'text-amber-500' : 'text-emerald-400'}`}>
             {getAnomalyLabel(activeAnomaly)}
           </span>
         </div>
-        <div className="bg-slate-900/50 p-3 rounded-xs border border-slate-850 text-left">
+        <div className="bg-slate-900/50 p-3 rounded-xs border border-slate-800/50 text-left">
           <span className="text-[9px] text-slate-500 block uppercase font-bold tracking-wider font-display mb-1">Dispositivos a Examinar</span>
-          <span className="font-mono text-slate-250 text-slate-200 text-xs font-semibold">
+          <span className="font-mono text-slate-300 text-slate-200 text-xs font-semibold">
             {devices.filter(d => d.estado !== 'No_Escaneado').length} activos en capa
           </span>
         </div>
       </div>
 
       {/* MAIN VIEWPORT */}
-      <div className="flex-1 min-h-[300px] flex flex-col justify-center items-center bg-slate-950/40 p-4 border border-slate-850 rounded-xs">
+      <div className="flex-1 min-h-[300px] flex flex-col justify-center items-center bg-slate-950/40 p-4 border border-slate-800/50 rounded-xs">
         {loading && (
           <div className="text-center py-10 max-w-md mx-auto space-y-4 animate-fade-in">
             <div className="relative w-16 h-16 mx-auto">
@@ -186,7 +186,7 @@ export default function NetworkAICopilot({
               <p className="font-sans text-rose-400 text-xs font-bold uppercase tracking-wider">
                 Error en Diagnóstico
               </p>
-              <p className="text-[11px] text-slate-400 leading-relaxed font-mono bg-slate-950 p-3 rounded-xs border border-slate-850 select-text text-left w-full">
+              <p className="text-[11px] text-slate-400 leading-relaxed font-mono bg-slate-950 p-3 rounded-xs border border-slate-800/50 select-text text-left w-full">
                 {errorMsg}
               </p>
               {!(errorMsg.includes("503") || errorMsg.toLowerCase().includes("saturados")) ? (
@@ -222,7 +222,7 @@ export default function NetworkAICopilot({
 
         {!loading && !errorMsg && report && (
           <div className="w-full text-left flex flex-col h-full select-text animate-fade-in">
-            <div className="flex justify-between items-center bg-[#0B1120] p-2.5 rounded-sm border-b border-slate-850 mb-4 px-4 font-mono text-[10px]">
+            <div className="flex justify-between items-center bg-[#0B1120] p-2.5 rounded-sm border-b border-slate-800/50 mb-4 px-4 font-mono text-[10px]">
               <span className="text-slate-500 flex items-center gap-1">
                 <Terminal className="h-3.5 w-3.5 text-cyan-400" />
                 informe_gemini_diagnostico.md • Generación Concluida
@@ -247,7 +247,7 @@ export default function NetworkAICopilot({
       </div>
 
       {/* QUICK SECURITY EDUCATION NOTES */}
-      <div className="bg-slate-900/30 p-4 border border-slate-850 rounded-xs text-left">
+      <div className="bg-slate-900/30 p-4 border border-slate-800/50 rounded-xs text-left">
         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 font-display flex items-center gap-1.5">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
           Nota Educativa sobre Seguridad LAN

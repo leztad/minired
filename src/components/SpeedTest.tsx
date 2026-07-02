@@ -270,7 +270,7 @@ Jitter: ${record.jitter} ms
         <div className="lg:col-span-8 bg-slate-900/50 p-6 border border-slate-800 rounded-md shadow-xs flex flex-col items-center justify-center relative min-h-[420px]">
           
           {/* TOP CONFIG BAR */}
-          <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3 mb-6 border-b border-slate-850 pb-4 text-xs">
+          <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3 mb-6 border-b border-slate-800/50 pb-4 text-xs">
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Server className="h-4 w-4 text-cyan-400 shrink-0" />
               <div className="text-left">
@@ -279,7 +279,7 @@ Jitter: ${record.jitter} ms
                   value={selectedServer}
                   onChange={(e) => setSelectedServer(e.target.value)}
                   disabled={isRunning}
-                  className="bg-slate-950 border border-slate-850 rounded px-2 py-1 font-semibold text-slate-350 focus:outline-hidden focus:border-cyan-500 text-[11px] disabled:opacity-50"
+                  className="bg-slate-950 border border-slate-800/50 rounded px-2 py-1 font-semibold text-slate-350 focus:outline-hidden focus:border-cyan-500 text-[11px] disabled:opacity-50"
                 >
                   <option value="Buenos Aires - Telecom Argentina">Buenos Aires - Telecom Argentina (10G)</option>
                   <option value="Santiago de Chile - Entel Soluciones">Santiago de Chile - Entel (10G)</option>
@@ -299,7 +299,7 @@ Jitter: ${record.jitter} ms
                   onChange={(e) => setSelectedProvider(e.target.value)}
                   disabled={isRunning}
                   placeholder="Ej. Fibertel / Claro"
-                  className="bg-slate-950 border border-slate-850 rounded px-2.5 py-1 text-slate-300 font-semibold focus:outline-hidden focus:border-cyan-500 text-[11px] w-full sm:w-48 disabled:opacity-50"
+                  className="bg-slate-950 border border-slate-800/50 rounded px-2.5 py-1 text-slate-300 font-semibold focus:outline-hidden focus:border-cyan-500 text-[11px] w-full sm:w-48 disabled:opacity-50"
                 />
               </div>
             </div>
@@ -408,10 +408,10 @@ Jitter: ${record.jitter} ms
           </div>
 
           {/* REAL TIME THREE-GAUGE LOWER VALUES */}
-          <div className="grid grid-cols-4 gap-2 w-full mt-6 bg-[#0B1120]/40 p-3 rounded border border-slate-850">
+          <div className="grid grid-cols-4 gap-2 w-full mt-6 bg-[#0B1120]/40 p-3 rounded border border-slate-800/50">
             
             {/* Ping Card */}
-            <div className="text-center space-y-1 border-r border-slate-850/60 p-1">
+            <div className="text-center space-y-1 border-r border-slate-800/30 p-1">
               <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Ping (latencia)</span>
               <div className="flex items-center justify-center gap-1">
                 <Clock className="h-3.5 w-3.5 text-cyan-400" />
@@ -422,7 +422,7 @@ Jitter: ${record.jitter} ms
             </div>
 
             {/* Jitter Card */}
-            <div className="text-center space-y-1 border-r border-slate-850/60 p-1">
+            <div className="text-center space-y-1 border-r border-slate-800/30 p-1">
               <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Jitter (variación)</span>
               <div className="flex items-center justify-center gap-1">
                 <Sparkles className="h-3.5 w-3.5 text-purple-400" />
@@ -433,7 +433,7 @@ Jitter: ${record.jitter} ms
             </div>
 
             {/* Descarga Card */}
-            <div className="text-center space-y-1 border-r border-slate-850/60 p-1">
+            <div className="text-center space-y-1 border-r border-slate-800/30 p-1">
               <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Descarga</span>
               <div className="flex items-center justify-center gap-1">
                 <HardDriveDownload className={`h-3.5 w-3.5 ${testStage === 'download' ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
@@ -473,7 +473,7 @@ Jitter: ${record.jitter} ms
         {/* SIDE PANEL - HISTORIC RESULTS */}
         <div className="lg:col-span-4 bg-slate-900/50 p-4 border border-slate-800 rounded-md shadow-xs flex flex-col justify-between">
           <div className="space-y-3">
-            <div className="flex justify-between items-center border-b border-slate-850 pb-2.5">
+            <div className="flex justify-between items-center border-b border-slate-800/50 pb-2.5">
               <h3 className="text-xs font-bold uppercase text-slate-400 font-display flex items-center gap-1.5">
                 <Clock className="h-4 w-4 text-cyan-400" />
                 Auditoría Histórica de Testeo
@@ -497,11 +497,11 @@ Jitter: ${record.jitter} ms
                 recentTests.map((test) => (
                   <div 
                     key={test.id} 
-                    className="p-2.5 rounded-sm bg-slate-950/40 border border-slate-850 hover:border-slate-750 flex flex-col gap-1.5 transition-all"
+                    className="p-2.5 rounded-sm bg-slate-950/40 border border-slate-800/50 hover:border-slate-800/30 flex flex-col gap-1.5 transition-all"
                   >
                     <div className="flex justify-between items-center text-[10px]">
                       <span className="text-slate-500 font-medium font-sans">{test.timestamp}</span>
-                      <span className="text-[8.5px] bg-slate-900 border border-slate-800 text-slate-450 px-1 hover:text-cyan-300 transition-colors uppercase truncate max-w-[120px]" title={test.server}>
+                      <span className="text-[8.5px] bg-slate-900 border border-slate-800 text-slate-400 px-1 hover:text-cyan-300 transition-colors uppercase truncate max-w-[120px]" title={test.server}>
                         {test.server.split('-')[0]}
                       </span>
                     </div>
@@ -533,7 +533,7 @@ Jitter: ${record.jitter} ms
             </div>
           </div>
 
-          <div className="bg-slate-950 p-2.5 border border-slate-850 rounded-xs mt-3 text-[10px] text-slate-500 space-y-1 font-mono">
+          <div className="bg-slate-950 p-2.5 border border-slate-800/50 rounded-xs mt-3 text-[10px] text-slate-500 space-y-1 font-mono">
             <span className="text-[10px] font-semibold text-slate-400 block uppercase font-sans mb-1">Nota del sistema:</span>
             <p className="leading-tight font-sans text-slate-500">
               Las velocidades de bajada (Download) y subida (Upload) simulan la respuesta física de tu interfaz <strong className="text-slate-350">{selectedProvider.split(' ')[0]}</strong> ante ráfagas TCP multicadena.
