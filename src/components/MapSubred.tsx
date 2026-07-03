@@ -3,11 +3,9 @@ import { Device } from '../types';
 import { 
   Monitor, Server, Router as RouterIcon, Activity, 
   HelpCircle, Cloud, Wifi, Database, HardDrive, Printer, 
-  Tv, Gamepad2, Layers, Network, Radio, HelpCircle as Question, CheckCircle2, AlertTriangle, XCircle, Grid, Cpu,
-  Globe
+  Tv, Gamepad2, Layers, Network, Radio, HelpCircle as Question, CheckCircle2, AlertTriangle, XCircle, Grid, Cpu
 } from 'lucide-react';
 import { resolveVendorByMac, resolveDeviceNameByMac } from '../utils/macUtils';
-import Cosmic3DSubnetUniverse from './Cosmic3DSubnetUniverse';
 
 interface MapSubredProps {
   devices: Device[];
@@ -51,7 +49,6 @@ const getShortHostName = (name: string): string => {
 export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }: MapSubredProps) {
   // Toggle between 'prtg', 'topology' and 'grid'
   const [viewMode, setViewMode] = useState<'prtg' | 'topology' | 'grid'>('prtg');
-  const [topologyLayout, setTopologyLayout] = useState<'2d' | '3d'>('2d');
   const [useOwnNames, setUseOwnNames] = useState<boolean>(true);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [hoveredGridId, setHoveredGridId] = useState<string | null>(null);
@@ -815,62 +812,33 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
         {/* CONTROLS TOGGLE */}
         <div className="flex flex-wrap items-center gap-3">
           {viewMode === 'topology' && (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase font-bold text-slate-500 font-mono hidden lg:inline">Perspectiva:</span>
-                <div className="flex bg-slate-950 rounded p-0.5 border border-slate-800 leading-none text-[11px]">
-                  <button
-                    onClick={() => setTopologyLayout('2d')}
-                    className={`px-2.5 py-1.5 rounded-xs font-semibold cursor-pointer transition-all ${
-                      topologyLayout === '2d' 
-                        ? 'bg-slate-800 text-cyan-400 font-bold border border-slate-700/80 shadow-md' 
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Plano 2D (Esquema)
-                  </button>
-                  <button
-                    onClick={() => setTopologyLayout('3d')}
-                    className={`px-2.5 py-1.5 rounded-xs font-semibold cursor-pointer transition-all flex items-center gap-1 ${
-                      topologyLayout === '3d' 
-                        ? 'bg-slate-800 text-amber-400 font-bold border border-slate-700/80 shadow-md' 
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Globe className="h-3.5 w-3.5 text-amber-400 animate-spin" style={{ animationDuration: '8s' }} />
-                    Cosmos 3D (Universo)
-                  </button>
-                </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase font-bold text-slate-500 font-mono hidden lg:inline">Etiquetas Mapa:</span>
+              <div className="flex bg-slate-950 rounded p-0.5 border border-slate-800 leading-none text-[11px]">
+                <button
+                  onClick={() => setUseOwnNames(false)}
+                  className={`px-2.5 py-1.5 rounded-xs font-semibold cursor-pointer transition-all ${
+                    !useOwnNames 
+                      ? 'bg-slate-800 text-cyan-400 font-bold border border-slate-700/80 shadow-md' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Mostrar apodos técnicos sintetizados (Smart TV, PS5, etc.)"
+                >
+                  Nombres Cortos
+                </button>
+                <button
+                  onClick={() => setUseOwnNames(true)}
+                  className={`px-2.5 py-1.5 rounded-xs font-semibold cursor-pointer transition-all ${
+                    useOwnNames 
+                      ? 'bg-slate-800 text-cyan-400 font-bold border border-slate-700/80 shadow-md' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Mostrar los nombres reales de los de dispositivos escaneados o personalizados por ti"
+                >
+                  Nombres Reales
+                </button>
               </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase font-bold text-slate-500 font-mono hidden lg:inline">Etiquetas Mapa:</span>
-                <div className="flex bg-slate-950 rounded p-0.5 border border-slate-800 leading-none text-[11px]">
-                  <button
-                    onClick={() => setUseOwnNames(false)}
-                    className={`px-2.5 py-1.5 rounded-xs font-semibold cursor-pointer transition-all ${
-                      !useOwnNames 
-                        ? 'bg-slate-800 text-cyan-400 font-bold border border-slate-700/80 shadow-md' 
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                    title="Mostrar apodos técnicos sintetizados (Smart TV, PS5, etc.)"
-                  >
-                    Nombres Cortos
-                  </button>
-                  <button
-                    onClick={() => setUseOwnNames(true)}
-                    className={`px-2.5 py-1.5 rounded-xs font-semibold cursor-pointer transition-all ${
-                      useOwnNames 
-                        ? 'bg-slate-800 text-cyan-400 font-bold border border-slate-700/80 shadow-md' 
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                    title="Mostrar los nombres reales de los de dispositivos escaneados o personalizados por ti"
-                  >
-                    Nombres Reales
-                  </button>
-                </div>
-              </div>
-            </>
+            </div>
           )}
 
           <div className="flex items-center gap-2">
@@ -1315,12 +1283,6 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
             })}
           </div>
         </div>
-      ) : topologyLayout === '3d' ? (
-        <Cosmic3DSubnetUniverse 
-          devices={devices} 
-          onSelectDevice={onSelectDevice} 
-          currentSubnetBase={currentSubnetBase} 
-        />
       ) : (
         // RENDER: GRAPHICAL TOPOLOGY LINK CHART MAP
         <div className="relative border border-slate-850/60 bg-slate-950/20 rounded-md overflow-hidden p-1.5">
