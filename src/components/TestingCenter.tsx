@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Device, Sensor, HistoryPoint } from '../types';
 import { generateFullSubnet, generateSensorsForDevices } from '../utils/simulation';
+import NetworkCMDConsole from './NetworkCMDConsole';
 
 interface TestingCenterProps {
   devices: Device[];
@@ -439,6 +440,20 @@ export default function TestingCenter({
           </div>
         </div>
 
+      </div>
+
+      {/* INTERACTIVE CMD LAN CONSOLE */}
+      <div className="space-y-2">
+        <div className="bg-slate-900/40 p-4 border border-slate-800 rounded-md">
+          <h3 className="text-sm font-bold tracking-wider text-white font-display uppercase flex items-center gap-2">
+            <Terminal className="h-5 w-5 text-emerald-400" />
+            Consola de Diagnóstico Físico e Interactividad LAN (CMD)
+          </h3>
+          <p className="text-[11px] text-slate-500 font-sans">
+            Consola interactiva que simula comandos de red de bajo nivel (capa 2 y capa 3) acoplada dinámicamente con el inventario de hosts activos de la subred {subnetSegment}.0/24.
+          </p>
+        </div>
+        <NetworkCMDConsole devices={devices} subnetSegment={subnetSegment} />
       </div>
 
       {/* CLI testing guides */}

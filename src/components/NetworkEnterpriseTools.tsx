@@ -124,7 +124,96 @@ interface SwitchPort {
 }
 
 export default function NetworkEnterpriseTools() {
-  const [activeTab, setActiveTab] = useState<'subnetting' | 'vlans' | 'switch_mapper'>('subnetting');
+  const [activeTab, setActiveTab] = useState<'subnetting' | 'vlans' | 'switch_mapper' | 'tdr_cable'>('subnetting');
+
+  // ----------------------------------------------------
+  // TAB 4: HIGH-PRECISION TDR CABLE MEASUREMENT SUITE
+  // ----------------------------------------------------
+  const [cableType, setCableType] = useState<string>('cat6');
+  const [nvpBase, setNvpBase] = useState<number>(0.68);
+  const [loopResistanceBase, setLoopResistanceBase] = useState<number>(176);
+  const [measurementMode, setMeasurementMode] = useState<'tdr' | 'resistance'>('tdr');
+  const [roundtripTimeNs, setRoundtripTimeNs] = useState<number>(350);
+  const [measuredOhms, setMeasuredOhms] = useState<number>(30.8);
+  const [temperatureC, setTemperatureC] = useState<number>(25);
+  const [clockJitterNs, setClockJitterNs] = useState<number>(0.1);
+  const [terminationType, setTerminationType] = useState<'open' | 'short' | 'terminated'>('open');
+
+  useEffect(() => {
+    switch (cableType) {
+      case 'cat5e':
+        setNvpBase(0.65);
+        setLoopResistanceBase(188);
+        break;
+      case 'cat6':
+        setNvpBase(0.68);
+        setLoopResistanceBase(176);
+        break;
+      case 'cat6a':
+        setNvpBase(0.70);
+        setLoopResistanceBase(165);
+        break;
+      case 'cat7':
+        setNvpBase(0.74);
+        setLoopResistanceBase(150);
+        break;
+      case 'coax':
+        setNvpBase(0.82);
+        setLoopResistanceBase(82);
+        break;
+      case 'sm_fiber':
+        setNvpBase(0.67);
+        setLoopResistanceBase(0);
+        break;
+      case 'mm_fiber':
+        setNvpBase(0.66);
+        setLoopResistanceBase(0);
+        break;
+      default:
+        break;
+    }
+  }, [cableType]);
+
+  const tdrCalculations = useMemo(() => {
+    const SPEED_OF_LIGHT = 299792458; // m/s
+    const SPEED_OF_LIGHT_M_NS = 0.299792458; // m/ns
+
+    const isFiber = cableType.includes('fiber');
+    const tempDriftCoeff = isFiber ? 0.00002 : 0.0002;
+    const correctedNvp = nvpBase * (1 - tempDriftCoeff * (temperatureC - 20));
+
+    const signalSpeedM_S = SPEED_OF_LIGHT * correctedNvp;
+    const signalSpeedM_NS = SPEED_OF_LIGHT_M_NS * correctedNvp;
+    const signalSpeedKm_S = signalSpeedM_S / 1000;
+
+    let distanceMeters = 0;
+    let marginOfErrorMeters = 0;
+    let loopResistanceCalculated = 0;
+
+    if (measurementMode === 'tdr') {
+      distanceMeters = (signalSpeedM_NS * roundtripTimeNs) / 2;
+      marginOfErrorMeters = (signalSpeedM_NS * clockJitterNs) / 2;
+      if (loopResistanceBase > 0) {
+        loopResistanceCalculated = (distanceMeters * 2 * (loopResistanceBase / 1000));
+      }
+    } else {
+      if (loopResistanceBase > 0) {
+        distanceMeters = (measuredOhms * 1000) / (2 * loopResistanceBase);
+        marginOfErrorMeters = (0.05 * 1000) / (2 * loopResistanceBase);
+        loopResistanceCalculated = measuredOhms;
+      }
+    }
+
+    return {
+      correctedNvp: parseFloat(correctedNvp.toFixed(4)),
+      signalSpeedM_NS: parseFloat(signalSpeedM_NS.toFixed(6)),
+      signalSpeedKm_S: Math.round(signalSpeedKm_S),
+      distanceMeters: parseFloat(distanceMeters.toFixed(3)),
+      marginOfErrorMeters: parseFloat(marginOfErrorMeters.toFixed(3)),
+      loopResistanceCalculated: parseFloat(loopResistanceCalculated.toFixed(2)),
+      roundtripNsCalculated: measurementMode === 'resistance' ? Math.round((distanceMeters * 2) / signalSpeedM_NS) : roundtripTimeNs
+    };
+  }, [cableType, nvpBase, loopResistanceBase, measurementMode, roundtripTimeNs, measuredOhms, temperatureC, clockJitterNs]);
 
   // ----------------------------------------------------
   // TAB 1: SUBNETTING STATES
@@ -388,6 +477,17 @@ export default function NetworkEnterpriseTools() {
             >
               <Server className="h-3.5 w-3.5" />
               Switch PoE & L2 Ports
+            </button>
+            <button
+              onClick={() => setActiveTab('tdr_cable')}
+              className={`px-4 py-2 rounded-md transition-all cursor-pointer font-bold flex items-center gap-1.5 duration-300 ${
+                activeTab === 'tdr_cable' 
+                  ? 'bg-cyan-500 text-slate-950 shadow-md font-bold' 
+                  : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
+              }`}
+            >
+              <Activity className="h-3.5 w-3.5 animate-pulse text-cyan-400" />
+              Cables y TDR de Precisión
             </button>
           </div>
         </div>
@@ -1037,6 +1137,397 @@ export default function NetworkEnterpriseTools() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* TAB 4: HIGH-PRECISION TDR CABLE MEASUREMENT SUITE  */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'tdr_cable' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-slide-up" id="tdr-tab-area">
+          {/* COL 1: CONFIGURATION */}
+          <div className="lg:col-span-5 bg-slate-900 border border-slate-800 p-5 rounded-xs space-y-5 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="border-b border-slate-800 pb-3">
+                <h3 className="text-sm font-bold font-mono text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                  <Activity className="h-4 w-4" /> Configuración de Medición TDR
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Establece las constantes físicas del cable para obtener una distancia con precisión milimétrica basada en reflectometría de tiempo o resistencia eléctrica de bucle.
+                </p>
+              </div>
+
+              {/* CABLE TYPE SELECTOR */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-semibold text-slate-400 uppercase font-mono">Tipo de Medio / Estándar</label>
+                <select
+                  value={cableType}
+                  onChange={(e) => setCableType(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-sm p-2 text-xs text-slate-300 focus:outline-none focus:border-cyan-500 cursor-pointer font-mono"
+                >
+                  <option value="cat5e">Categoría 5e UTP/FTP (Cobre • NVP ~0.65)</option>
+                  <option value="cat6">Categoría 6 UTP (Cobre Puro • NVP ~0.68)</option>
+                  <option value="cat6a">Categoría 6A F/UTP (Blindado • NVP ~0.70)</option>
+                  <option value="cat7">Categoría 7 S/FTP (Super Blindado • NVP ~0.74)</option>
+                  <option value="coax">Coaxial RG-6 Dual Shield (NVP ~0.82)</option>
+                  <option value="sm_fiber">Fibra Óptica Monomodo G.652 (NVP ~0.67)</option>
+                  <option value="mm_fiber">Fibra Óptica Multimodo OM3 (NVP ~0.66)</option>
+                </select>
+              </div>
+
+              {/* MEASUREMENT MODE SELECTOR */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-semibold text-slate-400 uppercase font-mono">Método de Diagnóstico</label>
+                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                  <button
+                    onClick={() => setMeasurementMode('tdr')}
+                    className={`py-1.5 rounded-sm border text-center font-bold cursor-pointer transition-all ${
+                      measurementMode === 'tdr'
+                        ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    TDR (Tiempo de Vuelo)
+                  </button>
+                  <button
+                    onClick={() => setMeasurementMode('resistance')}
+                    disabled={cableType.includes('fiber')}
+                    className={`py-1.5 rounded-sm border text-center font-bold cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                      measurementMode === 'resistance'
+                        ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    Resistencia de Bucle
+                  </button>
+                </div>
+                {cableType.includes('fiber') && (
+                  <p className="text-[9px] text-amber-500/80 italic font-mono">
+                    * La fibra óptica no conduce electricidad; el modo resistencia de bucle está inhabilitado.
+                  </p>
+                )}
+              </div>
+
+              {/* DYNAMIC PARAMETER ACCORDING TO MODE */}
+              {measurementMode === 'tdr' ? (
+                <div className="space-y-4 pt-2">
+                  {/* ROUNDTRIP TIME */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="text-[11px] font-semibold text-slate-400 uppercase font-mono">Tiempo de Retorno (Ida y Vuelta)</label>
+                      <span className="text-xs font-bold text-cyan-400 font-mono">{roundtripTimeNs} ns</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="10"
+                      max="2000"
+                      step="5"
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                      value={roundtripTimeNs}
+                      onChange={(e) => setRoundtripTimeNs(parseInt(e.target.value))}
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-500 font-mono mt-1">
+                      <span>10 ns (~1m)</span>
+                      <span>1000 ns (~100m)</span>
+                      <span>2000 ns (~200m)</span>
+                    </div>
+                  </div>
+
+                  {/* CLOCK JITTER / MEASUREMENT RESOLUTION */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="text-[11px] font-semibold text-slate-400 uppercase font-mono">Resolución de Reloj TDR</label>
+                      <span className="text-xs font-bold text-slate-300 font-mono">±{clockJitterNs} ns</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.05"
+                      max="1.0"
+                      step="0.05"
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-slate-400"
+                      value={clockJitterNs}
+                      onChange={(e) => setClockJitterNs(parseFloat(e.target.value))}
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-500 font-mono mt-1">
+                      <span>±0.05 ns (Laboratorio)</span>
+                      <span>±0.2 ns (Certificador Fluke)</span>
+                      <span>±1.0 ns (Estándar)</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 pt-2">
+                  {/* MEASURED RESISTANCE */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="text-[11px] font-semibold text-slate-400 uppercase font-mono">Resistencia de Bucle Medida</label>
+                      <span className="text-xs font-bold text-cyan-400 font-mono">{measuredOhms} Ω</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="300"
+                      step="0.5"
+                      className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                      value={measuredOhms}
+                      onChange={(e) => setMeasuredOhms(parseFloat(e.target.value))}
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-500 font-mono mt-1">
+                      <span>1 Ω (~3m)</span>
+                      <span>150 Ω (~420m)</span>
+                      <span>300 Ω (~850m)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ENVIRONMENTAL TEMPERATURE */}
+              <div className="pt-2">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-[11px] font-semibold text-slate-400 uppercase font-mono">Temperatura de Operación</label>
+                  <span className="text-xs font-bold text-amber-400 font-mono">{temperatureC}°C</span>
+                </div>
+                <input
+                  type="range"
+                  min="-20"
+                  max="80"
+                  step="1"
+                  className="w-full h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  value={temperatureC}
+                  onChange={(e) => setTemperatureC(parseInt(e.target.value))}
+                />
+                <div className="flex justify-between text-[9px] text-slate-500 font-mono mt-1">
+                  <span>-20°C (Frío Extremo)</span>
+                  <span>20°C (Estándar IEC)</span>
+                  <span>80°C (Pleno Sol / Ducto)</span>
+                </div>
+              </div>
+
+              {/* TERMINATION STATE */}
+              <div className="space-y-1.5 pt-2">
+                <label className="block text-[11px] font-semibold text-slate-400 uppercase font-mono">Estado de Terminación (Fin de Línea)</label>
+                <div className="grid grid-cols-3 gap-1 text-[10px] font-mono">
+                  <button
+                    onClick={() => setTerminationType('open')}
+                    className={`py-1.5 rounded-sm border text-center font-bold cursor-pointer transition-all ${
+                      terminationType === 'open'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    Abierto / Corte
+                  </button>
+                  <button
+                    onClick={() => setTerminationType('short')}
+                    className={`py-1.5 rounded-sm border text-center font-bold cursor-pointer transition-all ${
+                      terminationType === 'short'
+                        ? 'bg-red-500/10 text-red-400 border-red-500/30 font-bold'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    Cortocircuito
+                  </button>
+                  <button
+                    onClick={() => setTerminationType('terminated')}
+                    className={`py-1.5 rounded-sm border text-center font-bold cursor-pointer transition-all ${
+                      terminationType === 'terminated'
+                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 font-bold'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    Acoplado (Ok)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* QUICK FORMULA CARD */}
+            <div className="mt-5 border-t border-slate-800 pt-4 text-[10px] font-mono text-slate-400 space-y-2">
+              <span className="text-cyan-400 font-bold block uppercase tracking-wider text-[9px]">Fórmulas de Precisión Utilizadas:</span>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800/40 space-y-1.5">
+                <p>
+                  <span className="text-slate-300 font-semibold">TDR:</span> <code className="text-yellow-400">D = (c × NVP × t) / 2</code>
+                </p>
+                <p>
+                  <span className="text-slate-300 font-semibold">Deriva Térmica NVP:</span> <code className="text-yellow-400">NVP_corr = NVP_20C × (1 - α × (T - 20))</code>
+                </p>
+                <p>
+                  <span className="text-slate-300 font-semibold">Resistencia:</span> <code className="text-yellow-400">D = (R_medida × 1000) / (2 × R_km)</code>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* COL 2: HIGH-PRECISION RESULTS & OSCILLOSCOPE VISUALIZER */}
+          <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xs overflow-hidden flex flex-col justify-between">
+            {/* OSCILLOSCOPE MONITOR SCREEN */}
+            <div className="bg-[#040810] border-b border-slate-800 p-5 flex flex-col justify-between h-full space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-1.5 font-mono">
+                    <Activity className="h-4 w-4 text-emerald-400 animate-pulse" /> Ecograma TDR de Alta Resolución
+                  </h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Analizador físico de pulso en dominio de tiempo y fase.</p>
+                </div>
+                <div className="flex gap-2 text-[9px] font-mono">
+                  <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-sm">
+                    {measurementMode === 'tdr' ? 'MODO: TIEMPO' : 'MODO: RESISTENCIA'}
+                  </span>
+                  <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-sm">
+                    TERMINACIÓN: {terminationType.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+              {/* MONITOR SVG */}
+              <div className="relative bg-[#02050a] border border-emerald-500/20 rounded-xs overflow-hidden py-2 shadow-inner">
+                {/* GRID LINES BACKGROUND */}
+                <div className="absolute inset-0 grid grid-cols-10 grid-rows-6 pointer-events-none opacity-[0.03]">
+                  {Array.from({ length: 60 }).map((_, i) => (
+                    <div key={i} className="border border-emerald-400" />
+                  ))}
+                </div>
+
+                {/* SVG PLOTTING */}
+                <svg
+                  viewBox="0 0 500 130"
+                  className="w-full h-auto drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                  fill="none"
+                >
+                  {/* Center Line (Scope baseline) */}
+                  <line x1="0" y1="65" x2="500" y2="65" stroke="#10b981" strokeWidth="0.5" strokeDasharray="2,5" opacity="0.4" />
+
+                  {/* Calculated X position of reflection based on distance or time */}
+                  {(() => {
+                    const mappedTime = Math.min(2000, tdrCalculations.roundtripNsCalculated);
+                    const xEcho = 80 + (mappedTime / 2000) * 350;
+
+                    // Build path
+                    // Tx pulse: start at (0, 65) -> Flat to 15 -> rise to 30 -> drop to 65 at 45.
+                    let pathD = `M 0 65 L 15 65 L 20 25 L 30 25 L 35 65 L ${xEcho - 10} 65`;
+
+                    if (terminationType === 'open') {
+                      // Positive reflection eco
+                      pathD += ` L ${xEcho - 5} 65 L ${xEcho} 25 L ${xEcho + 10} 25 L ${xEcho + 15} 65 L 500 65`;
+                    } else if (terminationType === 'short') {
+                      // Negative reflection eco
+                      pathD += ` L ${xEcho - 5} 65 L ${xEcho} 105 L ${xEcho + 10} 105 L ${xEcho + 15} 65 L 500 65`;
+                    } else {
+                      // Terminated properly, flat line to end
+                      pathD += ` L 500 65`;
+                    }
+
+                    return (
+                      <>
+                        {/* Scope Signal Path */}
+                        <path
+                          d={pathD}
+                          stroke={terminationType === 'short' ? '#f43f5e' : terminationType === 'terminated' ? '#3b82f6' : '#10b981'}
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+
+                        {/* Tx Label */}
+                        <text x="25" y="115" fill="#10b981" fontSize="9" fontFamily="monospace" textAnchor="middle" opacity="0.8">
+                          Tx (Pulso)
+                        </text>
+                        <line x1="25" y1="65" x2="25" y2="102" stroke="#10b981" strokeWidth="0.5" strokeDasharray="2,2" opacity="0.5" />
+
+                        {/* Rx / Reflection Eco Label */}
+                        {terminationType !== 'terminated' && (
+                          <>
+                            <text x={xEcho + 5} y={terminationType === 'short' ? 22 : 115} fill={terminationType === 'short' ? '#f43f5e' : '#10b981'} fontSize="9" fontFamily="monospace" textAnchor="middle" opacity="0.8">
+                              Rx (Eco)
+                            </text>
+                            <line x1={xEcho + 5} y1="65" x2={xEcho + 5} y2={terminationType === 'short' ? 30 : 102} stroke={terminationType === 'short' ? '#f43f5e' : '#10b981'} strokeWidth="0.5" strokeDasharray="2,2" opacity="0.5" />
+                            {/* Dotted Vertical Cursor at reflection point */}
+                            <line x1={xEcho + 5} y1="5" x2={xEcho + 5} y2="125" stroke="#eab308" strokeWidth="1" strokeDasharray="3,3" opacity="0.6" />
+                            <text x={xEcho + 10} y="15" fill="#eab308" fontSize="8" fontFamily="monospace" opacity="0.9">
+                              {tdrCalculations.distanceMeters} m
+                            </text>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
+                </svg>
+
+                {/* Scope UI status indicators */}
+                <div className="flex justify-between px-3 mt-1.5 text-[8.5px] font-mono text-emerald-500/80 uppercase">
+                  <span>CH1: 2.5V/div</span>
+                  <span>TIMEBASE: {(tdrCalculations.roundtripNsCalculated / 10).toFixed(1)} ns/div</span>
+                  <span>NVP COMP: {tdrCalculations.correctedNvp}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* PRECISE DATA TILES SHEET */}
+            <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-950 border-t border-slate-800/80">
+              {/* DISTANCE METERS */}
+              <div className="p-3 bg-slate-900 border border-slate-800/60 rounded-sm">
+                <span className="text-[10px] font-mono text-slate-500 block uppercase font-bold">Longitud Real</span>
+                <span className="text-xl font-bold font-mono text-white block mt-1 tracking-tight">
+                  {tdrCalculations.distanceMeters.toLocaleString()} m
+                </span>
+                <span className="text-[9px] font-mono text-slate-400 mt-0.5 block">
+                  ~{(tdrCalculations.distanceMeters * 3.28084).toFixed(2)} ft (Pies)
+                </span>
+              </div>
+
+              {/* SYSTEM UNCERTAINTY */}
+              <div className="p-3 bg-slate-900 border border-slate-800/60 rounded-sm">
+                <span className="text-[10px] font-mono text-slate-500 block uppercase font-bold">Incertidumbre</span>
+                <span className="text-xl font-bold font-mono text-cyan-400 block mt-1 tracking-tight">
+                  ±{tdrCalculations.marginOfErrorMeters} m
+                </span>
+                <span className="text-[9px] font-mono text-slate-400 mt-0.5 block">
+                  Precisión: {(100 - (tdrCalculations.marginOfErrorMeters / Math.max(1, tdrCalculations.distanceMeters)) * 100).toFixed(3)}%
+                </span>
+              </div>
+
+              {/* PROPAGATION VELOCITY */}
+              <div className="p-3 bg-slate-900 border border-slate-800/60 rounded-sm">
+                <span className="text-[10px] font-mono text-slate-500 block uppercase font-bold">Velocidad (V)</span>
+                <span className="text-xl font-bold font-mono text-amber-400 block mt-1 tracking-tight">
+                  {tdrCalculations.signalSpeedKm_S.toLocaleString()}
+                </span>
+                <span className="text-[9px] font-mono text-slate-400 mt-0.5 block">
+                  km/s • ({tdrCalculations.signalSpeedM_NS.toFixed(4)} m/ns)
+                </span>
+              </div>
+
+              {/* LOOP RESISTANCE OR TRAVEL TIME */}
+              <div className="p-3 bg-slate-900 border border-slate-800/60 rounded-sm">
+                <span className="text-[10px] font-mono text-slate-500 block uppercase font-bold">Resist. Estimada</span>
+                <span className="text-xl font-bold font-mono text-slate-200 block mt-1 tracking-tight">
+                  {tdrCalculations.loopResistanceCalculated > 0 ? `${tdrCalculations.loopResistanceCalculated} Ω` : 'N/A'}
+                </span>
+                <span className="text-[9px] font-mono text-slate-400 mt-0.5 block">
+                  Tiempo total: {tdrCalculations.roundtripNsCalculated} ns
+                </span>
+              </div>
+            </div>
+
+            {/* TECHNICAL EDUCATION ACCORDION / EXPLANATION */}
+            <div className="p-5 bg-slate-900 border-t border-slate-800 space-y-3">
+              <h4 className="text-xs font-bold font-mono text-cyan-400 uppercase tracking-wider">¿Cómo lograr una precisión extrema al medir cables?</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Para conseguir una precisión centimétrica en la medición de cableado estructurado, fibra u coaxial, se deben aplicar tres factores esenciales:
+              </p>
+              <ul className="text-xs text-slate-400 space-y-2 list-disc pl-5 leading-relaxed">
+                <li>
+                  <strong className="text-slate-200">Ajustar el NVP exacto del fabricante:</strong> Cada cable tiene un <span className="italic text-cyan-400">Nominal Velocity of Propagation</span> único (por ejemplo, Cat6 sólido tiene ~0.68, multifilar ~0.65). Errar en un 1% de NVP provoca un error de 1 metro por cada 100 metros de cable.
+                </li>
+                <li>
+                  <strong className="text-slate-200">Compensar la deriva por temperatura:</strong> A mayor temperatura, la velocidad de los electrones decrece. Los certificadores calibran el factor con un ajuste de <span className="text-amber-400">0.2% por cada 10°C</span> de desviación estándar (20°C).
+                </li>
+                <li>
+                  <strong className="text-slate-200">Reducir el jitter del reloj físico:</strong> Un reloj interno del instrumento con resolución de <span className="text-slate-200">100 picosegundos (0.1 ns)</span> ofrece un límite teórico de incertidumbre física de solo <span className="text-cyan-400">±1.0 centímetros</span>.
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       )}
