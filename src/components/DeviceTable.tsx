@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Device } from '../types';
 import { Search, ChevronLeft, ChevronRight, Sliders, Monitor, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
-import { resolveVendorByMac, resolveDeviceNameByMac } from '../utils/macUtils';
+import { resolveVendorByMac, resolveDeviceNameByMac, isGenericVendor } from '../utils/macUtils';
 
 interface DeviceTableProps {
   devices: Device[];
@@ -24,9 +24,9 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
       }
 
       // Metric match
-      const brandName = d.vendor && d.vendor !== '—' && !d.vendor.toLowerCase().includes('genérico') && !d.vendor.toLowerCase().includes('generico') && d.vendor !== 'Dispositivo de Red Activo'
-        ? d.vendor
-        : resolveVendorByMac(d.mac, d.host, d.ip);
+      const brandName = isGenericVendor(d.vendor)
+        ? resolveVendorByMac(d.mac, d.host, d.ip)
+        : d.vendor!;
       const deviceName = resolveDeviceNameByMac(d.mac, d.host, d.ip);
       const matchesSearch = 
         d.ip.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -153,7 +153,7 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
                    pingText = '—';
                 }
 
-                const brandName = d.vendor && d.vendor !== '—' && !d.vendor.toLowerCase().includes('genérico') && !d.vendor.toLowerCase().includes('generico') && d.vendor !== 'Dispositivo de Red Activo' ? d.vendor : resolveVendorByMac(d.mac, d.host, d.ip);
+                const brandName = isGenericVendor(d.vendor) ? resolveVendorByMac(d.mac, d.host, d.ip) : d.vendor!;
 
                 let brandStyle = 'text-slate-400';
                 if (brandName.includes('Hikvision')) brandStyle = 'text-orange-400 font-bold';

@@ -10,7 +10,7 @@ import {
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
 import { generateFullSubnet, generateSensorsForDevices, INTERFACES_CONFIG } from './utils/simulation';
 import { calculateSubnetDetails } from './utils/subnetMath';
-import { resolveVendorByMac, resolveDeviceNameByMac, fetchVendorFromApi } from './utils/macUtils';
+import { resolveVendorByMac, resolveDeviceNameByMac, fetchVendorFromApi, isGenericVendor } from './utils/macUtils';
 import MapSubred from './components/MapSubred';
 import HistorialHosts from './components/HistorialHosts';
 import DeviceTable from './components/DeviceTable';
@@ -589,9 +589,9 @@ export default function App() {
         ? customVendors[d.mac]
         : customVendors[d.ip];
       
-      const resolvedVendor = d.vendor && d.vendor !== '—' && !d.vendor.toLowerCase().includes('genérico') && !d.vendor.toLowerCase().includes('generico') && d.vendor !== 'Dispositivo de Red Activo'
-        ? d.vendor
-        : resolveVendorByMac(d.mac, d.host, d.ip);
+      const resolvedVendor = isGenericVendor(d.vendor)
+        ? resolveVendorByMac(d.mac, d.host, d.ip)
+        : d.vendor!;
 
       return {
         ...d,
@@ -645,9 +645,9 @@ export default function App() {
       const activeDevice = processedDevices.find(d => d.id === selectedDevice.id);
       if (activeDevice) {
         setTempName(activeDevice.host !== '—' ? activeDevice.host : '');
-        const currentBrand = activeDevice.vendor && activeDevice.vendor !== '—' && !activeDevice.vendor.toLowerCase().includes('genérico') && !activeDevice.vendor.toLowerCase().includes('generico') && activeDevice.vendor !== 'Dispositivo de Red Activo'
-          ? activeDevice.vendor
-          : resolveVendorByMac(activeDevice.mac, activeDevice.host, activeDevice.ip);
+        const currentBrand = isGenericVendor(activeDevice.vendor)
+          ? resolveVendorByMac(activeDevice.mac, activeDevice.host, activeDevice.ip)
+          : activeDevice.vendor!;
         setTempVendor(currentBrand === 'Sonda de Red Genérica' ? '' : currentBrand);
       }
     }
@@ -3887,16 +3887,16 @@ export default function App() {
                           ) : (
                             <div className="flex items-center justify-between mt-0.5">
                               <span className="text-cyan-400 font-semibold block text-left font-sans">
-                                {activeDiagDevice.vendor && activeDiagDevice.vendor !== '—' && !activeDiagDevice.vendor.toLowerCase().includes('genérico') && !activeDiagDevice.vendor.toLowerCase().includes('generico') && activeDiagDevice.vendor !== 'Dispositivo de Red Activo'
-                                  ? activeDiagDevice.vendor
-                                  : resolveVendorByMac(activeDiagDevice.mac, activeDiagDevice.host, activeDiagDevice.ip)}
+                                {isGenericVendor(activeDiagDevice.vendor)
+                                  ? resolveVendorByMac(activeDiagDevice.mac, activeDiagDevice.host, activeDiagDevice.ip)
+                                  : activeDiagDevice.vendor}
                               </span>
                               {activeDiagDevice.estado !== 'No_Escaneado' && (
                                 <button
                                   onClick={() => {
-                                    const curBrand = activeDiagDevice.vendor && activeDiagDevice.vendor !== '—' && !activeDiagDevice.vendor.toLowerCase().includes('genérico') && !activeDiagDevice.vendor.toLowerCase().includes('generico') && activeDiagDevice.vendor !== 'Dispositivo de Red Activo'
-                                      ? activeDiagDevice.vendor
-                                      : resolveVendorByMac(activeDiagDevice.mac, activeDiagDevice.host, activeDiagDevice.ip);
+                                    const curBrand = isGenericVendor(activeDiagDevice.vendor)
+                                      ? resolveVendorByMac(activeDiagDevice.mac, activeDiagDevice.host, activeDiagDevice.ip)
+                                      : activeDiagDevice.vendor!;
                                     setTempVendor(curBrand === 'Sonda de Red Genérica' ? '' : curBrand);
                                     setIsEditingVendor(true);
                                   }}

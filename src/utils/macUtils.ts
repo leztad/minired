@@ -25,6 +25,24 @@ export const saveApiVendorToCache = (mac: string, vendor: string) => {
 };
 
 /**
+ * Checks if a manufacturer/vendor name is a generic placeholder.
+ */
+export const isGenericVendor = (vendor?: string): boolean => {
+  if (!vendor || vendor.trim() === '' || vendor === '—') return true;
+  const vLower = vendor.toLowerCase();
+  return (
+    vLower.includes('genérico') ||
+    vLower.includes('generico') ||
+    vLower.includes('dispositivo') ||
+    vLower.includes('sonda') ||
+    vLower.includes('lan') ||
+    vLower.includes('unknown') ||
+    vLower === 'equipo activo' ||
+    vLower === 'active device'
+  );
+};
+
+/**
  * Asynchronously fetches a manufacturer/vendor name from public APIs,
  * with multi-API fallback and local persistent caching.
  */
