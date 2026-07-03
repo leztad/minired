@@ -3,6 +3,93 @@
  * and hostname keywords as reliable fallbacks.
  */
 
+// Memory and persistent cache for API resolutions to avoid parsing localStorage repeatedly
+export const apiVendorCache: Record<string, string> = (() => {
+  try {
+    const cached = localStorage.getItem('netmonitor_api_vendors');
+    return cached ? JSON.parse(cached) : {};
+  } catch {
+    return {};
+  }
+})();
+
+export const saveApiVendorToCache = (mac: string, vendor: string) => {
+  const cleanMac = mac.replace(/[:-]/g, '').toUpperCase().trim();
+  if (!cleanMac) return;
+  apiVendorCache[cleanMac] = vendor;
+  try {
+    localStorage.setItem('netmonitor_api_vendors', JSON.stringify(apiVendorCache));
+  } catch (e) {
+    console.error('Error saving API vendor cache to localStorage', e);
+  }
+};
+
+/**
+ * Asynchronously fetches a manufacturer/vendor name from public APIs,
+ * with multi-API fallback and local persistent caching.
+ */
+export const fetchVendorFromApi = async (mac: string): Promise<string | null> => {
+  if (!mac || mac === '—') return null;
+  const cleanMac = mac.replace(/[:-]/g, '').toUpperCase().trim();
+  if (cleanMac.length < 6) return null;
+
+  // 1. Check persistent cache first
+  if (apiVendorCache[cleanMac]) {
+    return apiVendorCache[cleanMac] === 'UNKNOWN' ? null : apiVendorCache[cleanMac];
+  }
+
+  // Format MAC with colons if needed
+  const formattedMac = `${cleanMac.slice(0, 2)}:${cleanMac.slice(2, 4)}:${cleanMac.slice(4, 6)}:${cleanMac.slice(6, 8)}:${cleanMac.slice(8, 10)}:${cleanMac.slice(10, 12)}`;
+
+  // Try API 1: macvendors.com
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+    const response = await fetch(`https://api.macvendors.com/${cleanMac}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const text = await response.text();
+      const vendorName = text.trim();
+      if (vendorName && !vendorName.toLowerCase().includes('not found') && !vendorName.toLowerCase().includes('too many requests')) {
+        saveApiVendorToCache(cleanMac, vendorName);
+        return vendorName;
+      }
+    }
+  } catch (e) {
+    console.warn(`macvendors.com API failed for ${cleanMac}:`, e);
+  }
+
+  // Try API 2: macvendors.co JSON API
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+    const response = await fetch(`https://macvendors.co/api/${cleanMac}/json`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      const vendorName = data?.result?.company;
+      if (vendorName && !vendorName.toLowerCase().includes('not found')) {
+        saveApiVendorToCache(cleanMac, vendorName);
+        return vendorName;
+      }
+    }
+  } catch (e) {
+    console.warn(`macvendors.co API failed for ${cleanMac}:`, e);
+  }
+
+  // If both failed, store negative cache so we don't spam requests in the current session
+  saveApiVendorToCache(cleanMac, 'UNKNOWN');
+  return null;
+};
+
 // Precise database of common network vendors and consumer tech electronics
 const OUI_DATABASE: Record<string, string> = {
   // Ubiquiti Networks / Intel etc.
@@ -279,6 +366,11 @@ export const getStableFallbackVendor = (seed: string): string => {
 export const resolveVendorByMac = (mac?: string, hostname?: string, ip?: string): string => {
   // Normalize MAC to always be clean and normalized
   const cleanMac = (mac || '').replace(/[:-]/g, '').toUpperCase().trim();
+
+  // 0. Check persistent API cache first! (if we resolved it from the web previously, use it)
+  if (cleanMac && apiVendorCache[cleanMac] && apiVendorCache[cleanMac] !== 'UNKNOWN') {
+    return apiVendorCache[cleanMac];
+  }
 
   // 1. Try MAC OUI Database lookup first (using normalized 3-octet format: XX:XX:XX)
   if (cleanMac.length >= 6) {

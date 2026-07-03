@@ -10,7 +10,7 @@ import {
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
 import { generateFullSubnet, generateSensorsForDevices, INTERFACES_CONFIG } from './utils/simulation';
 import { calculateSubnetDetails } from './utils/subnetMath';
-import { resolveVendorByMac, resolveDeviceNameByMac } from './utils/macUtils';
+import { resolveVendorByMac, resolveDeviceNameByMac, fetchVendorFromApi } from './utils/macUtils';
 import MapSubred from './components/MapSubred';
 import HistorialHosts from './components/HistorialHosts';
 import DeviceTable from './components/DeviceTable';
@@ -441,6 +441,81 @@ export default function App() {
     }
   });
 
+  // External API Mac Resolution States
+  const [isResolvingVendors, setIsResolvingVendors] = useState<boolean>(false);
+  const [apiResolutionsCount, setApiResolutionsCount] = useState<number>(0);
+
+  const handleResolveAllVendorsViaApi = async (isAuto = false) => {
+    if (isResolvingVendors) return;
+    setIsResolvingVendors(true);
+    if (!isAuto) {
+      addAlert("🔍 Iniciando consulta externa de fabricantes vía API para los dispositivos con MAC...", "info");
+    }
+
+    const devicesToResolve = devices.filter(d => d.mac && d.mac !== '—');
+    if (devicesToResolve.length === 0) {
+      if (!isAuto) {
+        addAlert("⚠️ No se encontraron dispositivos con dirección MAC válida para consultar.", "warning");
+      }
+      setIsResolvingVendors(false);
+      return;
+    }
+
+    let successCount = 0;
+    let cachedCount = 0;
+    let failedCount = 0;
+
+    // We process sequentially with a small delay (e.g. 800ms) to avoid rate limiting
+    for (let i = 0; i < devicesToResolve.length; i++) {
+      const dev = devicesToResolve[i];
+      const mac = dev.mac!;
+      const cleanMac = mac.replace(/[:-]/g, '').toUpperCase().trim();
+      
+      // If we already have it in localStorage/apiVendorCache, skip the network request
+      const cached = localStorage.getItem('netmonitor_api_vendors');
+      const cacheObj = cached ? JSON.parse(cached) : {};
+      if (cacheObj[cleanMac] && cacheObj[cleanMac] !== 'UNKNOWN') {
+        cachedCount++;
+        continue;
+      }
+
+      // Add a visual log or alert for first few to show user progress
+      if (i < 3 || i === devicesToResolve.length - 1) {
+        addAlert(`Consultando fabricante para ${dev.ip} (${mac}) en API externa...`, "info", "API", "API-100");
+      }
+
+      try {
+        const result = await fetchVendorFromApi(mac);
+        if (result && result !== 'UNKNOWN') {
+          successCount++;
+          // Trigger forced re-render of processedDevices so it grabs the newly cached value
+          setApiResolutionsCount(prev => prev + 1);
+        } else {
+          failedCount++;
+        }
+      } catch (err) {
+        failedCount++;
+      }
+
+      // 800ms delay to respect rate limit
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+
+    setIsResolvingVendors(false);
+    // Force one last recalculation to ensure everything matches
+    setApiResolutionsCount(prev => prev + 1);
+
+    if (successCount > 0) {
+      addAlert(`✅ Consulta completada. Se resolvieron ${successCount} nuevos fabricantes vía API.`, "success");
+    } else if (!isAuto) {
+      if (cachedCount > 0 && failedCount === 0) {
+        addAlert("ℹ️ Todos los fabricantes ya se encontraban resueltos y cargados desde la caché local.", "info");
+      } else {
+        addAlert("ℹ️ Consulta finalizada. Los fabricantes locales se mantienen como respaldo de seguridad.", "info");
+      }
+    }
+  };
+
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const handleExportCustomizations = () => {
@@ -524,7 +599,7 @@ export default function App() {
         vendor: customVendor !== undefined ? customVendor : resolvedVendor
       };
     });
-  }, [devices, customNames, customVendors]);
+  }, [devices, customNames, customVendors, apiResolutionsCount]);
   
   // History point database (preload with realistic past records)
   const [historyData, setHistoryData] = useState<HistoryPoint[]>([
@@ -1556,6 +1631,11 @@ export default function App() {
           setLastScanDone(true);
           setIsScanning(false);
 
+          // Quietly resolve MAC manufacturers via the external API in the background
+          setTimeout(() => {
+            handleResolveAllVendorsViaApi(true);
+          }, 600);
+
           // Latency aggregates
           const validPings = activeHostsFiltered.filter(d => d.ping !== null).map(d => d.ping as number);
           const avgPing = validPings.length > 0 ? Math.round(validPings.reduce((a, b) => a + b, 0) / validPings.length) : 0;
@@ -2039,6 +2119,23 @@ export default function App() {
               <option value="Manual">Manual</option>
             </select>
           </div>
+
+          {/* CONSULTAR FABRICANTES API BUTTON */}
+          <button 
+            disabled={isResolvingVendors || isScanning}
+            onClick={() => handleResolveAllVendorsViaApi(false)}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border shrink-0 ${
+              isResolvingVendors 
+                ? 'bg-slate-950 text-amber-500 border-amber-500/50 cursor-wait' 
+                : isScanning
+                  ? 'bg-slate-900 text-slate-500 border-slate-800 cursor-not-allowed opacity-50'
+                  : 'bg-slate-950 text-amber-400 border-slate-850 hover:border-amber-500/50 hover:text-amber-300 active:scale-95 cursor-pointer'
+            }`}
+            title="Consulta las direcciones MAC de tu red con bases de datos en internet (macvendors.com) para obtener marcas reales con precisión quirúrgica"
+          >
+            <Globe className={`h-3.5 w-3.5 text-amber-400 ${isResolvingVendors ? 'animate-spin' : ''}`} style={{ animationDuration: isResolvingVendors ? '2s' : undefined }} />
+            {isResolvingVendors ? 'Consultando API...' : 'Resolver Fabricantes (API)'}
+          </button>
 
           {/* ESCANEAR AHORA BUTTON (Highlight Accent cyan) */}
           <button 
