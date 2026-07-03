@@ -285,9 +285,9 @@ export default function Cosmic3DSubnetUniverse({
         const y2 = y * cosP - z1 * sinP;
         const z2 = y * sinP + z1 * cosP;
 
-        // Perspective scaling
+        // Perspective scaling - prevent division by zero or negative values
         const d = 520; // Focal camera length
-        const scaleFactor = (d / (d + z2)) * zoom;
+        const scaleFactor = (d / Math.max(10, d + z2)) * Math.max(0.1, zoom);
 
         return {
           sx: cx + x1 * scaleFactor,
@@ -301,8 +301,9 @@ export default function Cosmic3DSubnetUniverse({
       ctx.fillStyle = '#02040a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Nebula Core light
-      const grad = ctx.createRadialGradient(cx, cy, 50 * zoom, cx, cy, 320 * zoom);
+      // Nebula Core light - guard radial gradient parameters
+      const safeZoom = Math.max(0.1, zoom);
+      const grad = ctx.createRadialGradient(cx, cy, 50 * safeZoom, cx, cy, 320 * safeZoom);
       grad.addColorStop(0, 'rgba(14, 116, 144, 0.12)'); // cyan glow core
       grad.addColorStop(0.5, 'rgba(67, 56, 202, 0.04)'); // indigo dust
       grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
@@ -657,8 +658,8 @@ export default function Cosmic3DSubnetUniverse({
       // 5. DRAW GALAXY NODES (Depth sorted)
       allRenderNodes.forEach(n => {
         if (!n.projected) return;
-        const scale = n.projected.scale;
-        const radius = n.size * scale;
+        const scale = Math.max(0.01, n.projected.scale);
+        const radius = Math.max(0.1, n.size * scale);
         const sx = n.projected.sx;
         const sy = n.projected.sy;
 
@@ -703,7 +704,7 @@ export default function Cosmic3DSubnetUniverse({
         if (n.id === gatewayNode.id) {
           // Central Sun (Router)
           // Radiant solar corona
-          const sunGlow = ctx.createRadialGradient(sx, sy, radius * 0.4, sx, sy, radius * 2.8);
+          const sunGlow = ctx.createRadialGradient(sx, sy, Math.max(0.1, radius * 0.4), sx, sy, Math.max(0.1, radius * 2.8));
           sunGlow.addColorStop(0, '#f59e0b');
           sunGlow.addColorStop(0.3, 'rgba(245, 158, 11, 0.45)');
           sunGlow.addColorStop(1, 'rgba(245, 158, 11, 0)');
@@ -732,7 +733,14 @@ export default function Cosmic3DSubnetUniverse({
         } else if (n.isSwitch) {
           // Switches (Planets)
           // Planetary gas shadow
-          const pGlow = ctx.createRadialGradient(sx - radius * 0.3, sy - radius * 0.3, radius * 0.1, sx, sy, radius);
+          const pGlow = ctx.createRadialGradient(
+            sx - radius * 0.3, 
+            sy - radius * 0.3, 
+            Math.max(0.1, radius * 0.1), 
+            sx, 
+            sy, 
+            Math.max(0.1, radius)
+          );
           pGlow.addColorStop(0, '#ffffff');
           pGlow.addColorStop(0.2, n.color);
           pGlow.addColorStop(1, '#02050f');
@@ -775,7 +783,14 @@ export default function Cosmic3DSubnetUniverse({
             ctx.fillRect(sx + size/12, sy - size/3, size/4, size/4);
           } else {
             // Spherical nodes
-            const sphereGrad = ctx.createRadialGradient(sx - radius * 0.2, sy - radius * 0.2, radius * 0.1, sx, sy, radius);
+            const sphereGrad = ctx.createRadialGradient(
+              sx - radius * 0.2, 
+              sy - radius * 0.2, 
+              Math.max(0.1, radius * 0.1), 
+              sx, 
+              sy, 
+              Math.max(0.1, radius)
+            );
             sphereGrad.addColorStop(0, '#ffffff');
             sphereGrad.addColorStop(0.3, n.color);
             sphereGrad.addColorStop(1, '#050a12');
