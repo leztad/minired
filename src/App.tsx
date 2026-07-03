@@ -444,6 +444,82 @@ export default function App() {
   // External API Mac Resolution States
   const [isResolvingVendors, setIsResolvingVendors] = useState<boolean>(false);
   const [apiResolutionsCount, setApiResolutionsCount] = useState<number>(0);
+  const [hasRealInternetAccess, setHasRealInternetAccess] = useState<boolean | null>(null);
+  const [isCheckingInternet, setIsCheckingInternet] = useState<boolean>(false);
+
+  const checkRealInternetConnection = async (silent = false): Promise<boolean> => {
+    if (isCheckingInternet) return false;
+    setIsCheckingInternet(true);
+    if (!silent) {
+      addAlert("📡 Probando conectividad WAN... Enviando paquetes de prueba a servidores de internet para verificar salida real...", "info", "Sistema", "NET-100");
+    }
+
+    if (!navigator.onLine || !isCablePhysicallyConnected) {
+      setHasRealInternetAccess(false);
+      setIsCheckingInternet(false);
+      if (!silent) {
+        addAlert("❌ Verificación de internet fallida: El adaptador de red físico o local está desconectado.", "error", "Sistema", "NET-101");
+      }
+      return false;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      // Verify reachability of a high-availability server
+      await fetch("https://cloudflare.com/cdn-cgi/trace", {
+        method: "GET",
+        signal: controller.signal,
+        mode: "no-cors"
+      });
+      clearTimeout(timeoutId);
+
+      setHasRealInternetAccess(true);
+      setIsCheckingInternet(false);
+      
+      addAlert("🌐 Conexión externa confirmada: El sistema tiene salida real a Internet.", "success", "Sistema", "NET-102");
+      
+      // Auto resolve names since we have internet
+      handleResolveAllVendorsViaApi(true);
+      return true;
+    } catch (e) {
+      console.warn("Primary WAN check failed, trying fallback...", e);
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        
+        await fetch("https://api.macvendors.com/00:00:00", {
+          method: "GET",
+          signal: controller.signal,
+          mode: "cors"
+        });
+        clearTimeout(timeoutId);
+
+        setHasRealInternetAccess(true);
+        setIsCheckingInternet(false);
+        
+        addAlert("🌐 Conexión externa confirmada (vía fallback): El sistema tiene salida real a Internet.", "success", "Sistema", "NET-102");
+        
+        handleResolveAllVendorsViaApi(true);
+        return true;
+      } catch (errFallback) {
+        setHasRealInternetAccess(false);
+        setIsCheckingInternet(false);
+        
+        addAlert("⚠️ Sin salida a Internet: No se detectó conectividad WAN externa. Operando en modo offline de contingencia.", "warning", "Sistema", "NET-103");
+        return false;
+      }
+    }
+  };
+
+  // Run initial internet connectivity check on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      checkRealInternetConnection(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [isCablePhysicallyConnected]);
 
   const handleResolveAllVendorsViaApi = async (isAuto = false) => {
     if (isResolvingVendors) return;
@@ -1631,9 +1707,9 @@ export default function App() {
           setLastScanDone(true);
           setIsScanning(false);
 
-          // Quietly resolve MAC manufacturers via the external API in the background
+          // Quietly check internet and resolve MAC manufacturers via the external API in the background if online
           setTimeout(() => {
-            handleResolveAllVendorsViaApi(true);
+            checkRealInternetConnection(true);
           }, 600);
 
           // Latency aggregates
@@ -2045,6 +2121,34 @@ export default function App() {
               <span>{isNetworkOffline ? 'Enlace: CAÍDO 🔌' : 'Enlace: OK ✔'}</span>
               <span className={`w-1.5 h-1.5 rounded-full ${isNetworkOffline ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`} />
             </button>
+
+            {/* Real Internet egress status badge */}
+            <div
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border text-[11px] font-mono font-medium transition-all h-[24px] ${
+                hasRealInternetAccess === null
+                  ? 'bg-slate-900 border-slate-800 text-slate-400 font-bold'
+                  : hasRealInternetAccess
+                    ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400 font-bold'
+                    : 'bg-amber-500/10 border-amber-500/20 text-amber-400 font-bold'
+              }`}
+              title="Resultado de la última sonda de salida real a Internet (conectividad WAN externa)."
+            >
+              <Globe className="h-3.5 w-3.5 text-slate-400" />
+              <span>
+                {hasRealInternetAccess === null 
+                  ? 'WAN: Sin probar' 
+                  : hasRealInternetAccess 
+                    ? 'WAN: Con internet ✔' 
+                    : 'WAN: Sin internet ❌'}
+              </span>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                hasRealInternetAccess === null 
+                  ? 'bg-slate-500' 
+                  : hasRealInternetAccess 
+                    ? 'bg-cyan-500' 
+                    : 'bg-amber-500 animate-pulse'
+              }`} />
+            </div>
           </div>
 
           {/* TOGGLE Demo / Simulación */}
@@ -2122,19 +2226,31 @@ export default function App() {
 
           {/* CONSULTAR FABRICANTES API BUTTON */}
           <button 
-            disabled={isResolvingVendors || isScanning}
-            onClick={() => handleResolveAllVendorsViaApi(false)}
+            disabled={isResolvingVendors || isCheckingInternet || isScanning}
+            onClick={() => checkRealInternetConnection(false)}
             className={`flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border shrink-0 ${
-              isResolvingVendors 
-                ? 'bg-slate-950 text-amber-500 border-amber-500/50 cursor-wait' 
-                : isScanning
-                  ? 'bg-slate-900 text-slate-500 border-slate-800 cursor-not-allowed opacity-50'
-                  : 'bg-slate-950 text-amber-400 border-slate-850 hover:border-amber-500/50 hover:text-amber-300 active:scale-95 cursor-pointer'
+              isCheckingInternet
+                ? 'bg-slate-950 text-cyan-400 border-cyan-500/50 cursor-wait'
+                : isResolvingVendors 
+                  ? 'bg-slate-950 text-amber-500 border-amber-500/50 cursor-wait' 
+                  : isScanning
+                    ? 'bg-slate-900 text-slate-500 border-slate-800 cursor-not-allowed opacity-50'
+                    : 'bg-slate-950 text-amber-400 border-slate-850 hover:border-amber-500/50 hover:text-amber-300 active:scale-95 cursor-pointer'
             }`}
-            title="Consulta las direcciones MAC de tu red con bases de datos en internet (macvendors.com) para obtener marcas reales con precisión quirúrgica"
+            title="Verifica la salida a internet de tu red local y, si la hay, consulta las direcciones MAC en bases de datos externas para resolver los nombres de fabricantes reales."
           >
-            <Globe className={`h-3.5 w-3.5 text-amber-400 ${isResolvingVendors ? 'animate-spin' : ''}`} style={{ animationDuration: isResolvingVendors ? '2s' : undefined }} />
-            {isResolvingVendors ? 'Consultando API...' : 'Resolver Fabricantes (API)'}
+            <Globe className={`h-3.5 w-3.5 ${
+              isCheckingInternet 
+                ? 'text-cyan-400 animate-pulse' 
+                : isResolvingVendors 
+                  ? 'text-amber-400 animate-spin' 
+                  : 'text-amber-400'
+            }`} style={{ animationDuration: isResolvingVendors ? '2s' : undefined }} />
+            {isCheckingInternet 
+              ? 'Verificando Internet...' 
+              : isResolvingVendors 
+                ? 'Resolviendo Nombres...' 
+                : 'Verificar Internet y Nombres'}
           </button>
 
           {/* ESCANEAR AHORA BUTTON (Highlight Accent cyan) */}
