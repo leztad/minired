@@ -464,6 +464,23 @@ export default function App() {
     }
 
     try {
+      // First try server-side authoritative check to see if our node has active egress dns lookup
+      const serverRes = await fetch("/api/check-internet");
+      if (serverRes.ok) {
+        const serverData = await serverRes.json();
+        if (serverData && serverData.online) {
+          setHasRealInternetAccess(true);
+          setIsCheckingInternet(false);
+          addAlert("🌐 Conexión externa confirmada: El servidor local de monitoreo reporta salida autoritativa a Internet.", "success", "Sistema", "NET-102");
+          handleResolveAllVendorsViaApi(true);
+          return true;
+        }
+      }
+    } catch (errServer) {
+      console.warn("Authoritative server WAN check unreachable, attempting browser probe...", errServer);
+    }
+
+    try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
@@ -478,7 +495,7 @@ export default function App() {
       setHasRealInternetAccess(true);
       setIsCheckingInternet(false);
       
-      addAlert("🌐 Conexión externa confirmada: El sistema tiene salida real a Internet.", "success", "Sistema", "NET-102");
+      addAlert("🌐 Conexión externa confirmada: El navegador tiene salida real a Internet.", "success", "Sistema", "NET-102");
       
       // Auto resolve names since we have internet
       handleResolveAllVendorsViaApi(true);

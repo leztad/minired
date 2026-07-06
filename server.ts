@@ -161,6 +161,26 @@ const fetchOnlineVendor = async (mac: string): Promise<string> => {
   return "Dispositivo de Red Activo";
 };
 
+// API endpoint to check if the server has real internet access
+app.get("/api/check-internet", async (req, res) => {
+  try {
+    const dnsResolve = new Promise<boolean>((resolve) => {
+      dns.lookup("cloudflare.com", (err) => {
+        resolve(!err);
+      });
+    });
+    
+    const timeout = new Promise<boolean>((resolve) => {
+      setTimeout(() => resolve(false), 2000);
+    });
+    
+    const hasInternet = await Promise.race([dnsResolve, timeout]);
+    res.json({ online: hasInternet });
+  } catch (e) {
+    res.json({ online: false, error: String(e) });
+  }
+});
+
 // API endpoint to return REAL network interfaces on the machine
 app.get("/api/interfaces", (req, res) => {
   try {
@@ -256,12 +276,21 @@ app.get("/api/interfaces", (req, res) => {
 // Helper to resolve IP hostname/computer name on the local subnet dynamically
 const resolveHostname = (ip: string): Promise<string> => {
   return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      resolve("");
+    }, 1200);
+
+    const done = (val: string) => {
+      clearTimeout(timeoutId);
+      resolve(val);
+    };
+
     // 1. Try native dns.reverse which is extremely fast if a local DNS server is active (like the home router)
     dns.reverse(ip, (err, hostnames) => {
       if (!err && hostnames && hostnames.length > 0) {
         let name = hostnames[0];
         if (name.endsWith('.')) name = name.slice(0, -1);
-        return resolve(name);
+        return done(name);
       }
       
       const isWindows = process.platform === "win32";
@@ -269,23 +298,23 @@ const resolveHostname = (ip: string): Promise<string> => {
         // 2. On Windows, use PowerShell to query DNS / NetBIOS hostname
         // This is extremely high-accuracy for Windows networks where devices have NetBIOS names
         const psCmd = `powershell -NoProfile -Command "[System.Net.Dns]::GetHostEntry('${ip}').HostName"`;
-        exec(psCmd, { timeout: 1200 }, (psErr, psStdout) => {
+        exec(psCmd, { timeout: 1000 }, (psErr, psStdout) => {
           if (!psErr && psStdout && psStdout.trim()) {
-            return resolve(psStdout.trim());
+            return done(psStdout.trim());
           }
           // Alternative: nslookup
-          exec(`nslookup ${ip}`, { timeout: 1000 }, (nsErr, nsStdout) => {
+          exec(`nslookup ${ip}`, { timeout: 800 }, (nsErr, nsStdout) => {
             if (!nsErr && nsStdout) {
               const lines = nsStdout.split('\n');
               const nameLine = lines.find(line => line.toLowerCase().includes('name:') || line.toLowerCase().includes('nombre:'));
               if (nameLine) {
                 const parts = nameLine.split(':');
                 if (parts.length > 1) {
-                  return resolve(parts[1].trim());
+                  return done(parts[1].trim());
                 }
               }
             }
-            resolve("");
+            done("");
           });
         });
       } else {
@@ -297,14 +326,14 @@ const resolveHostname = (ip: string): Promise<string> => {
             if (nameLine) {
               if (nameLine.includes('=')) {
                 const parts = nameLine.split('=');
-                return resolve(parts[1].trim());
+                return done(parts[1].trim());
               } else {
                 const parts = nameLine.split(':');
-                return resolve(parts[1].trim());
+                return done(parts[1].trim());
               }
             }
           }
-          resolve("");
+          done("");
         });
       }
     });

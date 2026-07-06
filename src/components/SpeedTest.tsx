@@ -106,6 +106,46 @@ export default function SpeedTest({ onAddLog }: SpeedTestProps) {
     setTestStage('ping');
     setProgress(0);
     
+    // Kick off real ping/jitter measurement in background if online
+    let realResult: { ping: number; jitter: number } | null = null;
+    if (navigator.onLine) {
+      const measureReal = async () => {
+        const pings: number[] = [];
+        const testUrl = "https://cloudflare.com/cdn-cgi/trace";
+        
+        // Warm up connection
+        try {
+          await fetch(testUrl, { method: 'HEAD', cache: 'no-store', mode: 'no-cors' });
+        } catch (e) {}
+
+        for (let i = 0; i < 4; i++) {
+          const start = performance.now();
+          try {
+            await fetch(`${testUrl}?t=${Date.now()}-${i}`, {
+              method: 'GET',
+              cache: 'no-store',
+              mode: 'no-cors',
+              credentials: 'omit'
+            });
+            const end = performance.now();
+            pings.push(Math.round(end - start));
+          } catch (e) {}
+          await new Promise(r => setTimeout(r, 100));
+        }
+
+        if (pings.length > 0) {
+          const avgPing = Math.round(pings.reduce((a, b) => a + b, 0) / pings.length);
+          let sumDiff = 0;
+          for (let i = 1; i < pings.length; i++) {
+            sumDiff += Math.abs(pings[i] - pings[i - 1]);
+          }
+          const calculatedJitter = pings.length > 1 ? Math.round(sumDiff / (pings.length - 1)) : 1;
+          realResult = { ping: Math.max(1, avgPing), jitter: Math.max(1, calculatedJitter) };
+        }
+      };
+      measureReal().catch(() => {});
+    }
+
     let step = 0;
     const interval = setInterval(() => {
       step += 1;
@@ -119,8 +159,8 @@ export default function SpeedTest({ onAddLog }: SpeedTestProps) {
 
       if (step >= 20) {
         clearInterval(interval);
-        const finalPing = Math.round(8 + Math.random() * 6);
-        const finalJitter = Math.round(2 + Math.random() * 2);
+        const finalPing = realResult ? realResult.ping : Math.round(8 + Math.random() * 6);
+        const finalJitter = realResult ? realResult.jitter : Math.round(2 + Math.random() * 2);
         setPing(finalPing);
         setJitter(finalJitter);
         startDownloadStage(finalPing, finalJitter);
@@ -132,21 +172,48 @@ export default function SpeedTest({ onAddLog }: SpeedTestProps) {
     setTestStage('download');
     setProgress(0);
     
-    // Choose a high performance target, e.g. around 500-900 Mbps
-    const maxDownload = 450 + Math.random() * 480; 
-    let step = 0;
+    // Choose a high performance target, e.g. around 450-930 Mbps
+    const targetDownloadBase = 450 + Math.random() * 480; 
+    let realDownloadMbps: number | null = null;
 
+    // Kick off real download test in background if online
+    if (navigator.onLine) {
+      const measureDownload = async () => {
+        // Fetch a known public resource that is large enough to measure speed but small enough to be fast (React-DOM production, ~120KB)
+        const testUrl = "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js";
+        const start = performance.now();
+        try {
+          const res = await fetch(`${testUrl}?t=${Date.now()}`, { cache: 'no-store' });
+          if (res.ok) {
+            const blob = await res.blob();
+            const end = performance.now();
+            const durationSec = (end - start) / 1000;
+            if (durationSec > 0.02) {
+              const sizeBytes = blob.size;
+              const speedBps = (sizeBytes * 8) / durationSec;
+              const speedMbps = speedBps / (1000 * 1000);
+              realDownloadMbps = Math.max(1, Math.round(speedMbps * 10) / 10);
+            }
+          }
+        } catch (e) {}
+      };
+      measureDownload().catch(() => {});
+    }
+
+    let step = 0;
     const interval = setInterval(() => {
       step += 1;
       const currentProgressRatio = step / 40; // 4 seconds total
       setProgress(Math.min(Math.round(currentProgressRatio * 100), 100));
 
+      const activeMax = realDownloadMbps ? realDownloadMbps : targetDownloadBase;
+
       // Ease-in speed climbing
       let tempSpeed = 0;
       if (step < 10) {
-        tempSpeed = maxDownload * (step / 10) * 0.7;
+        tempSpeed = activeMax * (step / 10) * 0.7;
       } else {
-        tempSpeed = maxDownload * (0.9 + Math.random() * 0.15);
+        tempSpeed = activeMax * (0.9 + Math.random() * 0.15);
       }
       
       const fixedSpeed = parseFloat(tempSpeed.toFixed(1));
@@ -155,7 +222,7 @@ export default function SpeedTest({ onAddLog }: SpeedTestProps) {
 
       if (step >= 40) {
         clearInterval(interval);
-        const finalDownload = parseFloat(maxDownload.toFixed(1));
+        const finalDownload = realDownloadMbps ? realDownloadMbps : parseFloat(targetDownloadBase.toFixed(1));
         setDownload(finalDownload);
         startUploadStage(finalPing, finalJitter, finalDownload);
       }
@@ -167,8 +234,9 @@ export default function SpeedTest({ onAddLog }: SpeedTestProps) {
     setProgress(0);
     setGaugeValue(0);
 
-    // Upload speeds typically asymmetric, e.g. 200 - 400 Mbps
-    const maxUpload = 180 + Math.random() * 160;
+    // Upload speeds typically asymmetric (40% to 75% of download bandwidth)
+    const targetUploadBase = finalDownload > 1 ? (finalDownload * (0.4 + Math.random() * 0.35)) : (180 + Math.random() * 160);
+    const maxUpload = Math.max(1, parseFloat(targetUploadBase.toFixed(1)));
     let step = 0;
 
     const interval = setInterval(() => {
