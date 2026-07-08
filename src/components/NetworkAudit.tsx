@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Device } from '../types';
 import { 
   ShieldCheck, ShieldAlert, Download, FileJson, FileSpreadsheet, Copy, 
-  Search, Sliders, Server, Wifi, Activity, Terminal, CheckCircle2, AlertTriangle, Info, Network
+  Search, Sliders, Server, Wifi, Activity, Terminal, CheckCircle2, AlertTriangle, Info, Network,
+  ChevronDown, ChevronUp, Cpu, HelpCircle, Check
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { resolveVendorByMac } from '../utils/macUtils';
@@ -17,6 +18,11 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSegment, setFilterSegment] = useState('all');
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
+
+  // States for Physical Serial Number Assistant Panel
+  const [showAssistant, setShowAssistant] = useState(true);
+  const [assistantTab, setAssistantTab] = useState<'explicacion' | 'comandos' | 'sonda'>('explicacion');
+  const [copiedCommandText, setCopiedCommandText] = useState<string | null>(null);
 
   // States for inline serial number overriding
   const [serialOverrides, setSerialOverrides] = useState<Record<string, string>>(() => {
@@ -649,6 +655,242 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
           </div>
         </div>
 
+      </div>
+
+      {/* PHYSICAL SERIAL NUMBERS ASSISTANT CONSOLE */}
+      <div className="bg-[#0b1329]/70 border border-amber-500/20 rounded-md overflow-hidden shadow-lg transition-all duration-300">
+        <div 
+          onClick={() => setShowAssistant(!showAssistant)}
+          className="p-3.5 bg-[#0e1b38] flex items-center justify-between cursor-pointer select-none hover:bg-[#12244a] transition-colors border-b border-slate-800/40"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded bg-amber-950/60 border border-amber-500/30 flex items-center justify-center">
+              <Cpu className="h-3.5 w-3.5 text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                Asistente de Consulta y Registro de Números de Serie Reales
+                <span className="bg-amber-400/10 text-amber-400 border border-amber-500/20 text-[9px] uppercase px-1.5 py-0.5 rounded font-mono font-bold">
+                  Sonda y Métodos de Captura
+                </span>
+              </h3>
+              <p className="text-[10px] text-slate-400">
+                Los escaneos de red ARP/Ping no transportan de forma nativa los números de serie de fábrica. Conozca las opciones reales para su auditoría.
+              </p>
+            </div>
+          </div>
+          <div className="text-slate-400 hover:text-slate-200">
+            {showAssistant ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </div>
+        </div>
+
+        {showAssistant && (
+          <div className="p-4 space-y-4">
+            {/* Tab Navigation */}
+            <div className="flex items-center gap-1.5 border-b border-slate-800/60 pb-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); setAssistantTab('explicacion'); }}
+                className={`px-3 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  assistantTab === 'explicacion'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                }`}
+              >
+                🔬 Limitaciones de Red
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setAssistantTab('comandos'); }}
+                className={`px-3 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  assistantTab === 'comandos'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                }`}
+              >
+                💻 Comandos OS (Sonda Local)
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setAssistantTab('sonda'); }}
+                className={`px-3 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  assistantTab === 'sonda'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                }`}
+              >
+                🛰️ Sonda de Red Automatizada
+              </button>
+            </div>
+
+            {/* Tab Content 1: Explanation */}
+            {assistantTab === 'explicacion' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] leading-relaxed">
+                <div className="space-y-2 bg-slate-950/40 p-3 rounded border border-slate-900">
+                  <span className="text-[10px] font-bold font-mono uppercase text-amber-400 flex items-center gap-1.5">
+                    <Info className="h-3 w-3" /> ¿POR QUÉ UN ESCÁNER DE RED NO VE SERIALES?
+                  </span>
+                  <p className="text-slate-300">
+                    Los protocolos de Capa 2 y 3 (como <strong className="text-slate-200 font-bold">ARP, ICMP/Ping o mDNS</strong>) operan puramente para direccionar tráfico lógico. <span className="text-amber-300">No existe ningún estándar de red de bajo nivel que exponga el número de serie de fábrica del chasis de un equipo</span> de forma pasiva.
+                  </p>
+                  <p className="text-slate-400">
+                    Para obtener el número de serie de un equipo ajeno (impresora, router, servidor) de forma automática por red, se requiere interactuar a través de protocolos de gestión de Capa Aplicación como <strong className="text-slate-200 font-bold">SNMP (Simple Network Management Protocol)</strong> o con agentes de Active Directory/WMI que necesitan credenciales administrativas explícitas.
+                  </p>
+                </div>
+
+                <div className="space-y-2 bg-slate-950/40 p-3 rounded border border-slate-900">
+                  <span className="text-[10px] font-bold font-mono uppercase text-cyan-400 flex items-center gap-1.5">
+                    <Server className="h-3 w-3" /> CONTEXTO DE EJECUCIÓN (CONTENEDOR NUBE)
+                  </span>
+                  <p className="text-slate-300">
+                    Al probar la aplicación en la vista de AI Studio, el backend se ejecuta en un <strong className="text-slate-200 font-bold">contenedor de Google Cloud aislado</strong>. Esto significa que:
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-400">
+                    <li>La sonda de red no puede conectarse eléctricamente a su red LAN física (oficina/casa) de forma automática.</li>
+                    <li>Los comandos de BIOS del host leen el chasis virtual del servidor Cloud, que devuelve seriales virtuales de la infraestructura.</li>
+                  </ul>
+                  <p className="text-slate-300 mt-2">
+                    <strong className="text-slate-200">Solución:</strong> Para auditar su entorno real, puede asociar manualmente los números de serie en la tabla inferior utilizando el botón de <strong className="text-amber-400">✏️ Editar</strong> o haciendo doble clic sobre el campo.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Tab Content 2: OS Commands */}
+            {assistantTab === 'comandos' && (
+              <div className="space-y-3 text-[11px]">
+                <p className="text-slate-300">
+                  Ejecute estos comandos con privilegios de administrador en el terminal del dispositivo local que desea auditar para obtener su número de serie físico real:
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Windows CMD / Powershell */}
+                  <div className="bg-slate-950 p-3 rounded border border-slate-800 space-y-2 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold font-mono text-cyan-400 block mb-1">🖥️ WINDOWS (CMD / PowerShell)</span>
+                      <p className="text-slate-400 text-[10px] mb-2 leading-tight">Muestra el número de serie cargado en el BIOS/SMBIOS por el fabricante del equipo.</p>
+                      <code className="block bg-slate-900 p-2 rounded text-amber-400 font-mono text-[9px] break-all select-all">
+                        wmic bios get serialnumber
+                      </code>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText("wmic bios get serialnumber");
+                        setCopiedCommandText("win");
+                        setTimeout(() => setCopiedCommandText(null), 2000);
+                        onAddLog("📋 Comando WMIC copiado al portapapeles", "info");
+                      }}
+                      className="mt-2 w-full bg-slate-900 hover:bg-[#1e293b] text-slate-300 font-bold py-1 px-2 rounded text-[9px] border border-slate-800 cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      {copiedCommandText === 'win' ? '¡Copiado!' : 'Copiar comando'}
+                    </button>
+                  </div>
+
+                  {/* macOS Terminal */}
+                  <div className="bg-slate-950 p-3 rounded border border-slate-800 space-y-2 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold font-mono text-cyan-400 block mb-1">🍏 macOS (Terminal)</span>
+                      <p className="text-slate-400 text-[10px] mb-2 leading-tight">Consulta el perfil de hardware del sistema para extraer el identificador de serie único de Apple.</p>
+                      <code className="block bg-slate-900 p-2 rounded text-amber-400 font-mono text-[9px] break-all select-all">
+                        system_profiler SPHardwareDataType | grep "Serial Number"
+                      </code>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText('system_profiler SPHardwareDataType | grep "Serial Number"');
+                        setCopiedCommandText("mac");
+                        setTimeout(() => setCopiedCommandText(null), 2000);
+                        onAddLog("📋 Comando macOS copiado al portapapeles", "info");
+                      }}
+                      className="mt-2 w-full bg-slate-900 hover:bg-[#1e293b] text-slate-300 font-bold py-1 px-2 rounded text-[9px] border border-slate-800 cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      {copiedCommandText === 'mac' ? '¡Copiado!' : 'Copiar comando'}
+                    </button>
+                  </div>
+
+                  {/* Linux Bash */}
+                  <div className="bg-slate-950 p-3 rounded border border-slate-800 space-y-2 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold font-mono text-cyan-400 block mb-1">🐧 LINUX (Terminal)</span>
+                      <p className="text-slate-400 text-[10px] mb-2 leading-tight">Requiere privilegios de root para leer de forma segura la tabla DMI de la placa madre local.</p>
+                      <code className="block bg-slate-900 p-2 rounded text-amber-400 font-mono text-[9px] break-all select-all">
+                        sudo dmidecode -s system-serial-number
+                      </code>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText("sudo dmidecode -s system-serial-number");
+                        setCopiedCommandText("linux");
+                        setTimeout(() => setCopiedCommandText(null), 2000);
+                        onAddLog("📋 Comando Linux copiado al portapapeles", "info");
+                      }}
+                      className="mt-2 w-full bg-slate-900 hover:bg-[#1e293b] text-slate-300 font-bold py-1 px-2 rounded text-[9px] border border-slate-800 cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      {copiedCommandText === 'linux' ? '¡Copiado!' : 'Copiar comando'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-amber-950/20 border border-amber-500/10 rounded flex items-start gap-2 text-[10px] text-amber-300 leading-tight">
+                  <span className="text-sm">💡</span>
+                  <p>
+                    <strong className="text-amber-200">Consejo de auditoría:</strong> Una vez ejecutado el comando en el equipo local, haga doble clic en el campo <strong className="text-slate-100">"Número de Serie"</strong> en la tabla inferior y pegue el serial real. El sistema lo guardará permanentemente de forma local.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Tab Content 3: Local Automated Script */}
+            {assistantTab === 'sonda' && (
+              <div className="space-y-3 text-[11px]">
+                <p className="text-slate-300">
+                  Para redes complejas de Windows, puede ejecutar este script de PowerShell en una consola de administrador local para escanear hosts y recuperar automáticamente sus seriales reales de BIOS por red:
+                </p>
+
+                <div className="bg-slate-950 p-3 rounded border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between border-b border-slate-900 pb-1">
+                    <span className="text-[10px] font-bold font-mono text-emerald-400">🛰️ Sonda de RedMonitor - PowerShell BIOS Serial Retriever</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const scriptText = `# Sonda de Auditoría de RedMonitor - Capturador de Números de Serie\n$Subnet = "192.168.1.*"\nWrite-Host "Iniciando sonda de números de serie físicos en: $Subnet..."\n$ActiveHosts = Get-NetNeighbor | Where-Object { $_.IPAddress -like $Subnet }\nforeach ($HostNode in $ActiveHosts) {\n    $IP = $HostNode.IPAddress\n    try {\n        $Serial = (Get-CimInstance Win32_Bios -ComputerName $IP -ErrorAction Stop).SerialNumber\n        $MAC = $HostNode.LinkLayerAddress\n        [PSCustomObject]@{ IP = $IP; MAC = $MAC; SerialNumber = $Serial }\n    } catch {}\n}`;
+                        navigator.clipboard.writeText(scriptText);
+                        setCopiedCommandText("script");
+                        setTimeout(() => setCopiedCommandText(null), 2000);
+                        onAddLog("📋 Script PowerShell copiado al portapapeles", "success");
+                      }}
+                      className="bg-slate-900 hover:bg-[#1e293b] text-[9px] text-slate-300 px-2.5 py-1 rounded border border-slate-800 cursor-pointer transition-all"
+                    >
+                      {copiedCommandText === 'script' ? '¡Copiado!' : 'Copiar script completo'}
+                    </button>
+                  </div>
+                  <pre className="text-[9px] font-mono text-emerald-300 bg-slate-900/65 p-2.5 rounded overflow-x-auto max-h-40 select-all leading-normal">
+{`# Sonda de Auditoría de RedMonitor - Capturador de Números de Serie
+$Subnet = "192.168.1.*"
+Write-Host "Iniciando sonda de números de serie físicos en: $Subnet..."
+
+# Realiza escaneo de red para hosts con WMI activo
+$ActiveHosts = Get-NetNeighbor | Where-Object { $_.IPAddress -like $Subnet }
+foreach ($HostNode in $ActiveHosts) {
+    $IP = $HostNode.IPAddress
+    try {
+        $Serial = (Get-CimInstance Win32_Bios -ComputerName $IP -ErrorAction Stop).SerialNumber
+        $MAC = $HostNode.LinkLayerAddress
+        [PSCustomObject]@{ IP = $IP; MAC = $MAC; SerialNumber = $Serial } | Format-Table
+    } catch {
+        # Si WMI está bloqueado, requiere habilitar WinRM o credenciales en dominio
+    }
+}`}
+                  </pre>
+                </div>
+
+                <p className="text-slate-400 text-[10px] leading-tight">
+                  <strong className="text-slate-300 font-bold font-sans">Nota de Ingeniería de Sistemas:</strong> Una vez recolectados, puede asignar de forma duradera estos números de serie en la tabla de abajo. Quedarán vinculados a las direcciones MAC correspondientes e integrados de forma impecable en todos los PDF que exporte.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* FILTER CONTROLS BAR */}
