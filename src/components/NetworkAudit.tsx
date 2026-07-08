@@ -11,10 +11,9 @@ interface NetworkAuditProps {
   devices: Device[];
   onAddLog: (msg: string, type: 'info' | 'success' | 'warning' | 'error') => void;
   locationName: string;
-  onChangeLocation: () => void;
 }
 
-export default function NetworkAudit({ devices, onAddLog, locationName, onChangeLocation }: NetworkAuditProps) {
+export default function NetworkAudit({ devices, onAddLog, locationName }: NetworkAuditProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSegment, setFilterSegment] = useState('all');
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
@@ -499,12 +498,6 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
             </div>
           </div>
         </div>
-        <button
-          onClick={onChangeLocation}
-          className="bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-3 py-1.5 rounded-xs font-bold text-[10px] uppercase font-mono tracking-wider active:scale-95 cursor-pointer transition-all flex items-center gap-1.5"
-        >
-          <span>✏️ Cambiar Ubicación</span>
-        </button>
       </div>
 
       {/* HEADER CARD */}

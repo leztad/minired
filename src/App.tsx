@@ -3785,7 +3785,6 @@ export default function App() {
               devices={processedDevices} 
               onAddLog={addAlert} 
               locationName={locationName}
-              onChangeLocation={() => setShowLocationModal(true)}
             />
           )}
 
