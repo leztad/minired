@@ -282,25 +282,77 @@ const getHostSerialNumber = (): string => {
   }
 
   try {
-    const isWindows = process.platform === "win32";
-    if (isWindows) {
-      const out = execSync("wmic bios get serialnumber", { encoding: "utf8", timeout: 800 });
-      const lines = out.split("\n").map(l => l.trim()).filter(Boolean);
-      if (lines.length > 1 && lines[1].toLowerCase() !== "serialnumber" && lines[1].trim() !== "") {
-        cachedHostSerial = lines[1].trim();
-        return cachedHostSerial;
-      }
+    const platform = process.platform;
+    if (platform === "win32") {
+      // 1. WMIC BIOS
+      try {
+        const out = execSync("wmic bios get serialnumber", { encoding: "utf8", timeout: 800 });
+        const lines = out.split("\n").map(l => l.trim()).filter(Boolean);
+        if (lines.length > 1 && lines[1] && !/serialnumber|default|to be filled|not specified/i.test(lines[1])) {
+          cachedHostSerial = lines[1].trim();
+          return cachedHostSerial;
+        }
+      } catch (e) {}
+
+      // 2. WMIC CSProduct
+      try {
+        const out = execSync("wmic csproduct get identifyingnumber", { encoding: "utf8", timeout: 800 });
+        const lines = out.split("\n").map(l => l.trim()).filter(Boolean);
+        if (lines.length > 1 && lines[1] && !/identifyingnumber|default|to be filled|not specified/i.test(lines[1])) {
+          cachedHostSerial = lines[1].trim();
+          return cachedHostSerial;
+        }
+      } catch (e) {}
+
+      // 3. PowerShell Get-CimInstance
+      try {
+        const out = execSync("powershell -NoProfile -Command \"(Get-CimInstance Win32_Bios).SerialNumber\"", { encoding: "utf8", timeout: 1200 });
+        const clean = out.trim();
+        if (clean && !/default|to be filled|not specified/i.test(clean)) {
+          cachedHostSerial = clean;
+          return cachedHostSerial;
+        }
+      } catch (e) {}
+    } else if (platform === "darwin") {
+      // macOS Serial Number
+      try {
+        const out = execSync("ioreg -l | grep IOPlatformSerialNumber", { encoding: "utf8", timeout: 800 });
+        const match = out.match(/"IOPlatformSerialNumber"\s*=\s*"([^"]+)"/);
+        if (match && match[1]) {
+          cachedHostSerial = match[1].trim();
+          return cachedHostSerial;
+        }
+      } catch (e) {}
+      
+      try {
+        const out = execSync("system_profiler SPHardwareDataType | grep 'Serial Number'", { encoding: "utf8", timeout: 1200 });
+        const parts = out.split(":");
+        if (parts.length > 1 && parts[1].trim()) {
+          cachedHostSerial = parts[1].trim();
+          return cachedHostSerial;
+        }
+      } catch (e) {}
     } else {
       // Linux
       try {
         const out = execSync("cat /sys/class/dmi/id/product_serial 2>/dev/null || cat /sys/class/dmi/id/chassis_serial 2>/dev/null", { encoding: "utf8", timeout: 500 });
         const clean = out.trim();
-        if (clean && !clean.includes("Permission denied") && clean.toLowerCase() !== "not specified" && clean.toLowerCase() !== "to be filled by o.e.m.") {
+        if (clean && !/permission denied|not specified|to be filled|default/i.test(clean)) {
           cachedHostSerial = clean;
           return cachedHostSerial;
         }
       } catch (e) {}
       
+      // Try dmidecode
+      try {
+        const out = execSync("dmidecode -s system-serial-number 2>/dev/null", { encoding: "utf8", timeout: 800 });
+        const clean = out.trim();
+        if (clean && !/permission denied|not specified|to be filled|default/i.test(clean)) {
+          cachedHostSerial = clean;
+          return cachedHostSerial;
+        }
+      } catch (e) {}
+
       // Fallback inside container/Docker
       try {
         const out = execSync("cat /etc/machine-id 2>/dev/null || cat /var/lib/dbus/machine-id 2>/dev/null", { encoding: "utf8", timeout: 500 });

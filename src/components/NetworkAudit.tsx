@@ -18,19 +18,53 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
   const [filterSegment, setFilterSegment] = useState('all');
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
 
+  // States for inline serial number overriding
+  const [serialOverrides, setSerialOverrides] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('netmonitor_serial_overrides') || '{}');
+    } catch (e) {
+      return {};
+    }
+  });
+  const [editingMac, setEditingMac] = useState<string | null>(null);
+  const [editSerialVal, setEditSerialVal] = useState<string>('');
+
+  // Handle saving of manual serial number
+  const handleSaveSerial = (mac: string) => {
+    const updated = {
+      ...serialOverrides,
+      [mac]: editSerialVal.trim()
+    };
+    setSerialOverrides(updated);
+    localStorage.setItem('netmonitor_serial_overrides', JSON.stringify(updated));
+    setEditingMac(null);
+    onAddLog(`✅ Nº de Serie físico asignado para MAC ${mac}: "${editSerialVal.trim()}"`, 'success');
+  };
+
+  // Map incoming devices with local overrides
+  const devicesWithOverrides = useMemo(() => {
+    return devices.map(d => {
+      const override = serialOverrides[d.mac];
+      return {
+        ...d,
+        serialNumber: override !== undefined ? override : d.serialNumber
+      };
+    });
+  }, [devices, serialOverrides]);
+
   // Consider only active devices or warning devices
   const activeDevices = useMemo(() => {
-    return devices.filter(d => d.estado === 'OK' || d.estado === 'Advertencia');
-  }, [devices]);
+    return devicesWithOverrides.filter(d => d.estado === 'OK' || d.estado === 'Advertencia');
+  }, [devicesWithOverrides]);
 
   // Compute distinct list of segments among active devices
   const activeSegments = useMemo(() => {
     const list = new Set<string>();
-    devices.forEach(d => {
+    devicesWithOverrides.forEach(d => {
       if (d.segmento) list.add(d.segmento);
     });
     return Array.from(list);
-  }, [devices]);
+  }, [devicesWithOverrides]);
 
   // Filters
   const filteredDevices = useMemo(() => {
@@ -706,8 +740,59 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                       </td>
 
                       {/* SERIAL NUMBER */}
-                      <td className="p-3 font-mono font-bold tracking-wide text-amber-400 select-all border-l border-slate-800/50 bg-slate-950/20" title="Número de Serie de Hardware">
-                        {d.serialNumber || '—'}
+                      <td className="p-3 font-mono font-bold tracking-wide select-all border-l border-slate-800/50 bg-slate-950/20" title="Haga doble clic para editar o use el botón">
+                        {editingMac === d.mac ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              value={editSerialVal}
+                              onChange={(e) => setEditSerialVal(e.target.value)}
+                              className="bg-slate-900 border border-cyan-500 rounded px-1.5 py-0.5 text-xs text-amber-400 font-mono focus:outline-none w-36 max-w-[150px]"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleSaveSerial(d.mac);
+                                } else if (e.key === 'Escape') {
+                                  setEditingMac(null);
+                                }
+                              }}
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleSaveSerial(d.mac)}
+                              className="text-emerald-400 hover:text-emerald-300 text-[10px] font-bold px-1.5 py-0.5 bg-emerald-950/40 rounded border border-emerald-500/30 cursor-pointer"
+                              title="Guardar"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => setEditingMac(null)}
+                              className="text-rose-400 hover:text-rose-300 text-[10px] font-bold px-1.5 py-0.5 bg-rose-950/40 rounded border border-rose-500/30 cursor-pointer"
+                              title="Cancelar"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div 
+                            className="flex items-center justify-between group/row cursor-pointer"
+                            onDoubleClick={() => {
+                              setEditingMac(d.mac);
+                              setEditSerialVal(d.serialNumber || '');
+                            }}
+                          >
+                            <span className="text-amber-400 select-all">{d.serialNumber || '—'}</span>
+                            <button
+                              onClick={() => {
+                                setEditingMac(d.mac);
+                                setEditSerialVal(d.serialNumber || '');
+                              }}
+                              className="opacity-0 group-hover/row:opacity-100 text-[9px] text-cyan-400 hover:text-cyan-300 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-500/20 ml-2 transition-all cursor-pointer"
+                              title="Haga doble clic o pulse para editar el Nº de Serie Real"
+                            >
+                              ✏️ Editar
+                            </button>
+                          </div>
+                        )}
                       </td>
 
                       {/* VENDOR RESOLVED PRESTINE NAME */}
