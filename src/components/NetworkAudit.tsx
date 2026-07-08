@@ -10,9 +10,11 @@ import { resolveVendorByMac } from '../utils/macUtils';
 interface NetworkAuditProps {
   devices: Device[];
   onAddLog: (msg: string, type: 'info' | 'success' | 'warning' | 'error') => void;
+  locationName: string;
+  onChangeLocation: () => void;
 }
 
-export default function NetworkAudit({ devices, onAddLog }: NetworkAuditProps) {
+export default function NetworkAudit({ devices, onAddLog, locationName, onChangeLocation }: NetworkAuditProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSegment, setFilterSegment] = useState('all');
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
@@ -256,75 +258,82 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       doc.text("Sondeo y Validación de Interfaces Físicas, Direcciones MAC y Latencia LAN", 10, 27);
 
       doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
-      doc.rect(10, 31, 190, 12, 'F');
+      doc.rect(10, 31, 190, 18, 'F');
       doc.setDrawColor(borderLineColor[0], borderLineColor[1], borderLineColor[2]);
       doc.setLineWidth(0.25);
-      doc.rect(10, 31, 190, 12, 'S');
+      doc.rect(10, 31, 190, 18, 'S');
 
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(textColorPrimary[0], textColorPrimary[1], textColorPrimary[2]);
-      doc.text(`Sonda de Monitoreo: RedMonitor Sonda de Campo Local`, 14, 38.5);
-      doc.text(`ID de Sonda: RED-MON-162BF909`, 100, 38.5);
-      doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 154, 38.5);
+      doc.text(`Sonda de Monitoreo: RedMonitor Sonda de Campo Local`, 14, 37);
+      doc.text(`ID de Sonda: RED-MON-162BF909`, 98, 37);
+      doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 148, 37);
+
+      doc.setFont('Helvetica', 'bold');
+      doc.text("📍 SITIO / UBICACIÓN EVALUADA:", 14, 44);
+      doc.setFont('Helvetica', 'normal');
+      doc.setTextColor(0, 102, 153);
+      doc.text(locationName || 'No especificada', 65, 44);
+      doc.setTextColor(textColorPrimary[0], textColorPrimary[1], textColorPrimary[2]);
 
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(11);
       doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.text("RESUMEN EJECUTIVO DE SEGURIDAD", 10, 49);
+      doc.text("RESUMEN EJECUTIVO DE SEGURIDAD", 10, 56);
 
       doc.setFillColor(255, 255, 255);
       doc.setDrawColor(186, 230, 253); 
       doc.setLineWidth(0.3);
-      doc.rect(10, 52, 190, 24, 'F');
-      doc.rect(10, 52, 190, 24, 'S');
+      doc.rect(10, 59, 190, 24, 'F');
+      doc.rect(10, 59, 190, 24, 'S');
 
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
-      doc.text("TOTAL HOSTS ACTIVOS", 15, 59);
+      doc.text("TOTAL HOSTS ACTIVOS", 15, 66);
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(15);
       doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.text(`${totals.count} Dispositivos`, 15, 68);
+      doc.text(`${totals.count} Dispositivos`, 15, 75);
 
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
-      doc.text("LATENCIA MEDIA LAN", 80, 59);
+      doc.text("LATENCIA MEDIA LAN", 80, 66);
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(15);
       doc.setTextColor(totals.avgLatency > 50 ? warningColor[0] : successColor[0], totals.avgLatency > 50 ? warningColor[1] : successColor[1], totals.avgLatency > 50 ? warningColor[2] : successColor[2]);
-      doc.text(`${totals.avgLatency} ms`, 80, 68);
+      doc.text(`${totals.avgLatency} ms`, 80, 75);
 
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
-      doc.text("NIVEL DE SEGURIDAD GENERAL", 135, 59);
+      doc.text("NIVEL DE SEGURIDAD GENERAL", 135, 66);
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(14);
       doc.setTextColor(totals.score < 80 ? warningColor[0] : successColor[0], totals.score < 80 ? warningColor[1] : successColor[1], totals.score < 80 ? warningColor[2] : successColor[2]);
-      doc.text(`${totals.score}% - ${totals.rank.split('(')[0]}`, 135, 68);
+      doc.text(`${totals.score}% - ${totals.rank.split('(')[0]}`, 135, 75);
 
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(11);
       doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.text("DIRECCIONES IP SONDEADAS CON DIRECCIÓN MAC ASOCIADA", 10, 85);
+      doc.text("DIRECCIONES IP SONDEADAS CON DIRECCIÓN MAC ASOCIADA", 10, 92);
 
       doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.rect(10, 89, 190, 8, 'F');
+      doc.rect(10, 96, 190, 8, 'F');
 
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(255, 255, 255);
-      doc.text("DIRECCIÓN IP", 14, 94.5);
-      doc.text("DIRECCIÓN MAC", 39, 94.5);
-      doc.text("FABRICANTE NIC (ARP)", 76, 94.5);
-      doc.text("ESTACIÓN / HOST", 125, 94.5);
-      doc.text("LATENCIA", 168, 94.5);
-      doc.text("ESTADO", 187, 94.5);
+      doc.text("DIRECCIÓN IP", 14, 101.5);
+      doc.text("DIRECCIÓN MAC", 39, 101.5);
+      doc.text("FABRICANTE NIC (ARP)", 76, 101.5);
+      doc.text("ESTACIÓN / HOST", 125, 101.5);
+      doc.text("LATENCIA", 168, 101.5);
+      doc.text("ESTADO", 187, 101.5);
 
-      let y = 97;
+      let y = 104;
       activeDevices.forEach((device, index) => {
         const isAlternate = index % 2 === 1;
         if (isAlternate) {
@@ -449,6 +458,27 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
   return (
     <div className="space-y-4" id="network-audit-view">
       
+      {/* LOCALIZACIÓN DE LA AUDITORÍA */}
+      <div className="bg-[#0f172a]/90 border border-cyan-500/10 p-3.5 rounded-md flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-cyan-950 flex items-center justify-center border border-cyan-500/20">
+            <span className="text-base text-cyan-400">📍</span>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-500 font-mono uppercase font-bold tracking-wider">Ubicación Registrada de Pruebas</div>
+            <div className="text-xs font-bold text-slate-200">
+              {locationName ? locationName : "No registrada / Local"}
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={onChangeLocation}
+          className="bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-3 py-1.5 rounded-xs font-bold text-[10px] uppercase font-mono tracking-wider active:scale-95 cursor-pointer transition-all flex items-center gap-1.5"
+        >
+          <span>✏️ Cambiar Ubicación</span>
+        </button>
+      </div>
+
       {/* HEADER CARD */}
       <div className="bg-[#0B1120]/40 border border-slate-800/80 p-3.5 rounded-md flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">

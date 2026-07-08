@@ -181,6 +181,12 @@ export default function App() {
   const [mobileAccessTab, setMobileAccessTab] = useState<'cloud' | 'local'>('cloud');
   const [isLocalHelpModalOpen, setIsLocalHelpModalOpen] = useState<boolean>(false);
 
+  // Location States for Laptop Mobility Report Traceability
+  const [locationName, setLocationName] = useState<string>(() => {
+    return localStorage.getItem('netmonitor_current_location') || '';
+  });
+  const [showLocationModal, setShowLocationModal] = useState<boolean>(true);
+
   // Probe UI States
   const [probeTab, setProbeTab] = useState<'arp' | 'manual' | 'local'>('arp');
   const [arpPasteText, setArpPasteText] = useState<string>('');
@@ -2010,6 +2016,18 @@ export default function App() {
             <Radio className={`h-4 w-4 ${isScanning ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
             <span className="text-[10px] text-slate-500 font-mono">Simulador de LAN integrado</span>
           </div>
+
+          {/* Ubicación actual */}
+          <div 
+            onClick={() => setShowLocationModal(true)}
+            className="hidden md:flex items-center gap-2 border-l border-slate-800 pl-3 cursor-pointer group hover:text-cyan-450 transition-colors"
+            title="Haga clic aquí para cambiar la ubicación física de las pruebas"
+          >
+            <span className="text-[10.5px] text-amber-500 group-hover:animate-bounce">📍</span>
+            <span className="text-[10px] text-slate-400 font-mono">
+              Sitio: <span className="text-cyan-400 font-bold group-hover:underline">{locationName || "Sede Local / No registrada"}</span>
+            </span>
+          </div>
         </div>
 
         {/* Dynamic Controls Header Group */}
@@ -3763,7 +3781,12 @@ export default function App() {
           )}
 
           {activeView === 'auditorias_red' && (
-            <NetworkAudit devices={processedDevices} onAddLog={addAlert} />
+            <NetworkAudit 
+              devices={processedDevices} 
+              onAddLog={addAlert} 
+              locationName={locationName}
+              onChangeLocation={() => setShowLocationModal(true)}
+            />
           )}
 
           {activeView === 'wiki_soporte' && (
@@ -4233,6 +4256,67 @@ export default function App() {
           </div>
         );
       })()}
+
+      {/* MODAL DE SOLICITUD DE UBICACIÓN INICIAL */}
+      {showLocationModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
+          <div className="bg-[#0b0f19] border border-cyan-500/30 rounded-lg max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 font-sans">
+            
+            <div className="flex items-center gap-2.5 mb-4 text-cyan-400">
+              <div className="w-8 h-8 rounded-full bg-cyan-950 flex items-center justify-center border border-cyan-500/30">
+                <span className="text-base text-cyan-400">📍</span>
+              </div>
+              <h3 className="text-md font-bold text-white leading-tight">
+                Ubicación de la Auditoría
+                <span className="block text-[10px] text-slate-500 font-mono font-normal uppercase tracking-wider mt-0.5">Trazabilidad de Verificación Portátil</span>
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+              Dado que este equipo se traslada a múltiples sedes u oficinas, por favor indique el nombre del sitio donde se encuentra para que aparezca en los reportes de red generados en formato PDF.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] text-slate-400 font-mono font-bold uppercase tracking-wider mb-1.5">
+                  Nombre de la Ubicación / Sitio
+                </label>
+                <input
+                  type="text"
+                  value={locationName}
+                  onChange={(e) => setLocationName(e.target.value)}
+                  placeholder="Ej. Sede Norte - Servidores, Sucursal Centro, Bodega 4"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-sm px-3 py-2 text-xs text-slate-100 placeholder-slate-600 focus:outline-hidden"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && locationName.trim()) {
+                      localStorage.setItem('netmonitor_current_location', locationName.trim());
+                      setShowLocationModal(false);
+                      addAlert(`📍 Ubicación de pruebas asignada a: "${locationName.trim()}"`, 'success');
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const finalLocation = locationName.trim() || 'Sede Local';
+                    setLocationName(finalLocation);
+                    localStorage.setItem('netmonitor_current_location', finalLocation);
+                    setShowLocationModal(false);
+                    addAlert(`📍 Ubicación de pruebas asignada a: "${finalLocation}"`, 'success');
+                  }}
+                  className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold text-xs py-2 px-5 rounded-xs cursor-pointer transition-colors"
+                >
+                  Confirmar Ubicación
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
