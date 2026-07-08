@@ -257,25 +257,53 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
       doc.text("Sondeo y Validación de Interfaces Físicas, Direcciones MAC y Latencia LAN", 10, 27);
 
-      doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
-      doc.rect(10, 31, 190, 18, 'F');
-      doc.setDrawColor(borderLineColor[0], borderLineColor[1], borderLineColor[2]);
+      // Redesigned Dual-Panel Metadata Section for maximum visibility and zero encoding issues
+      // Panel 1: Sonda & Technical Details (Left)
+      doc.setFillColor(248, 250, 252); // soft slate background
+      doc.rect(10, 31, 92, 22, 'F');
+      doc.setDrawColor(226, 232, 240);
       doc.setLineWidth(0.25);
-      doc.rect(10, 31, 190, 18, 'S');
-
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(textColorPrimary[0], textColorPrimary[1], textColorPrimary[2]);
-      doc.text(`Sonda de Monitoreo: RedMonitor Sonda de Campo Local`, 14, 37);
-      doc.text(`ID de Sonda: RED-MON-162BF909`, 98, 37);
-      doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 148, 37);
+      doc.rect(10, 31, 92, 22, 'S');
 
       doc.setFont('Helvetica', 'bold');
-      doc.text("📍 SITIO / UBICACIÓN EVALUADA:", 14, 44);
+      doc.setFontSize(7.5);
+      doc.setTextColor(71, 85, 105);
+      doc.text("SISTEMA / DETALLES DE AUDITORÍA", 14, 36);
+      
       doc.setFont('Helvetica', 'normal');
-      doc.setTextColor(0, 102, 153);
-      doc.text(locationName || 'No especificada', 65, 44);
-      doc.setTextColor(textColorPrimary[0], textColorPrimary[1], textColorPrimary[2]);
+      doc.setFontSize(7.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Sonda: RedMonitor Sonda de Campo Local`, 14, 41.5);
+      doc.text(`ID Dispositivo: RED-MON-162BF909`, 14, 45.5);
+      doc.text(`Fecha/Hora: ${new Date().toLocaleString('es-ES')}`, 14, 49.5);
+
+      // Panel 2: UBICACIÓN Y SEDE DE REGISTRO (Right) - Highly prominent with cyan accent
+      doc.setFillColor(236, 254, 255); // very light cyan background (cyan-50)
+      doc.rect(106, 31, 94, 22, 'F');
+      doc.setDrawColor(6, 182, 212); // cyan-500 accent color border
+      doc.setLineWidth(0.5); // thicker border for accent
+      doc.rect(106, 31, 94, 22, 'S');
+
+      // Decorative cyan side bar
+      doc.setFillColor(6, 182, 212);
+      doc.rect(106, 31, 2.5, 22, 'F'); // draw a nice left vertical line accent
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(8, 115, 137); // deep cyan/teal for text label
+      doc.text("SITIO / UBICACIÓN REGISTRADA", 111, 36.5);
+
+      // Render the locationName prominently in uppercase
+      const displayLoc = (locationName || 'Sede Local / No Registrada').trim().toUpperCase();
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(15, 23, 42); // deep dark text for ultimate contrast
+      doc.text(displayLoc, 111, 44);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(71, 85, 105);
+      doc.text("Verificación en campo físico activo", 111, 48.5);
 
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(11);
