@@ -1481,7 +1481,8 @@ export default function App() {
                     totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
                     interfaz: selectedInterface,
                     segmento: rSubnet,
-                    vendor: r.vendor
+                    vendor: r.vendor,
+                    serialNumber: r.serialNumber
                   };
 
                   if (idx !== -1) {

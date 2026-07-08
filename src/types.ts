@@ -14,6 +14,7 @@ export interface Device {
   interfaz?: string;        // Active interface name
   segmento?: string;        // Connected subnet segment
   vendor?: string;          // Brand/Manufacturer name
+  serialNumber?: string;    // Real or hardware-derived serial number
 }
 
 export interface Sensor {

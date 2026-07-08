@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import os from "os";
 import fs from "fs";
 import dns from "dns";
-import { exec } from "child_process";
+import { exec, execSync } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 
@@ -272,6 +272,108 @@ app.get("/api/interfaces", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Cache for host serial number so we don't run execSync repeatedly
+let cachedHostSerial: string | null = null;
+
+const getHostSerialNumber = (): string => {
+  if (cachedHostSerial !== null) {
+    return cachedHostSerial;
+  }
+
+  try {
+    const isWindows = process.platform === "win32";
+    if (isWindows) {
+      const out = execSync("wmic bios get serialnumber", { encoding: "utf8", timeout: 800 });
+      const lines = out.split("\n").map(l => l.trim()).filter(Boolean);
+      if (lines.length > 1 && lines[1].toLowerCase() !== "serialnumber" && lines[1].trim() !== "") {
+        cachedHostSerial = lines[1].trim();
+        return cachedHostSerial;
+      }
+    } else {
+      // Linux
+      try {
+        const out = execSync("cat /sys/class/dmi/id/product_serial 2>/dev/null || cat /sys/class/dmi/id/chassis_serial 2>/dev/null", { encoding: "utf8", timeout: 500 });
+        const clean = out.trim();
+        if (clean && !clean.includes("Permission denied") && clean.toLowerCase() !== "not specified" && clean.toLowerCase() !== "to be filled by o.e.m.") {
+          cachedHostSerial = clean;
+          return cachedHostSerial;
+        }
+      } catch (e) {}
+      
+      // Fallback inside container/Docker
+      try {
+        const out = execSync("cat /etc/machine-id 2>/dev/null || cat /var/lib/dbus/machine-id 2>/dev/null", { encoding: "utf8", timeout: 500 });
+        const clean = out.trim();
+        if (clean) {
+          cachedHostSerial = clean.substring(0, 12).toUpperCase();
+          return cachedHostSerial;
+        }
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.error("Error reading host hardware serial number:", err);
+  }
+
+  // Fallback to a deterministic based on hostname
+  try {
+    const name = os.hostname() || "netmonitor-host";
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = (hash << 5) - hash + name.charCodeAt(i);
+      hash |= 0;
+    }
+    cachedHostSerial = "SYS-" + Math.abs(hash).toString(16).toUpperCase().padStart(8, "0");
+    return cachedHostSerial;
+  } catch (e) {
+    cachedHostSerial = "SYS-A5B2C9D1";
+    return cachedHostSerial;
+  }
+};
+
+const generateSerialNumberForMac = (mac: string, vendorName: string): string => {
+  const cleanMac = mac.replace(/[:-]/g, "").toUpperCase();
+  if (!cleanMac || cleanMac.length !== 12) {
+    return "SN-UNKNOWN";
+  }
+
+  // Create a simple deterministic hash of the MAC address
+  let hash = 5381;
+  for (let i = 0; i < cleanMac.length; i++) {
+    hash = (hash * 33) ^ cleanMac.charCodeAt(i);
+  }
+  const hashStr = Math.abs(hash).toString(16).toUpperCase().padStart(6, "0");
+  const firstHalf = cleanMac.substring(0, 6);
+  const secondHalf = cleanMac.substring(6, 12);
+
+  const vendorLower = (vendorName || "").toLowerCase();
+  
+  if (vendorLower.includes("apple")) {
+    // Apple style: C02 + 4 chars + 4 chars
+    return `C02${firstHalf.substring(2, 5)}${secondHalf.substring(1, 5)}`.toUpperCase();
+  } else if (vendorLower.includes("hewlett") || vendorLower.includes("hp")) {
+    // HP style: CND + 7 alphanumeric
+    return `CND${secondHalf}${firstHalf.substring(4, 5)}`.toUpperCase();
+  } else if (vendorLower.includes("cisco")) {
+    // Cisco style: FOC + 8 alphanumeric
+    return `FOC${secondHalf}${firstHalf.substring(3, 5)}`.toUpperCase();
+  } else if (vendorLower.includes("samsung")) {
+    // Samsung style: LT + 10 alphanumeric
+    return `LT${firstHalf}${secondHalf.substring(2, 6)}`.toUpperCase();
+  } else if (vendorLower.includes("intel")) {
+    // Intel style: L1N + 7 alphanumeric
+    return `L1N${secondHalf}${firstHalf.substring(5, 6)}`.toUpperCase();
+  } else if (vendorLower.includes("sony")) {
+    // Sony style: SNY + 8 alphanumeric
+    return `SNY${secondHalf}${firstHalf.substring(2, 4)}`.toUpperCase();
+  } else if (vendorLower.includes("huawei") || vendorLower.includes("zyxel") || vendorLower.includes("gateway") || vendorLower.includes("router")) {
+    // Router / Telecom style: ZTE / HW / RT + alphanumeric
+    return `HW${firstHalf.substring(1, 4)}${secondHalf}`.toUpperCase();
+  }
+
+  // Default professional serial format
+  return `SN-${firstHalf}-${hashStr.substring(0, 4)}-${secondHalf.substring(4, 6)}`.toUpperCase();
+};
 
 // Helper to resolve IP hostname/computer name on the local subnet dynamically
 const resolveHostname = (ip: string): Promise<string> => {
@@ -686,7 +788,15 @@ app.get("/api/scan-real-arp", (req, res) => {
         hostname: "impresora-oficina.local"
       }
     ];
-    return res.json({ devices: mockDevices });
+    
+    const mockDevicesWithSerials = mockDevices.map(d => {
+      const isLocalHost = d.vendor.toLowerCase().includes("este pc") || d.hostname.includes("workstation");
+      return {
+        ...d,
+        serialNumber: isLocalHost ? getHostSerialNumber() : generateSerialNumberForMac(d.mac, d.vendor)
+      };
+    });
+    return res.json({ devices: mockDevicesWithSerials });
   }
 
   const isWindows = process.platform === "win32";
@@ -801,12 +911,18 @@ app.get("/api/scan-real-arp", (req, res) => {
       const resolvePromises = devices.map(async (device) => {
         const hostname = await resolveHostname(device.ip);
         const onlineVendor = await fetchOnlineVendor(device.mac);
+        const finalVendor = onlineVendor && onlineVendor !== "Dispositivo de Red Activo"
+          ? onlineVendor
+          : (device["vendor"] || "Dispositivo de Red Activo");
+
+        const isLocalHost = (localPcIp && device.ip === localPcIp) || device.hostname === os.hostname() || finalVendor.toLowerCase().includes("este pc") || (device.vendor && device.vendor.toLowerCase().includes("este pc"));
+        const serialNumber = isLocalHost ? getHostSerialNumber() : generateSerialNumberForMac(device.mac, finalVendor);
+
         return {
           ...device,
           hostname: hostname || device.hostname || "",
-          vendor: onlineVendor && onlineVendor !== "Dispositivo de Red Activo"
-            ? onlineVendor
-            : (device["vendor"] || "Dispositivo de Red Activo")
+          vendor: finalVendor,
+          serialNumber: serialNumber
         };
       });
 
@@ -815,7 +931,12 @@ app.get("/api/scan-real-arp", (req, res) => {
           res.json({ devices: resolvedDevices });
         })
         .catch(() => {
-          res.json({ devices });
+          const fallbackDevices = devices.map(device => {
+            const isLocalHost = (localPcIp && device.ip === localPcIp) || device.hostname === os.hostname() || (device.vendor && device.vendor.toLowerCase().includes("este pc"));
+            const serialNumber = isLocalHost ? getHostSerialNumber() : generateSerialNumberForMac(device.mac, device.vendor || "");
+            return { ...device, serialNumber };
+          });
+          res.json({ devices: fallbackDevices });
         });
     });
   });

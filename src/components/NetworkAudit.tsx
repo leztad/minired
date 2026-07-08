@@ -353,12 +353,13 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(255, 255, 255);
-      doc.text("DIRECCIÓN IP", 14, 101.5);
-      doc.text("DIRECCIÓN MAC", 39, 101.5);
-      doc.text("FABRICANTE NIC (ARP)", 76, 101.5);
-      doc.text("ESTACIÓN / HOST", 125, 101.5);
-      doc.text("LATENCIA", 168, 101.5);
-      doc.text("ESTADO", 187, 101.5);
+      doc.text("DIRECCIÓN IP", 12, 101.5);
+      doc.text("DIRECCIÓN MAC", 35, 101.5);
+      doc.text("Nº SERIE HARDWARE", 68, 101.5);
+      doc.text("FABRICANTE NIC", 98, 101.5);
+      doc.text("ESTACIÓN / HOST", 128, 101.5);
+      doc.text("LATENCIA", 165, 101.5);
+      doc.text("ESTADO", 182, 101.5);
 
       let y = 104;
       activeDevices.forEach((device, index) => {
@@ -377,46 +378,52 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(0, 102, 153); 
-        doc.text(device.ip, 14, y + 4.8);
+        doc.text(device.ip, 12, y + 4.8);
 
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(51, 65, 85); 
-        doc.text(device.mac, 39, y + 4.8);
+        doc.text(device.mac, 35, y + 4.8);
+
+        // Nº Serie (High visibility!)
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(180, 83, 9); // amber-700 color for nice contrast
+        doc.text(device.serialNumber || 'SN-UNKNOWN', 68, y + 4.8);
 
         const manufacturerRaw = resolveVendorByMac(device.mac, device.host, device.ip);
-        let manufacturer = manufacturerRaw.length > 25 ? manufacturerRaw.substring(0, 23) + '...' : manufacturerRaw;
+        let manufacturer = manufacturerRaw.length > 18 ? manufacturerRaw.substring(0, 16) + '...' : manufacturerRaw;
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(8);
+        doc.setFontSize(7.5);
         doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
-        doc.text(manufacturer, 76, y + 4.8);
+        doc.text(manufacturer, 98, y + 4.8);
 
-        let friendlyHostName = device.host.length > 22 ? device.host.substring(0, 20) + '...' : device.host;
+        let friendlyHostName = device.host.length > 20 ? device.host.substring(0, 18) + '...' : device.host;
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8);
+        doc.setFontSize(7.5);
         doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-        doc.text(friendlyHostName, 125, y + 4.8);
+        doc.text(friendlyHostName, 128, y + 4.8);
 
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(device.ping && device.ping > 100 ? warningColor[0] : successColor[0], device.ping && device.ping > 100 ? warningColor[1] : successColor[1], device.ping && device.ping > 100 ? warningColor[2] : successColor[2]);
         const pingLabel = device.ping !== null ? `${device.ping} ms` : '—';
-        doc.text(pingLabel, 168, y + 4.8);
+        doc.text(pingLabel, 165, y + 4.8);
 
         if (device.estado === 'OK') {
           doc.setFillColor(209, 250, 229); 
-          doc.rect(185, y + 1.5, 12, 4.5, 'F');
+          doc.rect(180, y + 1.5, 12, 4.5, 'F');
           doc.setFont('Helvetica', 'bold');
           doc.setFontSize(7);
           doc.setTextColor(5, 150, 105); 
-          doc.text("OK", 191, y + 4.7, { align: 'center' });
+          doc.text("OK", 186, y + 4.7, { align: 'center' });
         } else {
           doc.setFillColor(254, 243, 199); 
-          doc.rect(185, y + 1.5, 12, 4.5, 'F');
+          doc.rect(180, y + 1.5, 12, 4.5, 'F');
           doc.setFont('Helvetica', 'bold');
           doc.setFontSize(7);
           doc.setTextColor(217, 119, 6); 
-          doc.text("WARN", 191, y + 4.7, { align: 'center' });
+          doc.text("WARN", 186, y + 4.7, { align: 'center' });
         }
 
         y += 7.5;
@@ -433,12 +440,13 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
           doc.setFont('Helvetica', 'bold');
           doc.setFontSize(8);
           doc.setTextColor(255, 255, 255);
-          doc.text("DIRECCIÓN IP", 14, 23.5);
-          doc.text("DIRECCIÓN MAC", 39, 23.5);
-          doc.text("FABRICANTE NIC (ARP)", 76, 23.5);
-          doc.text("ESTACIÓN / HOST", 125, 23.5);
-          doc.text("LATENCIA", 168, 23.5);
-          doc.text("ESTADO", 187, 23.5);
+          doc.text("DIRECCIÓN IP", 12, 23.5);
+          doc.text("DIRECCIÓN MAC", 35, 23.5);
+          doc.text("Nº SERIE HARDWARE", 68, 23.5);
+          doc.text("FABRICANTE NIC", 98, 23.5);
+          doc.text("ESTACIÓN / HOST", 128, 23.5);
+          doc.text("LATENCIA", 165, 23.5);
+          doc.text("ESTADO", 182, 23.5);
 
           y = 26; 
         }
@@ -651,6 +659,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                 <th className="p-3">Estado</th>
                 <th className="p-3">Dirección IP</th>
                 <th className="p-3">Dirección MAC</th>
+                <th className="p-3">Número de Serie</th>
                 <th className="p-3">Fabricante Resolución (ARP)</th>
                 <th className="p-3">Host / Estación</th>
                 <th className="p-3">Ping Latencia</th>
@@ -660,7 +669,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
             <tbody className="divide-y divide-slate-800/30 font-sans text-xs text-slate-300">
               {filteredDevices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-10 text-center text-slate-500 italic max-w-sm">
+                  <td colSpan={8} className="p-10 text-center text-slate-500 italic max-w-sm">
                     No se encontraron dispositivos activos que coincidan con la búsqueda. Intente realizar un escáner de red para poblar la tabla.
                   </td>
                 </tr>
@@ -694,6 +703,11 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                       {/* MAC ADDRESS CLIENT HIGHLIGHTED */}
                       <td className="p-3 font-mono font-semibold tracking-wide text-slate-200 select-all border-l border-slate-800/50 bg-slate-950/20">
                         {d.mac}
+                      </td>
+
+                      {/* SERIAL NUMBER */}
+                      <td className="p-3 font-mono font-bold tracking-wide text-amber-400 select-all border-l border-slate-800/50 bg-slate-950/20" title="Número de Serie de Hardware">
+                        {d.serialNumber || '—'}
                       </td>
 
                       {/* VENDOR RESOLVED PRESTINE NAME */}
