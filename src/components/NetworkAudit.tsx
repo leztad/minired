@@ -764,19 +764,19 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                   {/* Windows CMD / Powershell */}
                   <div className="bg-slate-950 p-3 rounded border border-slate-800 space-y-2 flex flex-col justify-between">
                     <div>
-                      <span className="text-[10px] font-bold font-mono text-cyan-400 block mb-1">🖥️ WINDOWS (CMD / PowerShell)</span>
-                      <p className="text-slate-400 text-[10px] mb-2 leading-tight">Muestra el número de serie cargado en el BIOS/SMBIOS por el fabricante del equipo.</p>
+                      <span className="text-[10px] font-bold font-mono text-cyan-400 block mb-1">🖥️ WINDOWS (PowerShell)</span>
+                      <p className="text-slate-400 text-[10px] mb-2 leading-tight">Método moderno y recomendado (evita <code className="text-rose-400">wmic</code> que fue descontinuado en Windows 11 24H2+).</p>
                       <code className="block bg-slate-900 p-2 rounded text-amber-400 font-mono text-[9px] break-all select-all">
-                        wmic bios get serialnumber
+                        (Get-CimInstance Win32_BIOS).SerialNumber
                       </code>
                     </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigator.clipboard.writeText("wmic bios get serialnumber");
+                        navigator.clipboard.writeText("(Get-CimInstance Win32_BIOS).SerialNumber");
                         setCopiedCommandText("win");
                         setTimeout(() => setCopiedCommandText(null), 2000);
-                        onAddLog("📋 Comando WMIC copiado al portapapeles", "info");
+                        onAddLog("📋 Comando PowerShell moderno copiado", "info");
                       }}
                       className="mt-2 w-full bg-slate-900 hover:bg-[#1e293b] text-slate-300 font-bold py-1 px-2 rounded text-[9px] border border-slate-800 cursor-pointer flex items-center justify-center gap-1.5 transition-all"
                     >

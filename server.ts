@@ -284,7 +284,27 @@ const getHostSerialNumber = (): string => {
   try {
     const platform = process.platform;
     if (platform === "win32") {
-      // 1. WMIC BIOS
+      // 1. PowerShell Get-CimInstance Win32_Bios (Modern Windows alternative, fast and standard)
+      try {
+        const out = execSync("powershell -NoProfile -Command \"(Get-CimInstance Win32_Bios).SerialNumber\"", { encoding: "utf8", timeout: 1200 });
+        const clean = out.trim();
+        if (clean && !/default|to be filled|not specified/i.test(clean)) {
+          cachedHostSerial = clean;
+          return cachedHostSerial;
+        }
+      } catch (e) {}
+
+      // 2. PowerShell Get-CimInstance Win32_ComputerSystemProduct
+      try {
+        const out = execSync("powershell -NoProfile -Command \"(Get-CimInstance Win32_ComputerSystemProduct).IdentifyingNumber\"", { encoding: "utf8", timeout: 1200 });
+        const clean = out.trim();
+        if (clean && !/default|to be filled|not specified/i.test(clean)) {
+          cachedHostSerial = clean;
+          return cachedHostSerial;
+        }
+      } catch (e) {}
+
+      // 3. WMIC BIOS (Legacy fallback for older Windows)
       try {
         const out = execSync("wmic bios get serialnumber", { encoding: "utf8", timeout: 800 });
         const lines = out.split("\n").map(l => l.trim()).filter(Boolean);
@@ -294,22 +314,12 @@ const getHostSerialNumber = (): string => {
         }
       } catch (e) {}
 
-      // 2. WMIC CSProduct
+      // 4. WMIC CSProduct (Legacy fallback for older Windows)
       try {
         const out = execSync("wmic csproduct get identifyingnumber", { encoding: "utf8", timeout: 800 });
         const lines = out.split("\n").map(l => l.trim()).filter(Boolean);
         if (lines.length > 1 && lines[1] && !/identifyingnumber|default|to be filled|not specified/i.test(lines[1])) {
           cachedHostSerial = lines[1].trim();
-          return cachedHostSerial;
-        }
-      } catch (e) {}
-
-      // 3. PowerShell Get-CimInstance
-      try {
-        const out = execSync("powershell -NoProfile -Command \"(Get-CimInstance Win32_Bios).SerialNumber\"", { encoding: "utf8", timeout: 1200 });
-        const clean = out.trim();
-        if (clean && !/default|to be filled|not specified/i.test(clean)) {
-          cachedHostSerial = clean;
           return cachedHostSerial;
         }
       } catch (e) {}
