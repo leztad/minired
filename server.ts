@@ -10,11 +10,257 @@ import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
+import crypto from "crypto";
+
+const USERS_FILE = path.join(process.cwd(), "users.json");
+
+interface DBUser {
+  id: string;
+  username: string;
+  fullName: string;
+  passwordHash: string;
+  salt: string;
+  role: 'admin' | 'auditor';
+  createdAt: string;
+}
+
+// In-memory sessions storage
+const activeSessions = new Map<string, { userId: string; username: string; fullName: string; role: 'admin' | 'auditor' }>();
+
+// Password hashing helpers using native crypto
+function hashPassword(password: string, salt: string): string {
+  return crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+}
+
+function generateSalt(): string {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function loadUsers(): DBUser[] {
+  if (!fs.existsSync(USERS_FILE)) {
+    return [];
+  }
+  try {
+    const data = fs.readFileSync(USERS_FILE, "utf8");
+    return JSON.parse(data);
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveUsers(users: DBUser[]) {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), "utf8");
+}
+
 const app = express();
 const PORT = 3000;
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Authentication & User Management API Endpoints
+app.get("/api/auth/setup-needed", (req, res) => {
+  const users = loadUsers();
+  res.json({ setupNeeded: users.length === 0 });
+});
+
+app.post("/api/auth/setup", (req, res) => {
+  const { username, password, fullName } = req.body;
+  if (!username || !password || !fullName) {
+    return res.status(400).json({ error: "Faltan campos obligatorios (usuario, contraseña, nombre completo)" });
+  }
+
+  const users = loadUsers();
+  if (users.length > 0) {
+    return res.status(400).json({ error: "El sistema ya cuenta con usuarios creados. Setup no requerido." });
+  }
+
+  const salt = generateSalt();
+  const passwordHash = hashPassword(password, salt);
+
+  const adminUser: DBUser = {
+    id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+    username: username.trim().toLowerCase(),
+    fullName: fullName.trim(),
+    passwordHash,
+    salt,
+    role: "admin",
+    createdAt: new Date().toISOString()
+  };
+
+  users.push(adminUser);
+  saveUsers(users);
+
+  // Auto-login after setup
+  const token = crypto.randomBytes(32).toString('hex');
+  activeSessions.set(token, {
+    userId: adminUser.id,
+    username: adminUser.username,
+    fullName: adminUser.fullName,
+    role: adminUser.role
+  });
+
+  res.json({
+    success: true,
+    token,
+    user: {
+      username: adminUser.username,
+      fullName: adminUser.fullName,
+      role: adminUser.role
+    }
+  });
+});
+
+app.post("/api/auth/login", (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: "Usuario y contraseña son requeridos" });
+  }
+
+  const users = loadUsers();
+  const user = users.find(u => u.username === username.trim().toLowerCase());
+
+  if (!user) {
+    return res.status(401).json({ error: "Credenciales incorrectas" });
+  }
+
+  const calculatedHash = hashPassword(password, user.salt);
+  if (calculatedHash !== user.passwordHash) {
+    return res.status(401).json({ error: "Credenciales incorrectas" });
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  activeSessions.set(token, {
+    userId: user.id,
+    username: user.username,
+    fullName: user.fullName,
+    role: user.role
+  });
+
+  res.json({
+    success: true,
+    token,
+    user: {
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role
+    }
+  });
+});
+
+// Helper to authenticate request
+const authenticate = (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "No autorizado. Sesión no iniciada." });
+  }
+
+  const token = authHeader.split(" ")[1];
+  const session = activeSessions.get(token);
+
+  if (!session) {
+    return res.status(401).json({ error: "Sesión expirada o inválida." });
+  }
+
+  req.user = session;
+  req.token = token;
+  next();
+};
+
+app.get("/api/auth/status", authenticate, (req: any, res) => {
+  res.json({
+    loggedIn: true,
+    user: req.user
+  });
+});
+
+app.post("/api/auth/logout", authenticate, (req: any, res) => {
+  activeSessions.delete(req.token);
+  res.json({ success: true });
+});
+
+app.get("/api/auth/users", authenticate, (req: any, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Acceso denegado. Se requiere rol Administrador." });
+  }
+
+  const users = loadUsers();
+  const safeUsers = users.map(u => ({
+    id: u.id,
+    username: u.username,
+    fullName: u.fullName,
+    role: u.role,
+    createdAt: u.createdAt
+  }));
+
+  res.json(safeUsers);
+});
+
+app.post("/api/auth/users", authenticate, (req: any, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Acceso denegado. Se requiere rol Administrador." });
+  }
+
+  const { username, password, fullName, role } = req.body;
+  if (!username || !password || !fullName || !role) {
+    return res.status(400).json({ error: "Todos los campos son obligatorios" });
+  }
+
+  const users = loadUsers();
+  const exists = users.some(u => u.username === username.trim().toLowerCase());
+  if (exists) {
+    return res.status(400).json({ error: "El nombre de usuario ya está registrado" });
+  }
+
+  const salt = generateSalt();
+  const passwordHash = hashPassword(password, salt);
+
+  const newUser: DBUser = {
+    id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+    username: username.trim().toLowerCase(),
+    fullName: fullName.trim(),
+    passwordHash,
+    salt,
+    role: role === "admin" ? "admin" : "auditor",
+    createdAt: new Date().toISOString()
+  };
+
+  users.push(newUser);
+  saveUsers(users);
+
+  res.json({
+    success: true,
+    user: {
+      id: newUser.id,
+      username: newUser.username,
+      fullName: newUser.fullName,
+      role: newUser.role,
+      createdAt: newUser.createdAt
+    }
+  });
+});
+
+app.delete("/api/auth/users/:id", authenticate, (req: any, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Acceso denegado. Se requiere rol Administrador." });
+  }
+
+  const { id } = req.params;
+  if (req.user.userId === id) {
+    return res.status(400).json({ error: "No puede eliminar su propia cuenta activa" });
+  }
+
+  let users = loadUsers();
+  const initialLen = users.length;
+  users = users.filter(u => u.id !== id);
+
+  if (users.length === initialLen) {
+    return res.status(404).json({ error: "Usuario no encontrado" });
+  }
+
+  saveUsers(users);
+  res.json({ success: true, message: "Usuario eliminado correctamente" });
+});
 
 // In-memory cache for MAC address OUI vendor mappings
 const vendorCache: Record<string, string> = {};

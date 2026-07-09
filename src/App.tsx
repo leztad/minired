@@ -4,7 +4,7 @@ import {
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
   ChevronDown, Monitor, Copy, Plus, Play, Pause, ExternalLink, HelpCircle, 
   ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable,
-  Gauge, Menu, X
+  Gauge, Menu, X, Shield
 } from 'lucide-react';
 
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
@@ -23,6 +23,8 @@ import NetworkAudit from './components/NetworkAudit';
 import NetworkWiki from './components/NetworkWiki';
 import EventLogger from './components/EventLogger';
 import NetworkEnterpriseTools from './components/NetworkEnterpriseTools';
+import NetworkAuthGate from './components/NetworkAuthGate';
+import UserManagement from './components/UserManagement';
 
 const extractSubnetFromIp = (ip: string): string => {
   const parts = ip.trim().split('.');
@@ -90,6 +92,77 @@ const detectWebRTCLocalIP = (): Promise<string | null> => {
 };
 
 export default function App() {
+  // Authentication & session variables
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    return localStorage.getItem('netmonitor_auth_token') || null;
+  });
+  const [currentUser, setCurrentUser] = useState<{ username: string; fullName: string; role: 'admin' | 'auditor' } | null>(() => {
+    const stored = localStorage.getItem('netmonitor_auth_user');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+
+  useEffect(() => {
+    const verifySession = async () => {
+      if (!authToken) {
+        setIsAuthChecking(false);
+        return;
+      }
+      try {
+        const res = await fetch('/api/auth/status', {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUser(data.user);
+        } else {
+          // Session expired or invalid
+          setAuthToken(null);
+          setCurrentUser(null);
+          localStorage.removeItem('netmonitor_auth_token');
+          localStorage.removeItem('netmonitor_auth_user');
+        }
+      } catch (err) {
+        console.error("Error al verificar la sesión con el backend:", err);
+      } finally {
+        setIsAuthChecking(false);
+      }
+    };
+    verifySession();
+  }, [authToken]);
+
+  const handleAuthenticated = (token: string, user: { username: string; fullName: string; role: 'admin' | 'auditor' }) => {
+    setAuthToken(token);
+    setCurrentUser(user);
+    localStorage.setItem('netmonitor_auth_token', token);
+    localStorage.setItem('netmonitor_auth_user', JSON.stringify(user));
+  };
+
+  const handleLogout = async () => {
+    if (authToken) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+      } catch (e) {
+        console.warn("No se pudo invalidar la sesión del backend:", e);
+      }
+    }
+    setAuthToken(null);
+    setCurrentUser(null);
+    localStorage.removeItem('netmonitor_auth_token');
+    localStorage.removeItem('netmonitor_auth_user');
+    addAlert("🔓 Sesión de usuario finalizada correctamente.", "info");
+  };
+
   // User physical / manual laptop IP override setup
   const [deviceManualIp, setDeviceManualIp] = useState<string>(() => {
     return localStorage.getItem('netmonitor_manual_ip') || '';
@@ -1990,6 +2063,26 @@ export default function App() {
     setTimeout(() => setCopiedSuccess(false), 2000);
   };
 
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center text-slate-100">
+        <div className="space-y-4 text-center">
+          <Network className="h-10 w-10 text-cyan-400 animate-pulse mx-auto" />
+          <p className="text-sm font-mono tracking-wider text-cyan-400 uppercase">Verificando Credenciales de Acceso...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authToken || !currentUser) {
+    return (
+      <NetworkAuthGate 
+        onAuthenticated={handleAuthenticated} 
+        onAddLog={(msg, type) => addAlert(msg, type)} 
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-[#0B0F19] tech-grid font-sans text-xs text-slate-300">
       {/* HEADER BAR (Geometric Balance Theme) */}
@@ -2751,6 +2844,32 @@ export default function App() {
         {/* LEFT SIDEBAR NAVBAR */}
         <aside className={`${isMobileMenuOpen ? 'flex' : 'hidden'} md:flex w-full md:w-64 bg-[#070A13]/95 backdrop-blur-md text-slate-300 p-4 border-r border-slate-900/80 flex-col gap-4 select-none flex-shrink-0 transition-all duration-300`}>
           
+          {/* USER PROFILE INFO & LOGOUT */}
+          {currentUser && (
+            <div className="bg-[#0b1329]/80 p-2.5 rounded border border-slate-800 flex flex-col gap-2 shadow-lg">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded bg-[#12244a] border border-cyan-500/20 flex items-center justify-center font-bold text-xs text-cyan-400 font-mono shrink-0">
+                  {currentUser.username.substring(0, 2).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0 leading-tight">
+                  <span className="text-[10px] text-slate-300 font-bold block truncate">{currentUser.fullName}</span>
+                  <span className={`inline-flex items-center text-[8px] font-bold font-mono px-1.5 py-0.5 uppercase rounded ${
+                    currentUser.role === 'admin' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                  }`}>
+                    {currentUser.role === 'admin' ? 'ADMIN' : 'AUDITOR'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full text-center py-1 bg-slate-900/50 hover:bg-rose-950/20 hover:text-rose-400 border border-slate-850 hover:border-rose-500/20 text-[9px] font-bold uppercase tracking-wider rounded cursor-pointer transition-colors"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
+          )}
+          
           {/* SENSOR SEARCH BOX */}
           <div className="relative">
             <input 
@@ -2921,6 +3040,23 @@ export default function App() {
                   <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">WIKI</span>
                 </button>
               </li>
+
+              {currentUser && currentUser.role === 'admin' && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('usuarios' as any); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === ('usuarios' as any) 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Shield className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+                    <span>Gestión Usuarios</span>
+                    <span className="ml-auto bg-amber-500/10 text-amber-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-amber-500/20">SEGURIDAD</span>
+                  </button>
+                </li>
+              )}
 
               {/* Collapsible Subnet Folder Entry */}
               <li className="pt-2">
@@ -3803,6 +3939,14 @@ export default function App() {
 
           {activeView === 'diseno_red' && (
             <NetworkEnterpriseTools />
+          )}
+
+          {activeView === ('usuarios' as any) && currentUser && currentUser.role === 'admin' && (
+            <UserManagement 
+              authToken={authToken!}
+              currentUsername={currentUser.username}
+              onAddLog={addAlert}
+            />
           )}
 
         </main>
