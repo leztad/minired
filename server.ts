@@ -262,6 +262,75 @@ app.delete("/api/auth/users/:id", authenticate, (req: any, res) => {
   res.json({ success: true, message: "Usuario eliminado correctamente" });
 });
 
+// Endpoint for users to change their own password
+app.post("/api/auth/change-password", authenticate, (req: any, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "Contraseña actual y nueva contraseña son obligatorias" });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: "La nueva contraseña debe tener al menos 6 caracteres" });
+  }
+
+  const users = loadUsers();
+  const userIndex = users.findIndex(u => u.id === req.user.userId);
+
+  if (userIndex === -1) {
+    return res.status(404).json({ error: "Usuario no encontrado" });
+  }
+
+  const user = users[userIndex];
+  const currentHash = hashPassword(currentPassword, user.salt);
+
+  if (currentHash !== user.passwordHash) {
+    return res.status(401).json({ error: "La contraseña actual es incorrecta" });
+  }
+
+  // Update password
+  const newSalt = generateSalt();
+  user.salt = newSalt;
+  user.passwordHash = hashPassword(newPassword, newSalt);
+
+  users[userIndex] = user;
+  saveUsers(users);
+
+  res.json({ success: true, message: "Contraseña actualizada exitosamente" });
+});
+
+// Endpoint for administrators to force change another user's password
+app.post("/api/auth/admin/change-password", authenticate, (req: any, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Acceso denegado. Se requiere rol Administrador." });
+  }
+
+  const { userId, newPassword } = req.body;
+  if (!userId || !newPassword) {
+    return res.status(400).json({ error: "ID de usuario y nueva contraseña son obligatorios" });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: "La nueva contraseña debe tener al menos 6 caracteres" });
+  }
+
+  const users = loadUsers();
+  const userIndex = users.findIndex(u => u.id === userId);
+
+  if (userIndex === -1) {
+    return res.status(404).json({ error: "Usuario no encontrado" });
+  }
+
+  const user = users[userIndex];
+  const newSalt = generateSalt();
+  user.salt = newSalt;
+  user.passwordHash = hashPassword(newPassword, newSalt);
+
+  users[userIndex] = user;
+  saveUsers(users);
+
+  res.json({ success: true, message: `Contraseña para el usuario "${user.username}" actualizada por el administrador.` });
+});
+
 // In-memory cache for MAC address OUI vendor mappings
 const vendorCache: Record<string, string> = {};
 

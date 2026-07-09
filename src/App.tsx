@@ -3041,7 +3041,7 @@ export default function App() {
                 </button>
               </li>
 
-              {currentUser && currentUser.role === 'admin' && (
+              {currentUser && (
                 <li>
                   <button 
                     onClick={() => { setActiveView('usuarios' as any); setIsMobileMenuOpen(false); }}
@@ -3051,9 +3051,9 @@ export default function App() {
                         : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    <Shield className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
-                    <span>Gestión Usuarios</span>
-                    <span className="ml-auto bg-amber-500/10 text-amber-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-amber-500/20">SEGURIDAD</span>
+                    <Shield className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
+                    <span>Seguridad y Accesos</span>
+                    <span className="ml-auto bg-cyan-500/10 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">SISTEMA</span>
                   </button>
                 </li>
               )}
@@ -3941,10 +3941,10 @@ export default function App() {
             <NetworkEnterpriseTools />
           )}
 
-          {activeView === ('usuarios' as any) && currentUser && currentUser.role === 'admin' && (
+          {activeView === ('usuarios' as any) && currentUser && (
             <UserManagement 
               authToken={authToken!}
-              currentUsername={currentUser.username}
+              currentUser={currentUser}
               onAddLog={addAlert}
             />
           )}
