@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import os from "os";
 import fs from "fs";
 import dns from "dns";
+import AdmZip from "adm-zip";
 import { exec, execSync } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
@@ -57,6 +58,64 @@ const PORT = 3000;
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Dynamic ZIP Downloader Endpoint
+app.get("/api/download-zip", (req, res) => {
+  try {
+    const zip = new AdmZip();
+    const projectDir = process.cwd();
+
+    const excludeList = [
+      "node_modules",
+      "dist",
+      "src-tauri/target",
+      ".git",
+      ".env",
+      "users.json",
+      "workspace.zip",
+      "package-lock.json"
+    ];
+
+    const addLocalDirectory = (localPath: string) => {
+      const items = fs.readdirSync(localPath);
+      for (const item of items) {
+        const fullPath = path.join(localPath, item);
+        const relativePath = path.relative(projectDir, fullPath);
+
+        // Check if excluded
+        const isExcluded = excludeList.some(ex => {
+          return relativePath === ex || relativePath.startsWith(ex + path.sep);
+        });
+
+        if (isExcluded) {
+          continue;
+        }
+
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          addLocalDirectory(fullPath);
+        } else {
+          // Normalize path for the ZIP archive (always forward slashes)
+          const zipPath = relativePath.split(path.sep).join("/");
+          zip.addFile(zipPath, fs.readFileSync(fullPath));
+        }
+      }
+    };
+
+    addLocalDirectory(projectDir);
+
+    const zipBuffer = zip.toBuffer();
+    res.set({
+      "Content-Type": "application/zip",
+      "Content-Disposition": "attachment; filename=RedMonitor_Desktop_Tauri.zip",
+      "Content-Length": zipBuffer.length
+    });
+    res.send(zipBuffer);
+  } catch (error: any) {
+    console.error("Error creating ZIP:", error);
+    res.status(500).json({ error: "No se pudo generar el archivo ZIP: " + error.message });
+  }
+});
 
 // Authentication & User Management API Endpoints
 app.get("/api/auth/setup-needed", (req, res) => {

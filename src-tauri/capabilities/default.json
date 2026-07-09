@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/capability.json",
+  "identifier": "default-capability",
+  "description": "Default permissions for RedMonitor window rendering",
+  "windows": ["main"],
+  "permissions": [
+    "core:path:default",
+    "core:event:default",
+    "core:window:default",
+    "core:app:default"
+  ]
+}

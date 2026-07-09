@@ -25,6 +25,7 @@ import EventLogger from './components/EventLogger';
 import NetworkEnterpriseTools from './components/NetworkEnterpriseTools';
 import NetworkAuthGate from './components/NetworkAuthGate';
 import UserManagement, { AVAILABLE_FEATURES } from './components/UserManagement';
+import TauriInstallerGuide from './components/TauriInstallerGuide';
 
 const extractSubnetFromIp = (ip: string): string => {
   const parts = ip.trim().split('.');
@@ -423,7 +424,7 @@ export default function App() {
   const [calcCidr, setCalcCidr] = useState<number>(24);
   
   // Navigation
-  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red' | 'wiki_soporte' | 'event_logger' | 'diseno_red'>('vista_general');
+  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red' | 'wiki_soporte' | 'event_logger' | 'diseno_red' | 'instalador_desktop'>('vista_general');
   const [sidebarSearch, setSidebarSearch] = useState<string>('');
   const [isLanTreeOpen, setIsLanTreeOpen] = useState<boolean>(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
@@ -2897,6 +2898,7 @@ export default function App() {
              activeView === 'dispositivos' ? 'Dispositivos' : 
              activeView === 'ancho_banda' ? 'Ancho de Banda' : 
              activeView === 'wiki_soporte' ? 'Wiki y Soporte' :
+             activeView === 'instalador_desktop' ? 'Instalador Desktop' :
              activeView === 'event_logger' ? 'Consola de Eventos' :
              activeView === 'diseno_red' ? 'Herramientas L2/L3' :
              'Pruebas y Diagnóstico'}
@@ -3173,6 +3175,22 @@ export default function App() {
                   </button>
                 </li>
               )}
+
+              <li>
+                <button 
+                  onClick={() => { setActiveView('instalador_desktop'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'instalador_desktop' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-instalador-btn"
+                >
+                  <Monitor className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Instalador Desktop</span>
+                  <span className="ml-auto bg-emerald-500/15 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20 font-bold">DESKTOP</span>
+                </button>
+              </li>
 
               {currentUser && (
                 <li>
@@ -4060,6 +4078,10 @@ export default function App() {
 
           {activeView === 'wiki_soporte' && (
             <NetworkWiki />
+          )}
+
+          {activeView === 'instalador_desktop' && (
+            <TauriInstallerGuide />
           )}
 
           {activeView === 'event_logger' && (
