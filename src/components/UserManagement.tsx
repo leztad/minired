@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   UserPlus, Trash2, Key, Shield, User, Clock, AlertTriangle, 
-  CheckCircle2, ShieldAlert, RefreshCw, Lock, Unlock, Settings, Eye, EyeOff
+  CheckCircle2, ShieldAlert, RefreshCw, Lock, Unlock, Settings, Eye, EyeOff,
+  Cpu, Server, Activity, Terminal, Brain, Gauge, ShieldCheck, Layers, HelpCircle
 } from 'lucide-react';
 
 interface DBUser {
@@ -16,16 +17,37 @@ interface UserManagementProps {
   authToken: string;
   currentUser: { username: string; fullName: string; role: 'admin' | 'auditor' };
   onAddLog: (msg: string, type: 'success' | 'warning' | 'error' | 'info') => void;
+  enabledFeatures: Record<string, boolean>;
+  onUpdateFeatures: (features: Record<string, boolean>) => void;
 }
 
-export default function UserManagement({ authToken, currentUser, onAddLog }: UserManagementProps) {
+export const AVAILABLE_FEATURES = [
+  { key: 'sensores', label: 'Monitoreo de Sondas y Sensores', icon: Cpu, category: 'Hardware & IoT', desc: 'Monitoreo en tiempo real de sondas de temperatura, ping ICMP, puertos y servicios HTTP.' },
+  { key: 'dispositivos', label: 'Gestión de Dispositivos e IPs', icon: Server, category: 'Hosts & Equipos', desc: 'Inventario interactivo de hosts, direcciones IP/MAC, marcas OUI y auditoría de red.' },
+  { key: 'ancho_banda', label: 'Gráficos de Ancho de Banda', icon: Activity, category: 'Tráfico en Vivo', desc: 'Graficador dinámico del consumo instantáneo en megabits (Mbps) por cada equipo.' },
+  { key: 'testeo', label: 'Consola de Pruebas y Diagnóstico', icon: Terminal, category: 'Herramientas de Red', desc: 'Herramientas interactivas para trazas Ping, Traceroute y escaneo de puertos TCP abiertos.' },
+  { key: 'ai_diagnostic', label: 'Copiloto de Inteligencia Artificial', icon: Brain, category: 'IA & Automatización', desc: 'Sugerencias de optimización y diagnósticos inteligentes de red utilizando el modelo Gemini.' },
+  { key: 'speed_test', label: 'Test de Velocidad de Canal', icon: Gauge, category: 'Rendimiento', desc: 'Medición de velocidad local, jitter, pérdidas de paquetes y latencia WAN.' },
+  { key: 'auditorias_red', label: 'Auditorías y Reportes de Seguridad', icon: ShieldCheck, category: 'Seguridad Informática', desc: 'Escaneo automatizado de vulnerabilidades y buenas prácticas recomendadas por expertos.' },
+  { key: 'diseno_red', label: 'Planificador y Topología (L2/L3)', icon: Layers, category: 'Diseño Corporativo', desc: 'Planificación de subredes CIDR, diagramas de topología y mapeo lógico de routers/switches.' },
+  { key: 'event_logger', label: 'Consola de Syslog / Eventos', icon: Terminal, category: 'Bitácora general', desc: 'Historial detallado en tiempo real de caídas de enlaces, accesos de usuarios y alertas.' },
+  { key: 'wiki_soporte', label: 'Base de Conocimientos y Wiki', icon: HelpCircle, category: 'Wiki Soporte', desc: 'Glosario completo de redes y telecomunicaciones con guías paso a paso para el operador.' }
+];
+
+export default function UserManagement({ authToken, currentUser, onAddLog, enabledFeatures, onUpdateFeatures }: UserManagementProps) {
   const [users, setUsers] = useState<DBUser[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'perfil' | 'gestion'>(
+  const [activeTab, setActiveTab] = useState<'perfil' | 'gestion' | 'vistas'>(
     currentUser.role === 'admin' ? 'gestion' : 'perfil'
   );
+
+  const [localFeatures, setLocalFeatures] = useState<Record<string, boolean>>({ ...enabledFeatures });
+
+  useEffect(() => {
+    setLocalFeatures({ ...enabledFeatures });
+  }, [enabledFeatures]);
 
   // Own Password Change form states
   const [currentPassword, setCurrentPassword] = useState('');
@@ -295,6 +317,22 @@ export default function UserManagement({ authToken, currentUser, onAddLog }: Use
             Consola de Usuarios ({users.length})
           </button>
         )}
+
+        <button
+          onClick={() => {
+            setActiveTab('vistas');
+            setError(null);
+            setSuccess(null);
+          }}
+          className={`px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'vistas'
+              ? 'border-cyan-500 text-cyan-400 bg-cyan-500/5'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Settings className="h-3.5 w-3.5" />
+          Módulos Visibles
+        </button>
       </div>
 
       {/* FEEDBACK BANNERS */}
@@ -664,6 +702,84 @@ export default function UserManagement({ authToken, currentUser, onAddLog }: Use
                 <strong className="text-amber-200">Privilegios Administrativos:</strong> Como Administrador, usted puede cambiar la clave de acceso de cualquier usuario inmediatamente sin necesidad de conocer su clave actual. Esto es útil en caso de extravío de credenciales o por auditorías periódicas de personal.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: VISIBLE FEATURES PREFERENCE PANEL */}
+      {activeTab === 'vistas' && (
+        <div className="bg-[#0b1329]/50 border border-slate-800/60 p-5 rounded-md shadow-lg space-y-6">
+          <div className="border-b border-slate-800 pb-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+              <Settings className="h-4 w-4 text-cyan-400 animate-spin-slow" />
+              Personalización de Vistas de Red
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Marque o desmarque los módulos del sistema para personalizar las secciones visibles en el menú de navegación lateral.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {AVAILABLE_FEATURES.map((feature) => {
+              const IconComp = feature.icon;
+              const isChecked = localFeatures[feature.key] !== false;
+              return (
+                <div 
+                  key={feature.key}
+                  onClick={() => {
+                    setLocalFeatures(prev => ({
+                      ...prev,
+                      [feature.key]: !isChecked
+                    }));
+                  }}
+                  className={`p-3.5 rounded-lg border cursor-pointer select-none transition-all duration-200 flex gap-3.5 items-start ${
+                    isChecked 
+                      ? 'bg-cyan-500/5 border-cyan-500/30 hover:border-cyan-500/50' 
+                      : 'bg-slate-950/20 border-slate-850 hover:border-slate-800'
+                  }`}
+                >
+                  <div className="mt-0.5">
+                    <input 
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {}} // handled by parent div click
+                      className="accent-cyan-500 h-4 w-4 cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <IconComp className={`h-4 w-4 ${isChecked ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
+                      <span className="font-semibold text-xs text-slate-200">{feature.label}</span>
+                      <span className="text-[8px] font-mono tracking-widest uppercase bg-slate-850 text-slate-400 border border-slate-800 px-1.5 py-0.2 rounded">
+                        {feature.category}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-normal font-sans">
+                      {feature.desc}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="border-t border-slate-850 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <span className="text-[10px] text-slate-400 italic">
+              Las vistas no seleccionadas se ocultarán del menú principal, pero continuarán registrando información en segundo plano.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onUpdateFeatures(localFeatures);
+                setSuccess('Preferencias de visualización actualizadas con éxito.');
+                onAddLog('🎨 Preferencias de interfaz de red actualizadas por el operador.', 'success');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="bg-cyan-500 hover:bg-cyan-600 text-[#020617] font-bold py-2 px-5 rounded uppercase tracking-wider text-[10px] transition-colors cursor-pointer flex items-center gap-1.5 shadow-md shrink-0 self-end sm:self-auto"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Aplicar Configuración de Vistas
+            </button>
           </div>
         </div>
       )}

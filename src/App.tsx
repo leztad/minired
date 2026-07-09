@@ -24,7 +24,7 @@ import NetworkWiki from './components/NetworkWiki';
 import EventLogger from './components/EventLogger';
 import NetworkEnterpriseTools from './components/NetworkEnterpriseTools';
 import NetworkAuthGate from './components/NetworkAuthGate';
-import UserManagement from './components/UserManagement';
+import UserManagement, { AVAILABLE_FEATURES } from './components/UserManagement';
 
 const extractSubnetFromIp = (ip: string): string => {
   const parts = ip.trim().split('.');
@@ -427,6 +427,39 @@ export default function App() {
   const [sidebarSearch, setSidebarSearch] = useState<string>('');
   const [isLanTreeOpen, setIsLanTreeOpen] = useState<boolean>(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+
+  // Customizable features states
+  const [enabledFeatures, setEnabledFeatures] = useState<Record<string, boolean>>(() => {
+    const stored = localStorage.getItem('netmonitor_configured_features');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        // Fallback
+      }
+    }
+    return {
+      sensores: true,
+      dispositivos: true,
+      ancho_banda: true,
+      testeo: true,
+      ai_diagnostic: true,
+      speed_test: true,
+      auditorias_red: true,
+      diseno_red: true,
+      event_logger: true,
+      wiki_soporte: true,
+    };
+  });
+
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
+    return !localStorage.getItem('netmonitor_configured_features');
+  });
+
+  const handleUpdateFeatures = (newFeatures: Record<string, boolean>) => {
+    setEnabledFeatures(newFeatures);
+    localStorage.setItem('netmonitor_configured_features', JSON.stringify(newFeatures));
+  };
 
   // Gemini & Diagnóstico Inteligente API states
   const [aiReport, setAiReport] = useState<string | null>(null);
@@ -2083,6 +2116,86 @@ export default function App() {
     );
   }
 
+  if (showOnboarding) {
+    return (
+      <div className="min-h-screen bg-[#040814] tech-grid flex items-center justify-center p-4">
+        <div className="bg-[#070b19]/95 border border-slate-800/80 rounded-xl max-w-4xl w-full p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 text-slate-200 space-y-6">
+          <div className="text-center space-y-2">
+            <div className="inline-flex p-3 bg-cyan-500/10 rounded-full border border-cyan-500/20 text-cyan-400 mb-2">
+              <Sparkles className="h-6 w-6 animate-pulse" />
+            </div>
+            <h2 className="text-xl font-bold font-display tracking-wider text-white uppercase">Asistente de Configuración de Vistas de Red</h2>
+            <p className="text-xs text-slate-400 max-w-2xl mx-auto">
+              ¡Bienvenido a <span className="text-cyan-400 font-bold">RedMonitor PRO</span>! Personalice su entorno de trabajo seleccionando los módulos y herramientas que desea visualizar en su menú de navegación lateral. Podrá modificar esta selección en cualquier momento desde "Seguridad y Accesos".
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+            {AVAILABLE_FEATURES.map((feature) => {
+              const IconComp = feature.icon;
+              const isChecked = enabledFeatures[feature.key] !== false;
+              return (
+                <div 
+                  key={feature.key}
+                  onClick={() => {
+                    setEnabledFeatures(prev => ({
+                      ...prev,
+                      [feature.key]: !isChecked
+                    }));
+                  }}
+                  className={`p-4 rounded-lg border cursor-pointer select-none transition-all duration-200 flex gap-4 items-start ${
+                    isChecked 
+                      ? 'bg-cyan-500/5 border-cyan-500/40 hover:border-cyan-500/60 shadow-[0_0_15px_rgba(6,182,212,0.05)]' 
+                      : 'bg-slate-950/40 border-slate-900/80 hover:border-slate-800'
+                  }`}
+                >
+                  <div className="mt-1 flex items-center justify-center">
+                    <input 
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {}} // handled by parent div click
+                      className="accent-cyan-500 h-4 w-4 cursor-pointer rounded border-slate-800 bg-slate-950"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <IconComp className={`h-4.5 w-4.5 ${isChecked ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
+                      <span className="font-bold text-xs text-slate-100">{feature.label}</span>
+                      <span className="text-[8px] font-mono tracking-widest uppercase bg-slate-850 text-slate-400 border border-slate-800 px-1.5 py-0.2 rounded">
+                        {feature.category}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed font-sans">
+                      {feature.desc}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="border-t border-slate-800/80 pt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="text-[10.5px] text-slate-400 flex items-center gap-1.5 font-mono">
+              <span className="w-2 h-2 rounded-full bg-cyan-500 animate-ping" />
+              <span>Personalización de perfil de visualización activo</span>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.setItem('netmonitor_configured_features', JSON.stringify(enabledFeatures));
+                setShowOnboarding(false);
+                addAlert('🚀 ¡Consola configurada correctamente! Bienvenido a RedMonitor.', 'success');
+              }}
+              className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold uppercase py-3 px-8 rounded text-xs tracking-wider transition-all duration-200 hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Inicializar Consola RedMonitor
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-[#0B0F19] tech-grid font-sans text-xs text-slate-300">
       {/* HEADER BAR (Geometric Balance Theme) */}
@@ -2899,147 +3012,167 @@ export default function App() {
                   <span>Vista general</span>
                 </button>
               </li>
-              <li>
-                <button 
-                  onClick={() => { setActiveView('sensores'); setIsMobileMenuOpen(false); }}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'sensores' 
-                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Cpu className="h-3.5 w-3.5" />
-                  <span>Sensores</span>
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => { setActiveView('dispositivos'); setIsMobileMenuOpen(false); }}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'dispositivos' 
-                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Server className="h-3.5 w-3.5" />
-                  <span>Dispositivos</span>
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => { setActiveView('ancho_banda'); setIsMobileMenuOpen(false); }}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'ancho_banda' 
-                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Activity className="h-3.5 w-3.5" />
-                  <span>Ancho de Banda</span>
-                  <span className="ml-auto bg-emerald-500/10 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20">VIVO</span>
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => { setActiveView('testeo'); setIsMobileMenuOpen(false); }}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'testeo' 
-                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  <span>Consola de Pruebas</span>
-                  <span className="ml-auto bg-cyan-500/10 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">TEST</span>
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => { setActiveView('ai_diagnostic'); setIsMobileMenuOpen(false); }}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'ai_diagnostic' 
-                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Brain className="h-3.5 w-3.5 text-purple-400 animate-pulse" />
-                  <span>Copiloto de Red AI</span>
-                  <span className="ml-auto bg-purple-500/15 text-purple-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-purple-500/20">GEMINI</span>
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => { setActiveView('speed_test'); setIsMobileMenuOpen(false); }}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'speed_test' 
-                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Gauge className="h-3.5 w-3.5 text-cyan-500" />
-                  <span>Prueba de Velocidad</span>
-                  <span className="ml-auto bg-cyan-500/10 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">MEGABITS</span>
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => { setActiveView('auditorias_red'); setIsMobileMenuOpen(false); }}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'auditorias_red' 
-                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                  <span>Auditorías de Red</span>
-                  <span className="ml-auto bg-emerald-500/10 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20">AUDITOR</span>
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => { setActiveView('diseno_red'); setIsMobileMenuOpen(false); }}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'diseno_red' 
-                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                  }`}
-                  id="nav-diseno-red-btn"
-                >
-                  <Layers className="h-3.5 w-3.5 text-cyan-400" />
-                  <span>Herramientas L2/L3</span>
-                  <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">EMPRESA</span>
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => { setActiveView('event_logger'); setIsMobileMenuOpen(false); }}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'event_logger' 
-                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                  }`}
-                  id="nav-event-logger-btn"
-                >
-                  <Terminal className="h-3.5 w-3.5 text-cyan-400" />
-                  <span>Consola de Eventos</span>
-                  <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">LOGGER</span>
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => { setActiveView('wiki_soporte'); setIsMobileMenuOpen(false); }}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'wiki_soporte' 
-                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                  }`}
-                  id="nav-wiki-btn"
-                >
-                  <HelpCircle className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
-                  <span>Wiki y Soporte</span>
-                  <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">WIKI</span>
-                </button>
-              </li>
+              {enabledFeatures.sensores !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('sensores'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'sensores' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Cpu className="h-3.5 w-3.5" />
+                    <span>Sensores</span>
+                  </button>
+                </li>
+              )}
+              {enabledFeatures.dispositivos !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('dispositivos'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'dispositivos' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Server className="h-3.5 w-3.5" />
+                    <span>Dispositivos</span>
+                  </button>
+                </li>
+              )}
+              {enabledFeatures.ancho_banda !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('ancho_banda'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'ancho_banda' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Activity className="h-3.5 w-3.5" />
+                    <span>Ancho de Banda</span>
+                    <span className="ml-auto bg-emerald-500/10 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20">VIVO</span>
+                  </button>
+                </li>
+              )}
+              {enabledFeatures.testeo !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('testeo'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'testeo' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    <span>Consola de Pruebas</span>
+                    <span className="ml-auto bg-cyan-500/10 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">TEST</span>
+                  </button>
+                </li>
+              )}
+              {enabledFeatures.ai_diagnostic !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('ai_diagnostic'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'ai_diagnostic' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Brain className="h-3.5 w-3.5 text-purple-400 animate-pulse" />
+                    <span>Copiloto de Red AI</span>
+                    <span className="ml-auto bg-purple-500/15 text-purple-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-purple-500/20">GEMINI</span>
+                  </button>
+                </li>
+              )}
+              {enabledFeatures.speed_test !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('speed_test'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'speed_test' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Gauge className="h-3.5 w-3.5 text-cyan-500" />
+                    <span>Prueba de Velocidad</span>
+                    <span className="ml-auto bg-cyan-500/10 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">MEGABITS</span>
+                  </button>
+                </li>
+              )}
+              {enabledFeatures.auditorias_red !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('auditorias_red'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'auditorias_red' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>Auditorías de Red</span>
+                    <span className="ml-auto bg-emerald-500/10 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20">AUDITOR</span>
+                  </button>
+                </li>
+              )}
+              {enabledFeatures.diseno_red !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('diseno_red'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'diseno_red' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                    id="nav-diseno-red-btn"
+                  >
+                    <Layers className="h-3.5 w-3.5 text-cyan-400" />
+                    <span>Herramientas L2/L3</span>
+                    <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">EMPRESA</span>
+                  </button>
+                </li>
+              )}
+              {enabledFeatures.event_logger !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('event_logger'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'event_logger' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                    id="nav-event-logger-btn"
+                  >
+                    <Terminal className="h-3.5 w-3.5 text-cyan-400" />
+                    <span>Consola de Eventos</span>
+                    <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">LOGGER</span>
+                  </button>
+                </li>
+              )}
+              {enabledFeatures.wiki_soporte !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('wiki_soporte'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'wiki_soporte' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                    id="nav-wiki-btn"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
+                    <span>Wiki y Soporte</span>
+                    <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">WIKI</span>
+                  </button>
+                </li>
+              )}
 
               {currentUser && (
                 <li>
@@ -3946,6 +4079,8 @@ export default function App() {
               authToken={authToken!}
               currentUser={currentUser}
               onAddLog={addAlert}
+              enabledFeatures={enabledFeatures}
+              onUpdateFeatures={handleUpdateFeatures}
             />
           )}
 
