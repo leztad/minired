@@ -13,7 +13,19 @@ dotenv.config();
 
 import crypto from "crypto";
 
-const USERS_FILE = path.join(process.cwd(), "users.json");
+let USERS_FILE = path.join(process.cwd(), "users.json");
+
+// Verificar si el directorio actual de trabajo es escribible, si no, usar la carpeta personal del usuario
+try {
+  fs.accessSync(process.cwd(), fs.constants.W_OK);
+} catch (e) {
+  const homeDir = os.homedir();
+  const configDir = path.join(homeDir, ".redmonitor");
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true });
+  }
+  USERS_FILE = path.join(configDir, "users.json");
+}
 
 interface DBUser {
   id: string;
@@ -58,6 +70,24 @@ const PORT = 3000;
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Middleware de CORS para habilitar la comunicación segura con la aplicación de escritorio de Tauri
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && (origin.startsWith("tauri://") || origin.startsWith("https://tauri.localhost") || origin.includes("localhost"))) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 // Dynamic ZIP Downloader Endpoint
 app.get("/api/download-zip", (req, res) => {
