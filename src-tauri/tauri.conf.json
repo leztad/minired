@@ -33,12 +33,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "nsis": {
-      "createDesktopLink": "always",
-      "oneClick": false,
-      "installerIcon": "icons/icon.ico",
-      "installMode": "perMachine",
-      "languages": ["Spanish"]
+    "windows": {
+      "nsis": {
+        "createDesktopLink": "always",
+        "oneClick": false,
+        "installerIcon": "icons/icon.ico",
+        "installMode": "perMachine",
+        "languages": ["Spanish"]
+      }
     }
   }
 }
