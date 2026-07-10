@@ -30,10 +30,10 @@ echo [OK] Node.js detectado con exito.
 echo.
 echo [+] Verificando el compilador de Rust (indispensable para Tauri)...
 
-:: Intentar detectar si Rust se acaba de instalar en la ruta por defecto y agregarlo al PATH de esta sesion
-if exist "%USERPROFILE%\.cargo\bin" (
-    set "PATH=%PATH%;%USERPROFILE%\.cargo\bin"
-)
+:: Intentar detectar si Rust se acaba de instalar en la ruta por defecto y agregarlo al PATH de esta sesion de forma segura (sin parentesis)
+if not exist "%USERPROFILE%\.cargo\bin" goto skip_cargo_path
+set "PATH=%PATH%;%USERPROFILE%\.cargo\bin"
+:skip_cargo_path
 
 cargo --version >nul 2>nul
 if errorlevel 1 (
