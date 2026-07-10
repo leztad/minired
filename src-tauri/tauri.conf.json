@@ -35,8 +35,6 @@
     ],
     "windows": {
       "nsis": {
-        "createDesktopLink": "always",
-        "oneClick": false,
         "installerIcon": "icons/icon.ico",
         "installMode": "perMachine",
         "languages": ["Spanish"]
