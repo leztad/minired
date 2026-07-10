@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Lock, Unlock, ShieldAlert, CheckCircle2, AlertTriangle, Key, 
-  User, ArrowRight, UserPlus, Shield, Sparkles, Server, Terminal, Network, Info, ShieldCheck
+  User, ArrowRight, UserPlus, Shield, Sparkles, Server, Terminal, Network, Info, ShieldCheck,
+  Copy, Check, HelpCircle, ArrowLeft
 } from 'lucide-react';
 
 interface NetworkAuthGateProps {
@@ -23,6 +24,44 @@ export default function NetworkAuthGate({ onAuthenticated, onAddLog }: NetworkAu
 
   // Password visibility
   const [showPassword, setShowPassword] = useState(false);
+
+  // Password recovery states
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const [recoveryUsername, setRecoveryUsername] = useState('');
+  const [recoveryQuestionText, setRecoveryQuestionText] = useState('');
+  const [hasRecoveryQuestion, setHasRecoveryQuestion] = useState(false);
+  const [recoveryAnswerInput, setRecoveryAnswerInput] = useState('');
+  const [recoveryKeyInput, setRecoveryKeyInput] = useState('');
+  const [recoveryNewPassword, setRecoveryNewPassword] = useState('');
+  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState('');
+  const [recoveryStep, setRecoveryStep] = useState<1 | 2>(1);
+  const [recoveryMethod, setRecoveryMethod] = useState<'question' | 'key'>('question');
+
+  // Setup security recovery configuration
+  const [setupQuestion, setSetupQuestion] = useState('Nombre de tu primera mascota');
+  const [setupAnswer, setSetupAnswer] = useState('');
+  const [generatedRecoveryKey, setGeneratedRecoveryKey] = useState('');
+  const [copiedKey, setCopiedKey] = useState(false);
+
+  useEffect(() => {
+    if (isSetupNeeded) {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let key = 'RM-';
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 4; j++) {
+          key += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        if (i < 2) key += '-';
+      }
+      setGeneratedRecoveryKey(key);
+    }
+  }, [isSetupNeeded]);
+
+  const handleCopyKey = () => {
+    navigator.clipboard.writeText(generatedRecoveryKey);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
+  };
 
   // Check setup status on load
   const checkSetupStatus = async () => {
@@ -93,13 +132,25 @@ export default function NetworkAuthGate({ onAuthenticated, onAddLog }: NetworkAu
       return;
     }
 
+    if (!setupAnswer.trim()) {
+      setError('Por favor ingrese una respuesta para la pregunta de seguridad.');
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
       const res = await fetch('/api/auth/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, fullName })
+        body: JSON.stringify({ 
+          username, 
+          password, 
+          fullName,
+          securityQuestion: setupQuestion,
+          securityAnswer: setupAnswer,
+          recoveryKey: generatedRecoveryKey
+        })
       });
 
       const data = await res.json();
@@ -115,6 +166,103 @@ export default function NetworkAuthGate({ onAuthenticated, onAddLog }: NetworkAu
       }, 1500);
     } catch (err: any) {
       setError(err.message || 'Error al guardar la configuración inicial.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Recovery Step 1: Check Username
+  const handleRecoveryCheckUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryUsername.trim()) {
+      setError('Por favor ingrese su nombre de usuario.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await fetch(`/api/auth/recovery-question?username=${encodeURIComponent(recoveryUsername)}`);
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'No se pudo verificar el usuario.');
+      }
+
+      setHasRecoveryQuestion(data.hasQuestion);
+      if (data.hasQuestion) {
+        setRecoveryQuestionText(data.securityQuestion);
+        setRecoveryMethod('question');
+      } else {
+        setRecoveryQuestionText('');
+        setRecoveryMethod('key');
+      }
+      setRecoveryStep(2);
+    } catch (err: any) {
+      setError(err.message || 'Error al verificar el usuario.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Recovery Step 2: Reset Password
+  const handleRecoveryReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (recoveryMethod === 'question' && !recoveryAnswerInput.trim()) {
+      setError('Por favor ingrese la respuesta a su pregunta de seguridad.');
+      return;
+    }
+    if (recoveryMethod === 'key' && !recoveryKeyInput.trim()) {
+      setError('Por favor ingrese su clave de recuperación maestra.');
+      return;
+    }
+    if (!recoveryNewPassword || !recoveryConfirmPassword) {
+      setError('Por favor complete todos los campos de contraseña.');
+      return;
+    }
+    if (recoveryNewPassword.length < 6) {
+      setError('La nueva contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+    if (recoveryNewPassword !== recoveryConfirmPassword) {
+      setError('Las contraseñas no coinciden.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await fetch('/api/auth/recover-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: recoveryUsername,
+          securityAnswer: recoveryMethod === 'question' ? recoveryAnswerInput : undefined,
+          recoveryKey: recoveryMethod === 'key' ? recoveryKeyInput : undefined,
+          newPassword: recoveryNewPassword
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al restablecer la contraseña.');
+      }
+
+      setSuccessMsg('¡Contraseña restablecida con éxito! Ya puede iniciar sesión.');
+      onAddLog(`🔐 Contraseña restablecida con éxito para el usuario "${recoveryUsername}".`, 'info');
+      
+      setTimeout(() => {
+        setIsRecoveryMode(false);
+        setRecoveryStep(1);
+        setRecoveryUsername('');
+        setRecoveryAnswerInput('');
+        setRecoveryKeyInput('');
+        setRecoveryNewPassword('');
+        setRecoveryConfirmPassword('');
+        setSuccessMsg(null);
+      }, 3000);
+    } catch (err: any) {
+      setError(err.message || 'Error al restablecer la contraseña.');
     } finally {
       setIsLoading(false);
     }
@@ -274,10 +422,71 @@ export default function NetworkAuthGate({ onAuthenticated, onAddLog }: NetworkAu
                   </label>
                 </div>
 
+                {/* CONFIGURACIÓN DE RECUPERACIÓN */}
+                <div className="border-t border-slate-800/60 pt-4 mt-2 space-y-4">
+                  <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Shield className="h-3.5 w-3.5" /> Seguridad de Recuperación
+                  </h3>
+                  <p className="text-[10px] text-slate-400 leading-normal">
+                    Establezca estos datos por seguridad. En caso de olvidar su contraseña, podrá restablecerla utilizando esta pregunta o la clave maestra.
+                  </p>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                      Pregunta de Seguridad
+                    </label>
+                    <select
+                      value={setupQuestion}
+                      onChange={(e) => setSetupQuestion(e.target.value)}
+                      className="w-full bg-[#020617] border border-slate-800 rounded p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                    >
+                      <option value="Nombre de tu primera mascota">Nombre de tu primera mascota</option>
+                      <option value="Ciudad donde nació tu madre">Ciudad donde nació tu madre</option>
+                      <option value="Nombre de tu primera escuela">Nombre de tu primera escuela</option>
+                      <option value="Modelo de tu primer coche">Modelo de tu primer coche</option>
+                      <option value="Tu comida favorita de la infancia">Tu comida favorita de la infancia</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                      Respuesta de Seguridad
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={setupAnswer}
+                      onChange={(e) => setSetupAnswer(e.target.value)}
+                      placeholder="Ingrese la respuesta secreta"
+                      className="w-full bg-slate-900/80 border border-slate-800 rounded p-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                    />
+                  </div>
+
+                  <div className="bg-slate-950/60 border border-slate-800 rounded p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400">Clave Maestra de Recuperación</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyKey}
+                        className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        {copiedKey ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                        {copiedKey ? 'Copiado' : 'Copiar'}
+                      </button>
+                    </div>
+                    <div className="font-mono text-center text-xs text-white bg-[#020617] py-2 rounded select-all border border-slate-800 tracking-wider">
+                      {generatedRecoveryKey}
+                    </div>
+                    <p className="text-[9px] text-slate-500 leading-normal">
+                      Guarde esta clave en un lugar seguro. Es única para su servidor.
+                    </p>
+                  </div>
+                </div>
+
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-cyan-500 hover:bg-cyan-600 disabled:bg-cyan-500/40 text-[#020617] font-bold py-3 px-4 rounded text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/10"
+                  className="w-full mt-2 bg-cyan-500 hover:bg-cyan-600 disabled:bg-cyan-500/40 text-[#020617] font-bold py-3 px-4 rounded text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/10"
                 >
                   {isLoading ? (
                     <span className="flex items-center gap-2">
@@ -292,6 +501,183 @@ export default function NetworkAuthGate({ onAuthenticated, onAddLog }: NetworkAu
                   )}
                 </button>
               </form>
+            ) : isRecoveryMode ? (
+              /* ================= PASSWORD RECOVERY FORM ================= */
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRecoveryMode(false);
+                      setError(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="text-slate-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                  >
+                    <ArrowLeft className="h-4 w-4" /> Volver al Inicio
+                  </button>
+                </div>
+
+                {recoveryStep === 1 ? (
+                  <form onSubmit={handleRecoveryCheckUser} className="space-y-4">
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Ingrese su nombre de usuario de RedMonitor para iniciar el proceso de recuperación de credenciales.
+                    </p>
+                    
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <User className="h-3 w-3" /> Nombre de Usuario
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        disabled={isLoading}
+                        value={recoveryUsername}
+                        onChange={(e) => setRecoveryUsername(e.target.value)}
+                        placeholder="Ingrese su usuario"
+                        className="w-full bg-slate-900/80 border border-slate-800 rounded p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors font-mono"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full bg-cyan-500 hover:bg-cyan-600 disabled:bg-cyan-500/40 text-[#020617] font-bold py-3 px-4 rounded text-xs uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/10"
+                    >
+                      {isLoading ? (
+                        <span className="flex items-center gap-2">
+                          <span className="w-4 h-4 border-2 border-[#020617] border-t-transparent rounded-full animate-spin"></span>
+                          Buscando usuario...
+                        </span>
+                      ) : (
+                        <>
+                          Continuar
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleRecoveryReset} className="space-y-4">
+                    {/* Selección de Método de Recuperación si el usuario tiene pregunta de seguridad configurada */}
+                    {hasRecoveryQuestion && (
+                      <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950/80 rounded border border-slate-850">
+                        <button
+                          type="button"
+                          onClick={() => setRecoveryMethod('question')}
+                          className={`py-1.5 text-[10px] font-bold rounded cursor-pointer transition-colors ${
+                            recoveryMethod === 'question'
+                              ? 'bg-cyan-500 text-[#020617]'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Pregunta de Seguridad
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRecoveryMethod('key')}
+                          className={`py-1.5 text-[10px] font-bold rounded cursor-pointer transition-colors ${
+                            recoveryMethod === 'key'
+                              ? 'bg-cyan-500 text-[#020617]'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Clave Maestra
+                        </button>
+                      </div>
+                    )}
+
+                    {recoveryMethod === 'question' ? (
+                      <div className="space-y-3">
+                        <div className="p-3 bg-cyan-950/20 border border-cyan-500/15 rounded text-xs text-slate-300 space-y-1">
+                          <span className="text-[9px] uppercase font-mono tracking-wider font-semibold text-cyan-400">Pregunta:</span>
+                          <p className="font-medium text-white">{recoveryQuestionText}</p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                            Su Respuesta
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            disabled={isLoading}
+                            value={recoveryAnswerInput}
+                            onChange={(e) => setRecoveryAnswerInput(e.target.value)}
+                            placeholder="Ingrese su respuesta"
+                            className="w-full bg-slate-900/80 border border-slate-800 rounded p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <Key className="h-3 w-3 text-amber-400" /> Clave de Recuperación Maestra
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          disabled={isLoading}
+                          value={recoveryKeyInput}
+                          onChange={(e) => setRecoveryKeyInput(e.target.value)}
+                          placeholder="ej: RM-XXXX-XXXX-XXXX"
+                          className="w-full bg-slate-900/80 border border-slate-800 rounded p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors font-mono tracking-wider"
+                        />
+                      </div>
+                    )}
+
+                    <div className="border-t border-slate-800/60 pt-3 space-y-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                          Nueva Contraseña
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          disabled={isLoading}
+                          value={recoveryNewPassword}
+                          onChange={(e) => setRecoveryNewPassword(e.target.value)}
+                          placeholder="Mínimo 6 caracteres"
+                          className="w-full bg-slate-900/80 border border-slate-800 rounded p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors font-mono"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                          Confirmar Nueva Contraseña
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          disabled={isLoading}
+                          value={recoveryConfirmPassword}
+                          onChange={(e) => setRecoveryConfirmPassword(e.target.value)}
+                          placeholder="Repita nueva contraseña"
+                          className="w-full bg-slate-900/80 border border-slate-800 rounded p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 disabled:from-cyan-500/30 disabled:to-blue-600/30 text-white font-bold py-3 px-4 rounded text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+                    >
+                      {isLoading ? (
+                        <span className="flex items-center gap-2">
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          Procesando restablecimiento...
+                        </span>
+                      ) : (
+                        <>
+                          <Lock className="h-4 w-4" />
+                          Restablecer Contraseña
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )}
+              </div>
             ) : (
               /* ================= STANDARD LOGIN FORM ================= */
               <form onSubmit={handleLogin} className="space-y-4">
@@ -315,6 +701,18 @@ export default function NetworkAuthGate({ onAuthenticated, onAddLog }: NetworkAu
                     <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
                       <Key className="h-3 w-3" /> Contraseña
                     </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecoveryMode(true);
+                        setRecoveryStep(1);
+                        setError(null);
+                        setSuccessMsg(null);
+                      }}
+                      className="text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer hover:underline"
+                    >
+                      ¿Olvidó su contraseña?
+                    </button>
                   </div>
                   <input
                     type="password"

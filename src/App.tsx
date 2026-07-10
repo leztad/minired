@@ -2551,32 +2551,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ADVERTENCIA DE RED EJECUTÁNDOSE EN SANDBOX CLOUD */}
-      {isHostedInCloud && (
-        <div className="bg-amber-500/10 border-b border-amber-950/40 px-4 py-2 text-xs text-amber-300 font-sans">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 max-w-7xl mx-auto w-full">
-            <div className="flex items-start gap-2.5">
-              <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold uppercase tracking-wide text-amber-450 pr-1">🌐 Servidor en la Nube de Google Cloud Run:</span>
-                Esta vista previa de la aplicación corre en un servidor remoto de Google. 
-                Por motivos de seguridad informática y sandbox, este servidor remoto no puede acceder a los enrutadores físicos privados ni a la red local residencial (`192.168.1.x`) de tu portátil a menos que lo corras físicamente. 
-                {!isDemoMode && (
-                  <span className="text-rose-450 font-bold block mt-1">
-                    ⚠️ Al tener desactivado el "Modo Demo", el escáner intentará buscar equipos reales en el servidor remoto de Google, reportando los hosts locales como caídos. Activa "Modo Demo" para ver datos ilustrativos o corre la app localmente.
-                  </span>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => setIsLocalHelpModalOpen(true)}
-              className="text-[11px] bg-amber-500/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-200 font-bold px-3 py-1 rounded-sm cursor-pointer transition-all shrink-0 hover:text-white"
-            >
-              🚀 ¿Cómo escanear mi red real?
-            </button>
-          </div>
-        </div>
-      )}
+
 
        {/* MODAL DE INSTRUCCIONES DE ESCANEO DE RED LOCAL REAL */}
        {isLocalHelpModalOpen && (

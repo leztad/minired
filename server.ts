@@ -35,6 +35,10 @@ interface DBUser {
   salt: string;
   role: 'admin' | 'auditor';
   createdAt: string;
+  securityQuestion?: string;
+  securityAnswerHash?: string;
+  securityAnswerSalt?: string;
+  recoveryKeyHash?: string;
 }
 
 // In-memory sessions storage
@@ -154,7 +158,7 @@ app.get("/api/auth/setup-needed", (req, res) => {
 });
 
 app.post("/api/auth/setup", (req, res) => {
-  const { username, password, fullName } = req.body;
+  const { username, password, fullName, securityQuestion, securityAnswer, recoveryKey } = req.body;
   if (!username || !password || !fullName) {
     return res.status(400).json({ error: "Faltan campos obligatorios (usuario, contraseña, nombre completo)" });
   }
@@ -167,6 +171,18 @@ app.post("/api/auth/setup", (req, res) => {
   const salt = generateSalt();
   const passwordHash = hashPassword(password, salt);
 
+  let securityAnswerHash = undefined;
+  let securityAnswerSalt = undefined;
+  if (securityQuestion && securityAnswer) {
+    securityAnswerSalt = generateSalt();
+    securityAnswerHash = hashPassword(securityAnswer.trim().toLowerCase(), securityAnswerSalt);
+  }
+
+  let recoveryKeyHash = undefined;
+  if (recoveryKey) {
+    recoveryKeyHash = hashPassword(recoveryKey.trim(), salt);
+  }
+
   const adminUser: DBUser = {
     id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
     username: username.trim().toLowerCase(),
@@ -174,7 +190,11 @@ app.post("/api/auth/setup", (req, res) => {
     passwordHash,
     salt,
     role: "admin",
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    securityQuestion: securityQuestion ? securityQuestion.trim() : undefined,
+    securityAnswerHash,
+    securityAnswerSalt,
+    recoveryKeyHash
   };
 
   users.push(adminUser);
@@ -237,6 +257,88 @@ app.post("/api/auth/login", (req, res) => {
   });
 });
 
+app.get("/api/auth/recovery-question", (req, res) => {
+  const { username } = req.query;
+  if (!username) {
+    return res.status(400).json({ error: "Nombre de usuario requerido" });
+  }
+
+  const users = loadUsers();
+  const user = users.find(u => u.username === (username as string).trim().toLowerCase());
+
+  if (!user) {
+    return res.status(404).json({ error: "Usuario no registrado" });
+  }
+
+  if (!user.securityQuestion) {
+    return res.json({ 
+      hasQuestion: false, 
+      message: "Este usuario no tiene configurada una pregunta de seguridad. Puede usar su clave de recuperación maestra si la tiene." 
+    });
+  }
+
+  res.json({
+    hasQuestion: true,
+    securityQuestion: user.securityQuestion
+  });
+});
+
+app.post("/api/auth/recover-password", (req, res) => {
+  const { username, securityAnswer, recoveryKey, newPassword } = req.body;
+
+  if (!username || !newPassword) {
+    return res.status(400).json({ error: "Nombre de usuario y nueva contraseña son requeridos" });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: "La nueva contraseña debe tener al menos 6 caracteres" });
+  }
+
+  const users = loadUsers();
+  const userIndex = users.findIndex(u => u.username === username.trim().toLowerCase());
+
+  if (userIndex === -1) {
+    return res.status(404).json({ error: "Usuario no encontrado" });
+  }
+
+  const user = users[userIndex];
+  let verified = false;
+
+  // 1. Intentar validar por pregunta de seguridad
+  if (securityAnswer && user.securityAnswerHash && user.securityAnswerSalt) {
+    const answerHash = hashPassword(securityAnswer.trim().toLowerCase(), user.securityAnswerSalt);
+    if (answerHash === user.securityAnswerHash) {
+      verified = true;
+    }
+  }
+
+  // 2. Intentar validar por clave de recuperación
+  if (!verified && recoveryKey && user.recoveryKeyHash) {
+    const keyHash = hashPassword(recoveryKey.trim(), user.salt);
+    if (keyHash === user.recoveryKeyHash) {
+      verified = true;
+    }
+  }
+
+  if (!verified) {
+    return res.status(401).json({ error: "La respuesta de seguridad o clave de recuperación es incorrecta" });
+  }
+
+  // Restablecer contraseña
+  const newSalt = generateSalt();
+  const newPasswordHash = hashPassword(newPassword, newSalt);
+
+  users[userIndex] = {
+    ...user,
+    passwordHash: newPasswordHash,
+    salt: newSalt
+  };
+
+  saveUsers(users);
+
+  res.json({ success: true, message: "Contraseña restablecida con éxito" });
+});
+
 // Helper to authenticate request
 const authenticate = (req: any, res: any, next: any) => {
   const authHeader = req.headers.authorization;
@@ -290,7 +392,7 @@ app.post("/api/auth/users", authenticate, (req: any, res) => {
     return res.status(403).json({ error: "Acceso denegado. Se requiere rol Administrador." });
   }
 
-  const { username, password, fullName, role } = req.body;
+  const { username, password, fullName, role, securityQuestion, securityAnswer, recoveryKey } = req.body;
   if (!username || !password || !fullName || !role) {
     return res.status(400).json({ error: "Todos los campos son obligatorios" });
   }
@@ -304,6 +406,18 @@ app.post("/api/auth/users", authenticate, (req: any, res) => {
   const salt = generateSalt();
   const passwordHash = hashPassword(password, salt);
 
+  let securityAnswerHash = undefined;
+  let securityAnswerSalt = undefined;
+  if (securityQuestion && securityAnswer) {
+    securityAnswerSalt = generateSalt();
+    securityAnswerHash = hashPassword(securityAnswer.trim().toLowerCase(), securityAnswerSalt);
+  }
+
+  let recoveryKeyHash = undefined;
+  if (recoveryKey) {
+    recoveryKeyHash = hashPassword(recoveryKey.trim(), salt);
+  }
+
   const newUser: DBUser = {
     id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
     username: username.trim().toLowerCase(),
@@ -311,7 +425,11 @@ app.post("/api/auth/users", authenticate, (req: any, res) => {
     passwordHash,
     salt,
     role: role === "admin" ? "admin" : "auditor",
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    securityQuestion: securityQuestion ? securityQuestion.trim() : undefined,
+    securityAnswerHash,
+    securityAnswerSalt,
+    recoveryKeyHash
   };
 
   users.push(newUser);
