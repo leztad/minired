@@ -29,13 +29,21 @@ echo [OK] Node.js detectado con exito.
 :: 2. Verificar Rust y Cargo
 echo.
 echo [+] Verificando el compilador de Rust (indispensable para Tauri)...
+
+:: Intentar detectar si Rust se acaba de instalar en la ruta por defecto y agregarlo al PATH de esta sesion
+if exist "%USERPROFILE%\.cargo\bin" (
+    set "PATH=%PATH%;%USERPROFILE%\.cargo\bin"
+)
+
 cargo --version >nul 2>nul
 if errorlevel 1 (
-    echo [!] Rust y Cargo no fueron detectados en este computador.
-    echo     Para compilar aplicaciones de Tauri, necesitas instalar Rust.
+    echo [!] Rust y Cargo no fueron detectados de forma global.
+    echo     Si acabas de instalar Rust:
+    echo     1. CIERRA ESTA VENTANA NEGRA por completo.
+    echo     2. Abre una nueva ventana negra (Terminal o CMD) o vuelve a abrir este archivo.
+    echo        Windows necesita actualizar la configuracion de rutas (PATH).
     echo.
-    echo     Presiona una tecla para abrir la pagina oficial de Rust (https://www.rust-lang.org/es)
-    echo     e instala Rustup. Reinicia esta consola despues de instalarlo.
+    echo     Si aun no lo has instalado, presiona una tecla para descargar Rustup:
     echo.
     pause
     start "" "https://www.rust-lang.org/es/tools/install"
