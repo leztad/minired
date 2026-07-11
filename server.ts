@@ -381,7 +381,9 @@ app.get("/api/auth/users", authenticate, (req: any, res) => {
     username: u.username,
     fullName: u.fullName,
     role: u.role,
-    createdAt: u.createdAt
+    createdAt: u.createdAt,
+    hasSecurityQuestion: !!u.securityQuestion,
+    hasRecoveryKey: !!u.recoveryKeyHash
   }));
 
   res.json(safeUsers);
@@ -503,6 +505,60 @@ app.post("/api/auth/change-password", authenticate, (req: any, res) => {
   saveUsers(users);
 
   res.json({ success: true, message: "Contraseña actualizada exitosamente" });
+});
+
+// Endpoint for users to get their own recovery setup info
+app.get("/api/auth/recovery-info", authenticate, (req: any, res) => {
+  const users = loadUsers();
+  const user = users.find(u => u.id === req.user.userId);
+
+  if (!user) {
+    return res.status(404).json({ error: "Usuario no encontrado" });
+  }
+
+  res.json({
+    hasQuestion: !!user.securityQuestion,
+    securityQuestion: user.securityQuestion || null,
+    hasRecoveryKey: !!user.recoveryKeyHash
+  });
+});
+
+// Endpoint for users to update their own recovery setup info
+app.post("/api/auth/update-recovery", authenticate, (req: any, res) => {
+  const { securityQuestion, securityAnswer, recoveryKey } = req.body;
+
+  if (!securityQuestion || !securityAnswer) {
+    return res.status(400).json({ error: "La pregunta y la respuesta de seguridad son obligatorias" });
+  }
+
+  const users = loadUsers();
+  const userIndex = users.findIndex(u => u.id === req.user.userId);
+
+  if (userIndex === -1) {
+    return res.status(404).json({ error: "Usuario no encontrado" });
+  }
+
+  const user = users[userIndex];
+
+  // Hash security answer
+  const answerSalt = generateSalt();
+  const answerHash = hashPassword(securityAnswer.trim().toLowerCase(), answerSalt);
+
+  user.securityQuestion = securityQuestion.trim();
+  user.securityAnswerHash = answerHash;
+  user.securityAnswerSalt = answerSalt;
+
+  if (recoveryKey) {
+    user.recoveryKeyHash = hashPassword(recoveryKey.trim(), user.salt);
+  }
+
+  users[userIndex] = user;
+  saveUsers(users);
+
+  res.json({ 
+    success: true, 
+    message: "Método de recuperación actualizado correctamente" 
+  });
 });
 
 // Endpoint for administrators to force change another user's password

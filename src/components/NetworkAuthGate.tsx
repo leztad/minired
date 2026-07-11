@@ -5,6 +5,30 @@ import {
   Copy, Check, HelpCircle, ArrowLeft
 } from 'lucide-react';
 
+export const getPasswordStrength = (password: string) => {
+  if (!password) return { score: 0, label: 'Sin ingresar', color: 'bg-slate-800', textColor: 'text-slate-500', width: 'w-0' };
+  let score = 0;
+  if (password.length >= 6) score += 1;
+  if (password.length >= 8) score += 1;
+  if (/[A-Z]/.test(password)) score += 1;
+  if (/[0-9]/.test(password)) score += 1;
+  if (/[^A-Za-z0-9]/.test(password)) score += 1;
+
+  switch (score) {
+    case 1:
+      return { score: 1, label: 'Muy Débil', color: 'bg-rose-500', textColor: 'text-rose-400', width: 'w-1/5' };
+    case 2:
+      return { score: 2, label: 'Débil', color: 'bg-orange-500', textColor: 'text-orange-400', width: 'w-2/5' };
+    case 3:
+      return { score: 3, label: 'Aceptable (Estándar)', color: 'bg-amber-500', textColor: 'text-amber-400', width: 'w-3/5' };
+    case 4:
+      return { score: 4, label: 'Fuerte (Segura)', color: 'bg-cyan-500', textColor: 'text-cyan-400', width: 'w-4/5' };
+    case 5:
+    default:
+      return { score: 5, label: 'Excelente (Militar)', color: 'bg-emerald-500', textColor: 'text-emerald-400', width: 'w-full' };
+  }
+};
+
 interface NetworkAuthGateProps {
   onAuthenticated: (token: string, user: { username: string; fullName: string; role: 'admin' | 'auditor' }) => void;
   onAddLog: (msg: string, type: 'success' | 'warning' | 'error' | 'info') => void;
@@ -224,6 +248,14 @@ export default function NetworkAuthGate({ onAuthenticated, onAddLog }: NetworkAu
       setError('La nueva contraseña debe tener al menos 6 caracteres.');
       return;
     }
+    
+    // Validar nivel de seguridad de la nueva contraseña
+    const strength = getPasswordStrength(recoveryNewPassword);
+    if (strength.score < 3) {
+      setError('Contraseña demasiado débil por directivas de seguridad corporativa. Debe incluir números, letras mayúsculas o caracteres especiales.');
+      return;
+    }
+
     if (recoveryNewPassword !== recoveryConfirmPassword) {
       setError('Las contraseñas no coinciden.');
       return;
@@ -232,13 +264,19 @@ export default function NetworkAuthGate({ onAuthenticated, onAddLog }: NetworkAu
     try {
       setIsLoading(true);
       setError(null);
+      
+      // Sanitizar la respuesta de seguridad para evitar fallas por mayúsculas/minúsculas o espacios extra
+      const sanitizedAnswer = recoveryMethod === 'question' 
+        ? recoveryAnswerInput.trim().toLowerCase() 
+        : undefined;
+
       const res = await fetch('/api/auth/recover-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: recoveryUsername,
-          securityAnswer: recoveryMethod === 'question' ? recoveryAnswerInput : undefined,
-          recoveryKey: recoveryMethod === 'key' ? recoveryKeyInput : undefined,
+          securityAnswer: sanitizedAnswer,
+          recoveryKey: recoveryMethod === 'key' ? recoveryKeyInput.trim() : undefined,
           newPassword: recoveryNewPassword
         })
       });
@@ -640,6 +678,46 @@ export default function NetworkAuthGate({ onAuthenticated, onAddLog }: NetworkAu
                           placeholder="Mínimo 6 caracteres"
                           className="w-full bg-slate-900/80 border border-slate-800 rounded p-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors font-mono"
                         />
+
+                        {/* PASSWORD STRENGTH VISUAL METER */}
+                        {recoveryNewPassword && (
+                          <div className="space-y-1.5 pt-1">
+                            <div className="flex justify-between items-center text-[9px] font-mono">
+                              <span className="text-slate-400 uppercase">Fortaleza:</span>
+                              <span className={`font-bold uppercase ${getPasswordStrength(recoveryNewPassword).textColor}`}>
+                                {getPasswordStrength(recoveryNewPassword).label}
+                              </span>
+                            </div>
+                            <div className="h-1 w-full bg-slate-950 rounded overflow-hidden flex">
+                              <div 
+                                className={`h-full transition-all duration-300 ${getPasswordStrength(recoveryNewPassword).color} ${getPasswordStrength(recoveryNewPassword).width}`}
+                              />
+                            </div>
+                            {/* Requisitos de seguridad interactivos */}
+                            <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-1 text-[8.5px] font-mono text-slate-400">
+                              <div className="flex items-center gap-1">
+                                <span className={recoveryNewPassword.length >= 8 ? "text-emerald-400" : "text-slate-500"}>
+                                  {recoveryNewPassword.length >= 8 ? '✓' : '•'} 8+ caracteres
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className={/[A-Z]/.test(recoveryNewPassword) ? "text-emerald-400" : "text-slate-500"}>
+                                  {/[A-Z]/.test(recoveryNewPassword) ? '✓' : '•'} Mayúscula [A-Z]
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className={/[0-9]/.test(recoveryNewPassword) ? "text-emerald-400" : "text-slate-500"}>
+                                  {/[0-9]/.test(recoveryNewPassword) ? '✓' : '•'} Número [0-9]
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className={/[^A-Za-z0-9]/.test(recoveryNewPassword) ? "text-emerald-400" : "text-slate-500"}>
+                                  {/[^A-Za-z0-9]/.test(recoveryNewPassword) ? '✓' : '•'} Símbolo (!@#$)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-1.5">

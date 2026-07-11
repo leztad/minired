@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   UserPlus, Trash2, Key, Shield, User, Clock, AlertTriangle, 
   CheckCircle2, ShieldAlert, RefreshCw, Lock, Unlock, Settings, Eye, EyeOff,
-  Cpu, Server, Activity, Terminal, Brain, Gauge, ShieldCheck, Layers, HelpCircle
+  Cpu, Server, Activity, Terminal, Brain, Gauge, ShieldCheck, Layers, HelpCircle,
+  Copy, Check
 } from 'lucide-react';
 
 interface DBUser {
@@ -11,6 +12,8 @@ interface DBUser {
   fullName: string;
   role: 'admin' | 'auditor';
   createdAt: string;
+  hasSecurityQuestion?: boolean;
+  hasRecoveryKey?: boolean;
 }
 
 interface UserManagementProps {
@@ -66,6 +69,36 @@ export default function UserManagement({ authToken, currentUser, onAddLog, enabl
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [adminForceNewPass, setAdminForceNewPass] = useState('');
 
+  // Own Account Recovery states
+  const [personalQuestion, setPersonalQuestion] = useState('Nombre de tu primera mascota');
+  const [personalAnswer, setPersonalAnswer] = useState('');
+  const [personalRecoveryKey, setPersonalRecoveryKey] = useState('');
+  const [personalHasQuestion, setPersonalHasQuestion] = useState(false);
+  const [personalHasKey, setPersonalHasKey] = useState(false);
+  const [personalQuestionText, setPersonalQuestionText] = useState('');
+  const [isSavingRecovery, setIsSavingRecovery] = useState(false);
+  const [copiedPersonalKey, setCopiedPersonalKey] = useState(false);
+
+  const fetchRecoveryInfo = async () => {
+    try {
+      const res = await fetch('/api/auth/recovery-info', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (!res.ok) {
+        throw new Error('No se pudo obtener información de recuperación.');
+      }
+      const data = await res.json();
+      setPersonalHasQuestion(data.hasQuestion);
+      setPersonalHasKey(data.hasRecoveryKey);
+      if (data.hasQuestion && data.securityQuestion) {
+        setPersonalQuestionText(data.securityQuestion);
+        setPersonalQuestion(data.securityQuestion);
+      }
+    } catch (err: any) {
+      console.error(err.message);
+    }
+  };
+
   const fetchUsers = async () => {
     if (currentUser.role !== 'admin') return;
     try {
@@ -90,6 +123,73 @@ export default function UserManagement({ authToken, currentUser, onAddLog, enabl
   useEffect(() => {
     fetchUsers();
   }, [authToken, currentUser.role]);
+
+  useEffect(() => {
+    if (activeTab === 'perfil') {
+      fetchRecoveryInfo();
+    }
+  }, [activeTab, authToken]);
+
+  const handleGeneratePersonalKey = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let key = 'RM-';
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 4; j++) {
+        key += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      if (i < 2) key += '-';
+    }
+    setPersonalRecoveryKey(key);
+  };
+
+  const handleCopyPersonalKey = () => {
+    if (!personalRecoveryKey) return;
+    navigator.clipboard.writeText(personalRecoveryKey);
+    setCopiedPersonalKey(true);
+    setTimeout(() => setCopiedPersonalKey(false), 2000);
+  };
+
+  const handleUpdateRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (!personalAnswer.trim()) {
+      setError('Por favor ingrese una respuesta para la pregunta de seguridad.');
+      return;
+    }
+
+    try {
+      setIsSavingRecovery(true);
+      const res = await fetch('/api/auth/update-recovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          securityQuestion: personalQuestion,
+          securityAnswer: personalAnswer,
+          recoveryKey: personalRecoveryKey || undefined
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'No se pudo guardar la configuración de recuperación.');
+      }
+
+      setSuccess('Configuración de recuperación de cuenta actualizada correctamente.');
+      onAddLog('🔐 Configuración de recuperación de cuenta de usuario actualizada.', 'success');
+      setPersonalAnswer('');
+      setPersonalRecoveryKey('');
+      fetchRecoveryInfo();
+    } catch (err: any) {
+      setError(err.message || 'Ocurrió un error al actualizar los datos de recuperación.');
+    } finally {
+      setIsSavingRecovery(false);
+    }
+  };
 
   // Handle own password change
   const handleChangeOwnPassword = async (e: React.FormEvent) => {
@@ -456,6 +556,129 @@ export default function UserManagement({ authToken, currentUser, onAddLog, enabl
                 Actualizar Mi Contraseña
               </button>
             </form>
+
+            {/* SECCIÓN ADICIONAL DE OPCIONES DE RECUPERACIÓN */}
+            <div className="border-t border-slate-800/80 pt-5 mt-4 space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+                <Shield className="h-4 w-4 text-cyan-400" />
+                Opciones de Recuperación de Cuenta
+              </h3>
+              <p className="text-[11px] text-slate-400 leading-normal max-w-xl">
+                Configure sus métodos de recuperación en caso de olvido. Al habilitar estos métodos, podrá usar tanto la pregunta secreta como una Clave Maestra de Recuperación para restablecer su contraseña de forma segura.
+              </p>
+
+              {/* Badges de estado actual */}
+              <div className="flex flex-wrap gap-3">
+                <div className="bg-[#0b1329]/80 border border-slate-850 p-3 rounded-lg flex items-center gap-2.5 flex-1 min-w-[200px]">
+                  <HelpCircle className="h-5 w-5 text-cyan-500 shrink-0" />
+                  <div>
+                    <span className="text-[9px] text-slate-500 block uppercase font-bold">Pregunta de Seguridad:</span>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${personalHasQuestion ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {personalHasQuestion ? (
+                        <>✓ Configurada: "{personalQuestionText}"</>
+                      ) : (
+                        <>✗ No Configurada</>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-[#0b1329]/80 border border-slate-850 p-3 rounded-lg flex items-center gap-2.5 flex-1 min-w-[200px]">
+                  <Key className="h-5 w-5 text-cyan-500 shrink-0" />
+                  <div>
+                    <span className="text-[9px] text-slate-500 block uppercase font-bold">Clave Maestra:</span>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${personalHasKey ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {personalHasKey ? (
+                        <>✓ Vinculada al Servidor</>
+                      ) : (
+                        <>✗ No Vinculada</>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Formulario de actualización */}
+              <form onSubmit={handleUpdateRecovery} className="bg-slate-950/40 border border-slate-850/60 p-4 rounded-md space-y-4 text-xs max-w-xl">
+                <h4 className="text-[11px] font-bold uppercase text-cyan-400 tracking-wider">
+                  Actualizar Métodos de Recuperación
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Pregunta de Seguridad</label>
+                    <select
+                      value={personalQuestion}
+                      onChange={(e) => setPersonalQuestion(e.target.value)}
+                      className="w-full bg-[#020617] border border-slate-850 rounded p-2 text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                    >
+                      <option value="Nombre de tu primera mascota">Nombre de tu primera mascota</option>
+                      <option value="Ciudad donde nació tu madre">Ciudad donde nació tu madre</option>
+                      <option value="Nombre de tu primera escuela">Nombre de tu primera escuela</option>
+                      <option value="Modelo de tu primer coche">Modelo de tu primer coche</option>
+                      <option value="Tu comida favorita de la infancia">Tu comida favorita de la infancia</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Respuesta de Seguridad</label>
+                    <input
+                      type="text"
+                      required
+                      value={personalAnswer}
+                      onChange={(e) => setPersonalAnswer(e.target.value)}
+                      placeholder="Ingrese la respuesta secreta"
+                      className="w-full bg-[#020617] border border-slate-850 rounded p-2 text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-850/80 pt-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Clave Maestra de Recuperación (Opcional)</span>
+                    <button
+                      type="button"
+                      onClick={handleGeneratePersonalKey}
+                      className="text-[9px] text-cyan-400 hover:text-cyan-300 font-bold uppercase tracking-wider"
+                    >
+                      {personalRecoveryKey ? 'Re-Generar Clave' : 'Generar Clave Maestra'}
+                    </button>
+                  </div>
+
+                  {personalRecoveryKey ? (
+                    <div className="bg-slate-900 border border-slate-800 rounded p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-mono text-amber-400 uppercase font-bold">¡Guarde esta nueva clave segura!</span>
+                        <button
+                          type="button"
+                          onClick={handleCopyPersonalKey}
+                          className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          {copiedPersonalKey ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                          {copiedPersonalKey ? 'Copiado' : 'Copiar'}
+                        </button>
+                      </div>
+                      <div className="font-mono text-center text-xs text-white bg-[#020617] py-2 rounded border border-slate-850 select-all tracking-wider">
+                        {personalRecoveryKey}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[9px] text-slate-550 leading-normal">
+                      Si lo desea, genere una nueva clave de recuperación y descárguela en un sitio seguro. De lo contrario, se mantendrá su clave anterior.
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingRecovery}
+                  className="bg-cyan-500 hover:bg-cyan-600 disabled:bg-cyan-500/30 text-[#020617] font-bold py-2 px-4 rounded uppercase tracking-wider text-[10px] transition-colors cursor-pointer flex items-center gap-1.5 shadow-md"
+                >
+                  {isSavingRecovery ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                  Guardar Cambios de Recuperación
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -563,6 +786,7 @@ export default function UserManagement({ authToken, currentUser, onAddLog, enabl
                     <th className="py-2.5 px-3">Usuario (Login)</th>
                     <th className="py-2.5 px-3">Nombre Completo</th>
                     <th className="py-2.5 px-3 text-center">Rol</th>
+                    <th className="py-2.5 px-3 text-center">Seguridad</th>
                     <th className="py-2.5 px-3">Creado el</th>
                     <th className="py-2.5 px-3 text-center">Acciones</th>
                   </tr>
@@ -570,7 +794,7 @@ export default function UserManagement({ authToken, currentUser, onAddLog, enabl
                 <tbody className="divide-y divide-slate-850">
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-500 font-mono">
+                      <td colSpan={6} className="py-8 text-center text-slate-500 font-mono">
                         {isLoading ? 'Cargando usuarios...' : 'No hay usuarios configurados en el sistema.'}
                       </td>
                     </tr>
@@ -600,6 +824,31 @@ export default function UserManagement({ authToken, currentUser, onAddLog, enabl
                                 <Shield className="h-2.5 w-2.5" />
                                 {u.role === 'admin' ? 'ADMIN' : 'AUDITOR'}
                               </span>
+                            </td>
+                            {/* SEGURIDAD DE RECUPERACIÓN */}
+                            <td className="py-3 px-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <span 
+                                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full border cursor-help ${
+                                    u.hasSecurityQuestion
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                      : 'bg-amber-500/10 text-amber-500/70 border-amber-500/20'
+                                  }`}
+                                  title={u.hasSecurityQuestion ? 'Pregunta de seguridad configurada' : 'Sin pregunta de seguridad registrada'}
+                                >
+                                  <HelpCircle className="w-3 h-3" />
+                                </span>
+                                <span 
+                                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full border cursor-help ${
+                                    u.hasRecoveryKey
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                      : 'bg-amber-500/10 text-amber-500/70 border-amber-500/20'
+                                  }`}
+                                  title={u.hasRecoveryKey ? 'Clave Maestra vinculada' : 'Sin clave de recuperación maestra registrada'}
+                                >
+                                  <Key className="w-3 h-3" />
+                                </span>
+                              </div>
                             </td>
                             <td className="py-3 px-3 text-slate-400 font-mono text-[10px]">
                               <span className="flex items-center gap-1">
@@ -651,7 +900,7 @@ export default function UserManagement({ authToken, currentUser, onAddLog, enabl
                           {/* INLINE ADMIN PASSWORD RESET SECTION */}
                           {isEditing && (
                             <tr className="bg-cyan-950/5">
-                              <td colSpan={5} className="py-3 px-4 border-l-2 border-cyan-500 bg-[#070e1e]/60">
+                              <td colSpan={6} className="py-3 px-4 border-l-2 border-cyan-500 bg-[#070e1e]/60">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                                   <div className="flex items-center gap-2">
                                     <ShieldAlert className="h-4 w-4 text-cyan-400 animate-pulse" />
