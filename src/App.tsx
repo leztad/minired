@@ -4,7 +4,7 @@ import {
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
   ChevronDown, Monitor, Copy, Plus, Play, Pause, ExternalLink, HelpCircle, 
   ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable,
-  Gauge, Menu, X, Shield
+  Gauge, Menu, X, Shield, MapPin
 } from 'lucide-react';
 
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
@@ -26,6 +26,7 @@ import NetworkEnterpriseTools from './components/NetworkEnterpriseTools';
 import NetworkAuthGate from './components/NetworkAuthGate';
 import UserManagement, { AVAILABLE_FEATURES } from './components/UserManagement';
 import TauriInstallerGuide from './components/TauriInstallerGuide';
+import OfflineLocationsManager, { LocationProfile } from './components/OfflineLocationsManager';
 
 const extractSubnetFromIp = (ip: string): string => {
   const parts = ip.trim().split('.');
@@ -260,6 +261,7 @@ export default function App() {
     return localStorage.getItem('netmonitor_current_location') || '';
   });
   const [showLocationModal, setShowLocationModal] = useState<boolean>(true);
+  const [loadedProfileId, setLoadedProfileId] = useState<string | null>(null);
 
   // Probe UI States
   const [probeTab, setProbeTab] = useState<'arp' | 'manual' | 'local'>('arp');
@@ -1016,6 +1018,8 @@ export default function App() {
 
   // Unified empty pool initializer based on selectedInterface and raw inputs
   useEffect(() => {
+    if (loadedProfileId) return; // Prevent overwriting when a saved profile is loaded offline!
+
     const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
     let segments = [...currentInterfaceObj.segments];
     
@@ -1075,11 +1079,28 @@ export default function App() {
     setLastScanDone(false);
     setLastScanTimeStr(null);
     setScanDurationSec(null);
-  }, [selectedInterface, subnetSegment, deviceManualIp, activeInterfacesList]);
+  }, [selectedInterface, subnetSegment, deviceManualIp, activeInterfacesList, loadedProfileId]);
 
   // Handle active states if Virtuales changes, ask to scan again
   const handleVirtualsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setIncludeVirtuals(e.target.checked);
+  };
+
+  const handleLoadOfflineProfile = (profile: LocationProfile) => {
+    setLoadedProfileId(profile.id);
+    setLocationName(profile.name);
+    setSubnetSegment(profile.subnet);
+    setDevices(profile.devices);
+    setLastScanDone(true); // Treat as scanned so that they can see details immediately!
+    addAlert(`⚡ Perfil de ubicación offline cargado: "${profile.name}". Vista de mapa e inventario habilitada.`, 'success');
+  };
+
+  const handleUnloadOfflineProfile = () => {
+    setLoadedProfileId(null);
+    // Restore default/cached location name
+    const cachedLoc = localStorage.getItem('netmonitor_current_location') || 'Sede Local';
+    setLocationName(cachedLoc);
+    addAlert(`🔌 Perfil offline desconectado. Re-inicializando simulaciones de red activa.`, 'info');
   };
 
   // Bandwidth Traffic Simulation and Fluctuation loop
@@ -3116,6 +3137,23 @@ export default function App() {
                   </button>
                 </li>
               )}
+              
+              <li>
+                <button 
+                  onClick={() => { setActiveView('ubicaciones_offline' as any); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'ubicaciones_offline' as any
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-ubicaciones-btn"
+                >
+                  <MapPin className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Ubicaciones Offline</span>
+                  <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">CACHÉ</span>
+                </button>
+              </li>
+
               {enabledFeatures.event_logger !== false && (
                 <li>
                   <button 
@@ -4057,6 +4095,20 @@ export default function App() {
 
           {activeView === 'instalador_desktop' && (
             <TauriInstallerGuide />
+          )}
+
+          {activeView === ('ubicaciones_offline' as any) && (
+            <OfflineLocationsManager
+              currentLocationName={locationName}
+              currentSubnet={subnetSegment}
+              currentInterface={selectedInterface}
+              activeDevices={devices.filter(d => d.estado !== 'No_Escaneado')}
+              onLoadProfile={handleLoadOfflineProfile}
+              onAddLog={addAlert}
+              onAddAlert={addAlert}
+              activeProfileId={loadedProfileId}
+              onUnloadProfile={handleUnloadOfflineProfile}
+            />
           )}
 
           {activeView === 'event_logger' && (
