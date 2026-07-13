@@ -11,6 +11,7 @@ interface MapSubredProps {
   devices: Device[];
   onSelectDevice: (device: Device) => void;
   isDemoMode?: boolean;
+  selectedDeviceId?: string;
 }
 
 interface TopologyNode {
@@ -46,7 +47,7 @@ const getShortHostName = (name: string): string => {
   return name.length > 18 ? name.substring(0, 15) + '...' : name;
 };
 
-export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }: MapSubredProps) {
+export default function MapSubred({ devices, onSelectDevice, isDemoMode = true, selectedDeviceId }: MapSubredProps) {
   // Toggle between 'prtg', 'topology' and 'grid'
   const [viewMode, setViewMode] = useState<'prtg' | 'topology' | 'grid'>('prtg');
   const [useOwnNames, setUseOwnNames] = useState<boolean>(true);
@@ -1009,7 +1010,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                 <span>🟢</span>
                 <span>Local Probe (Sonda de Red IP)</span>
               </span>
-              <span className="text-[10px] bg-slate-100 border border-slate-200 px-1.5 py-0.5 text-slate-550 rounded font-mono ml-auto">
+              <span className="text-[10px] bg-slate-200 border border-slate-300 px-1.5 py-0.5 text-slate-700 rounded font-mono ml-auto font-semibold">
                 PRTG Engine v12.1.80
               </span>
             </div>
@@ -1078,7 +1079,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                                 </span>
                                 
                                 {device.ip !== '—' && (
-                                  <span className="font-mono text-[9px] bg-slate-100 border border-slate-200 px-1.5 py-0.3 rounded text-slate-500">
+                                  <span className="font-mono text-[9.5px] bg-slate-200/70 border border-slate-300 px-1.5 py-0.3 rounded text-slate-700 font-bold">
                                     IP: {device.ip}
                                   </span>
                                 )}
@@ -1320,7 +1321,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
           <div className="absolute inset-0 pointer-events-none opacity-[0.03] select-none scale-105 bg-[linear-gradient(rgba(14,165,233,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(14,165,233,0.15)_1px,transparent_1px)] bg-[size:15px_15px]"></div>
 
           {/* LIVE NET LEGEND OVERLAY */}
-          <div className="absolute top-2 left-2 pointer-events-none hidden md:flex flex-col bg-slate-950/80 border border-slate-850 p-2 rounded text-[9px] font-sans text-slate-450 space-y-1 z-30 select-none">
+          <div className="absolute top-2 left-2 pointer-events-none hidden md:flex flex-col bg-slate-950/80 border border-slate-850 p-2 rounded text-[9px] font-sans text-slate-400 space-y-1 z-30 select-none">
             <span className="font-bold text-slate-300 border-b border-slate-850 pb-0.75 uppercase">Estándar de Enlaces</span>
             <span className="flex items-center gap-1.5">
               <span className="w-5 h-0.5 bg-sky-200/50 inline-block"></span>
@@ -1475,6 +1476,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                 // Check matches for interactive highlights
                 const isHovered = hoveredNodeId === node.id;
                 const isNodeActive = !isNoScan && !isDown;
+                const isSelected = !!device && selectedDeviceId === device.id;
 
                 // Color themes for nodes rings
                 let ringColor = 'stroke-slate-700';
@@ -1493,8 +1495,11 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                   circleBorderClass = 'stroke-dashed stroke-[1.5]';
                 }
 
-                // Double accent glow for selected or hovered targets
-                if (isHovered) {
+                // Selection or hover upgrades
+                if (isSelected) {
+                  circleBorderClass = 'stroke-[3.5]';
+                  ringColor = 'stroke-sky-500';
+                } else if (isHovered) {
                   circleBorderClass += ' stroke-[3.5]';
                 }
 
@@ -1506,7 +1511,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                     onClick={() => {
                       if (device && !isNoScan) onSelectDevice(device);
                     }}
-                    className="cursor-pointer"
+                    className={`cursor-pointer transition-transform duration-200 ${isSelected ? 'scale-110' : ''}`}
                   >
                     {/* INVISIBLE STABLE HOVER TARGET AREA */}
                     <circle
@@ -1516,6 +1521,22 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                       fill="transparent"
                       className="cursor-pointer pointer-events-auto"
                     />
+
+                    {/* Active selection glowing background animation */}
+                    {isSelected && (
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r="23"
+                        fill="none"
+                        stroke="#0ea5e9"
+                        strokeWidth="3.5"
+                        className="selection-ring-glow"
+                        style={{
+                          transformOrigin: `${node.x}px ${node.y}px`
+                        }}
+                      />
+                    )}
                     
                     {/* Pulse glow background circle for warnings/active alarms */}
                     {(isWarning || isHovered) && isNodeActive && (
@@ -1589,7 +1610,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true }
                       x={node.x}
                       y={node.y + 34}
                       textAnchor="middle"
-                      className="font-mono text-[8px] fill-slate-500 font-normal select-none pointer-events-none transition-colors"
+                      className="font-mono text-[8.5px] fill-cyan-400 font-semibold select-none pointer-events-none transition-colors"
                     >
                       {device 
                         ? (isNoScan ? 'No Escaneado' : `${device.ip}`)

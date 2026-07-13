@@ -1232,15 +1232,29 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       </div>
 
       {/* HEADER CARD */}
-      <div className="bg-[#0B1120]/40 border border-slate-800/80 p-3.5 rounded-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[#22d3ee] font-mono flex items-center gap-1.5">
-            <ShieldCheck className="h-4 w-4" /> AUDITORÍA DE RED Y EXPORTADOR MÉTRICO
+      <div className="bg-[#0B1120]/40 border border-slate-800/80 p-4 rounded-md flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div className="space-y-2 max-w-3xl">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-cyan-950/40 border border-cyan-800/30 text-[10px] font-bold uppercase tracking-widest text-cyan-400 font-mono">
+            <ShieldCheck className="h-3.5 w-3.5" /> AUDITORÍA DE RED Y EXPORTADOR MÉTRICO
           </span>
-          <h2 className="text-sm font-bold text-slate-200">Sistemas de Diagnóstico y Emisión de Reportes de Cumplimiento</h2>
-          <p className="text-[11px] text-slate-500 font-sans">
+          <h2 className="text-base font-bold text-slate-100 light:text-slate-900 leading-tight">Sistemas de Diagnóstico y Emisión de Reportes de Cumplimiento</h2>
+          <p className="text-[11px] text-slate-400 light:text-slate-600 font-sans max-w-2xl leading-relaxed">
             Compruebe el direccionamiento MAC de los hosts activos, deduzca marcas y fabricantes de tarjetas NIC en tiempo de ejecución, y exporte auditorías oficiales de red.
           </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1 text-[10px] text-slate-500 font-medium">
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+              Monitoreo MAC en tiempo real
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+              Deducción inteligente de fabricantes NIC
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+              Reportes oficiales de cumplimiento
+            </span>
+          </div>
         </div>
 
         {/* TOP COMPILING TRIGGER ACTION BUTTONS */}

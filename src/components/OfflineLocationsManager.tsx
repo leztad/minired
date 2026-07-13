@@ -924,8 +924,7 @@ export default function OfflineLocationsManager({
                               x={node.x}
                               y={node.y - size - 4}
                               textAnchor="middle"
-                              fill="#f1f5f9"
-                              className="font-bold text-[8px]"
+                              className="font-bold text-[8.5px] fill-slate-300"
                             >
                               {node.label}
                             </text>
@@ -935,8 +934,7 @@ export default function OfflineLocationsManager({
                               x={node.x}
                               y={node.y + size + 11}
                               textAnchor="middle"
-                              fill="#94a3b8"
-                              className="font-mono text-[8px]"
+                              className="font-mono text-[8.5px] fill-cyan-400 font-medium"
                             >
                               {node.ip}
                             </text>

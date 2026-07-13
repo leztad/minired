@@ -113,7 +113,7 @@ export default function SensorTable({ sensors, isScanning }: SensorTableProps) {
                       {s.nombre}
                     </td>
                     <td className="py-2.5 px-3 text-slate-300 font-medium">
-                      {s.dispositivo} <span className="text-[10px] text-slate-500 font-mono">({s.ip})</span>
+                      {s.dispositivo} <span className="text-[10px] bg-cyan-950/45 text-cyan-400 border border-cyan-800/40 px-1.5 py-0.5 rounded font-mono ml-1.5 font-semibold inline-flex items-center select-all">{s.ip}</span>
                     </td>
                     <td className="py-2.5 px-3 font-mono font-medium text-slate-300">
                       {s.ultimoValor}

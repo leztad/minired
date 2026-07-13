@@ -162,116 +162,249 @@
 
 /* Light theme overrides to dynamically map dark backgrounds to soft light mode colors */
 .light {
+  /* Swap Tailwind v4 custom theme properties scoped to the light container */
+  --color-slate-5: #0f172a;
+  --color-slate-50: #0f172a;    /* dark slate text */
+  --color-slate-100: #1e293b;   /* dark slate text */
+  --color-slate-200: #334155;   /* body text */
+  --color-slate-300: #475569;   /* body text */
+  --color-slate-400: #64748b;   /* secondary text */
+  --color-slate-500: #94a3b8;   /* muted labels */
+  --color-slate-600: #cbd5e1;   /* light borders/dividers */
+  --color-slate-700: #e2e8f0;   /* borders */
+  --color-slate-800: #f1f5f9;   /* card backgrounds */
+  --color-slate-900: #f8fafc;   /* panel background */
+  --color-slate-950: #ffffff;   /* main container background */
+
+  /* Customize cyan/purple/emerald/amber accents for high contrast / prolijo look in light mode */
+  --color-cyan-50: #ecfeff;
+  --color-cyan-100: #cffafe;
+  --color-cyan-200: #a5f3fc;
+  --color-cyan-300: #0891b2;    /* rich cyan */
+  --color-cyan-400: #0369a1;    /* dark blue-cyan for high legibility */
+  --color-cyan-500: #0369a1;
+  --color-cyan-600: #075985;
+  --color-cyan-950: #f0f9ff;
+
+  --color-purple-50: #faf5ff;
+  --color-purple-400: #7c3aed;
+  --color-purple-500: #6d28d9;
+
+  --color-emerald-50: #f0fdf4;
+  --color-emerald-400: #16a34a;
+  --color-emerald-500: #15803d;
+
+  --color-rose-50: #fff1f2;
+  --color-rose-400: #dc2626;
+  --color-rose-500: #b91c1c;
+
+  --color-amber-50: #fffbeb;
+  --color-amber-400: #ca8a04;
+  --color-amber-500: #b45309;
+
   background-color: #F8FAFC !important;
   background-image: 
-    radial-gradient(circle at 0% 0%, rgba(6, 182, 212, 0.04) 0%, transparent 40%),
-    radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.03) 0%, transparent 40%) !important;
+    radial-gradient(circle at 0% 0%, rgba(6, 182, 212, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.04) 0%, transparent 40%) !important;
   color: #1E293B !important;
 }
 
-/* Keep headers, text containers, and elements matching */
-.light h1, .light h2, .light h3, .light h4, .light h5, .light h6, .light th, .light legend {
+/* Base element color corrections under light mode */
+.light h1, 
+.light h2, 
+.light h3, 
+.light h4, 
+.light h5, 
+.light h6, 
+.light th, 
+.light legend,
+.light strong,
+.light b,
+.light dt,
+.light label {
   color: #0F172A !important;
 }
 
-.light .text-white, 
-.light .text-slate-50, 
-.light .text-slate-100, 
-.light .text-slate-200 {
-  color: #0F172A !important;
-}
-
-.light .text-slate-300, 
-.light .text-slate-400 {
+.light p,
+.light span:not([class*="text-"]):not([class*="bg-"]):not([class*="badge"]),
+.light li,
+.light td {
   color: #334155 !important;
 }
 
-.light .text-slate-500 {
+/* General clean overrides for text classes designed for dark mode */
+.light .text-white,
+.light [class*="text-slate-50" i],
+.light [class*="text-slate-1" i],
+.light [class*="text-slate-2" i] {
+  color: #0F172A !important;
+}
+
+.light [class*="text-slate-3" i] {
+  color: #334155 !important;
+}
+
+.light [class*="text-slate-4" i] {
+  color: #475569 !important;
+}
+
+.light [class*="text-slate-5" i],
+.light [class*="text-slate-6" i] {
   color: #64748B !important;
 }
 
-/* Specific component texts to remain readable or match light context */
-.light .text-cyan-400 {
-  color: #0891B2 !important;
+/* Accent texts legibility overrides to ensure perfect contrast against white/gray */
+.light [class*="text-cyan-1" i],
+.light [class*="text-cyan-2" i],
+.light [class*="text-cyan-3" i],
+.light [class*="text-cyan-4" i],
+.light [class*="text-cyan-5" i],
+.light [class*="text-cyan-400" i],
+.light [class*="text-cyan-300" i] {
+  color: #0369A1 !important; /* Deep ocean blue */
 }
 
-.light .text-purple-400 {
-  color: #7C3AED !important;
+.light [class*="text-cyan-500" i] {
+  color: #075985 !important;
 }
 
-.light .text-emerald-400 {
-  color: #16A34A !important;
+.light [class*="text-emerald-1" i],
+.light [class*="text-emerald-2" i],
+.light [class*="text-emerald-3" i],
+.light [class*="text-emerald-4" i],
+.light [class*="text-emerald-5" i],
+.light [class*="text-emerald-400" i] {
+  color: #15803D !important; /* Deep forest green */
 }
 
-.light .text-amber-400, .light .text-amber-500 {
-  color: #D97706 !important;
+.light [class*="text-amber-1" i],
+.light [class*="text-amber-2" i],
+.light [class*="text-amber-3" i],
+.light [class*="text-amber-4" i],
+.light [class*="text-amber-5" i],
+.light [class*="text-amber-400" i],
+.light [class*="text-amber-500" i] {
+  color: #B45309 !important; /* Deep warm amber/orange */
 }
 
-/* Background class mappings */
-.light .bg-[#0B0F19], 
-.light .bg-[#070A13], 
-.light .bg-[#050811], 
-.light .bg-slate-950,
-.light .bg-[#020617] {
+.light [class*="text-rose-1" i],
+.light [class*="text-rose-2" i],
+.light [class*="text-rose-3" i],
+.light [class*="text-rose-4" i],
+.light [class*="text-rose-5" i],
+.light [class*="text-rose-400" i],
+.light [class*="text-red-1" i],
+.light [class*="text-red-2" i],
+.light [class*="text-red-3" i],
+.light [class*="text-red-4" i],
+.light [class*="text-red-5" i],
+.light [class*="text-red-400" i] {
+  color: #B91C1C !important; /* Deep crimson red */
+}
+
+.light [class*="text-purple-1" i],
+.light [class*="text-purple-2" i],
+.light [class*="text-purple-3" i],
+.light [class*="text-purple-4" i],
+.light [class*="text-purple-5" i],
+.light [class*="text-purple-400" i] {
+  color: #6D28D9 !important; /* Deep royal purple */
+}
+
+/* 
+   POWER OVERRIDES: Force all deep dark backgrounds (hex or slate class names) 
+   to transition gracefully to pure white or very light grey panels in Light Mode
+*/
+.light [class*="bg-[#0" i],
+.light [class*="bg-[#11" i],
+.light [class*="bg-[#1e" i],
+.light [class*="bg-[#1a" i],
+.light [class*="bg-[#12" i],
+.light [class*="bg-[#0d" i] {
+  background-color: #FFFFFF !important;
+}
+
+/* Specific elements that require off-white/light gray for professional contrast */
+.light header,
+.light footer,
+.light aside,
+.light [class*="bg-[#070A13]" i],
+.light [class*="bg-[#050811]" i],
+.light [class*="bg-slate-950" i] {
   background-color: #F8FAFC !important;
 }
 
-.light .bg-slate-900, 
-.light .bg-slate-900\/40, 
-.light .bg-slate-900\/20,
-.light .bg-[#0B1120],
-.light .bg-[#0b1120],
-.light .bg-[#0f172a], 
-.light .bg-[#0f172a]\/80,
-.light .bg-[#0f172a]\/95 {
+/* Tables & secondary components */
+.light thead tr,
+.light [class*="bg-[#0F172A]" i],
+.light [class*="bg-[#0b1120]" i] {
   background-color: #F1F5F9 !important;
 }
 
-.light .bg-slate-950\/50, 
-.light .bg-slate-900\/50, 
-.light .bg-[#070A13]\/90,
-.light .bg-slate-900\/30 {
-  background-color: rgba(241, 245, 249, 0.95) !important;
+/* Handle all transparent variations of slate backgrounds */
+.light [class*="bg-slate-9" i],
+.light [class*="bg-slate-8" i] {
+  background-color: #FFFFFF !important;
 }
 
-/* Glass panel and card properties */
-.light .glass-panel {
-  background: rgba(255, 255, 255, 0.92) !important;
-  border-color: rgba(203, 213, 225, 0.8) !important;
-  box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.05) !important;
+.light [class*="bg-slate-9/" i],
+.light [class*="bg-slate-8/" i],
+.light [class*="bg-slate-950/" i],
+.light [class*="bg-slate-900/" i] {
+  background-color: #F8FAFC !important;
+}
+
+/* Glass panels & cards - gorgeous professional office aesthetics */
+.light .glass-panel,
+.light [id*="settings-"],
+.light [id*="tab-"] {
+  background: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  box-shadow: 0 4px 20px -2px rgba(148, 163, 184, 0.12) !important;
 }
 
 .light .glass-card {
-  background: rgba(255, 255, 255, 0.7) !important;
-  border-color: rgba(226, 232, 240, 0.9) !important;
-  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.03) !important;
+  background: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  box-shadow: 0 2px 8px -1px rgba(148, 163, 184, 0.06) !important;
 }
 
 .light .glass-card:hover {
-  background: rgba(255, 255, 255, 1) !important;
-  border-color: rgba(6, 182, 212, 0.5) !important;
-  box-shadow: 0 10px 20px -10px rgba(6, 182, 212, 0.15) !important;
+  background: #FFFFFF !important;
+  border-color: #0369A1 !important;
+  box-shadow: 0 10px 25px -5px rgba(3, 105, 161, 0.12) !important;
 }
 
-/* Borders */
+/* Borders & Dividers */
+.light *,
+.light .border,
+.light .border-t,
+.light .border-b,
+.light .border-l,
+.light .border-r {
+  border-color: #E2E8F0;
+}
+
 .light .border-slate-800, 
 .light .border-slate-800\/80, 
 .light .border-slate-900\/80, 
 .light .border-slate-800\/50, 
 .light .border-slate-700,
 .light .border-slate-800\/60,
+.light .border-slate-850,
 .light .border-slate-800\/25,
-.light .border-slate-850 {
-  border-color: #E2E8F0 !important;
+.light .border-cyan-500\/10,
+.light .border-cyan-500\/20 {
+  border-color: #CBD5E1 !important;
 }
 
-/* Forms & Inputs */
+/* Forms, Inputs, Dropdowns, Textareas */
 .light input, 
 .light select, 
 .light textarea {
   background-color: #FFFFFF !important;
   border-color: #CBD5E1 !important;
-  color: #1E293B !important;
+  color: #0F172A !important;
 }
 
 .light input::placeholder, 
@@ -292,33 +425,316 @@
   background: #94A3B8 !important;
 }
 
-/* Tech Grids */
+/* Tech Grid styling */
 .light .tech-grid {
   background-image: 
-    linear-gradient(to right, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(148, 163, 184, 0.06) 1px, transparent 1px) !important;
+    linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px) !important;
 }
 
-/* Navigation & Submenu highlights */
+/* Hover effects & selection backgrounds */
 .light .hover\:bg-slate-900\/40:hover, 
 .light .hover\:bg-slate-900\/30:hover {
-  background-color: rgba(226, 232, 240, 0.6) !important;
+  background-color: rgba(226, 232, 240, 0.8) !important;
+}
+
+/* Semi-transparent overlays for warnings, success badges, and diagnostic panels mapping dynamically */
+.light [class*="bg-cyan-5" i],
+.light [class*="bg-cyan-9" i],
+.light [class*="bg-cyan-500/10" i],
+.light [class*="bg-cyan-950/25" i],
+.light [class*="bg-cyan-950/40" i] {
+  background-color: #F0F9FF !important;
+  border-color: #BAE6FD !important;
+}
+
+.light [class*="bg-emerald-5" i],
+.light [class*="bg-emerald-9" i],
+.light [class*="bg-emerald-500/10" i],
+.light [class*="bg-emerald-500/15" i],
+.light [class*="bg-emerald-950/10" i] {
+  background-color: #ECFDF5 !important;
+  border-color: #A7F3D0 !important;
+}
+
+.light [class*="bg-rose-5" i],
+.light [class*="bg-rose-9" i],
+.light [class*="bg-rose-500/10" i],
+.light [class*="bg-rose-500/15" i],
+.light [class*="bg-rose-950/20" i],
+.light [class*="bg-[#1c0c10]" i],
+.light [class*="fill-[#1c0c10]" i] {
+  background-color: #FEF2F2 !important;
+  fill: #FEF2F2 !important;
+  border-color: #FCA5A5 !important;
+}
+
+.light [class*="bg-amber-5" i],
+.light [class*="bg-amber-9" i],
+.light [class*="bg-amber-500/10" i],
+.light [class*="bg-amber-950/60" i] {
+  background-color: #FFFBEB !important;
+  border-color: #FDE68A !important;
 }
 
 .light .bg-cyan-500\/10 {
-  background-color: rgba(6, 182, 212, 0.15) !important;
+  background-color: rgba(2, 132, 199, 0.1) !important;
 }
 
-.light .bg-emerald-500\/10, .light .bg-emerald-500\/15 {
-  background-color: rgba(22, 163, 74, 0.12) !important;
+.light .bg-emerald-500\/10, 
+.light .bg-emerald-500\/15 {
+  background-color: rgba(22, 163, 74, 0.1) !important;
 }
 
-.light .bg-[#0f172a] {
+.light .bg-\[\#0f172a\] {
   background-color: #E2E8F0 !important;
 }
 
-.light .bg-[#0f172a].text-cyan-400 {
-  background-color: rgba(6, 182, 212, 0.1) !important;
-  color: #0891B2 !important;
+.light .bg-\[\#0f172a\].text-cyan-400 {
+  background: linear-gradient(90deg, #BAE6FD 0%, #E0F2FE 100%) !important;
+  color: #0369A1 !important;
 }
 
+/* SVG Topology & Network Map Compatibility overrides for Light Mode */
+.light svg .fill-slate-950 {
+  fill: #FFFFFF !important;
+}
+
+.light svg .stroke-slate-700,
+.light svg [class*="stroke-slate-7" i] {
+  stroke: #94A3B8 !important;
+}
+
+.light svg .stroke-slate-800,
+.light svg [class*="stroke-slate-8" i] {
+  stroke: #CBD5E1 !important;
+}
+
+.light svg .stroke-slate-900,
+.light svg [class*="stroke-slate-9" i] {
+  stroke: #475569 !important;
+}
+
+.light svg [class*="fill-slate-3" i] {
+  fill: #0F172A !important;
+}
+
+.light svg [class*="fill-slate-5" i] {
+  fill: #475569 !important;
+}
+
+.light svg .signal-wave {
+  stroke-opacity: 0.25 !important;
+}
+
+/* Tooltip arrows matching light theme */
+.light [class*="border-t-[#0" i],
+.light [class*="border-t-slate" i] {
+  border-top-color: #F1F5F9 !important;
+}
+
+/* Theme compatibility for cyan-accented badges and SVG typography */
+.light svg [class*="fill-cyan-4" i] {
+  fill: #0369A1 !important;
+}
+
+.light [class*="bg-cyan-9" i] {
+  background-color: #E0F2FE !important;
+}
+
+.light [class*="border-cyan-8" i] {
+  border-color: #BAE6FD !important;
+}
+
+/* ==========================================
+   VIVID LIGHT MODE SELECTION & COLOR ANIMATIONS
+   ========================================== */
+
+/* 1. Selection Animations */
+
+/* Active Sidebar items slide-right and elegant elevation shadow */
+.light [class*="bg-[#0f172a]" i].text-cyan-400,
+.light aside button[class*="bg-[#0f172a]" i],
+.light aside button[class*="text-cyan-4" i] {
+  background: linear-gradient(90deg, #BAE6FD 0%, #E0F2FE 100%) !important;
+  color: #0369A1 !important;
+  border-left: 4px solid #0284C7 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 12px -2px rgba(2, 132, 199, 0.22) !important;
+  transform: translateX(6px) scale(1.02);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.light [class*="bg-[#0f172a]" i].text-cyan-400 svg,
+.light aside button[class*="bg-[#0f172a]" i] svg,
+.light aside button[class*="text-cyan-4" i] svg {
+  color: #0284C7 !important;
+  stroke: #0284C7 !important;
+}
+
+/* Active Topbar/Tabs filters (Cyan selections) */
+.light button[class*="bg-cyan-500" i] {
+  background-color: #0284C7 !important; /* Vivid sky-600 */
+  color: #FFFFFF !important; /* High contrast white text */
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.28) !important;
+  transform: translateY(-1.5px) scale(1.01);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.light button[class*="bg-cyan-500" i]:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Active Topbar/Tabs filters (Green selections) */
+.light button[class*="bg-green-500" i] {
+  background-color: #16A34A !important; /* Vivid emerald-600 */
+  color: #FFFFFF !important; /* High contrast white text */
+  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.28) !important;
+  transform: translateY(-1.5px) scale(1.01);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.light button[class*="bg-green-500" i]:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* SVG Topology Node Selection rings */
+.selection-ring-glow {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: selectionRingMove 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes selectionRingMove {
+  0%, 100% {
+    transform: scale(1);
+    stroke-width: 3.5px;
+    opacity: 0.85;
+    stroke: #0ea5e9;
+  }
+  50% {
+    transform: scale(1.25);
+    stroke-width: 4.5px;
+    opacity: 0.45;
+    stroke: #0284c7;
+  }
+}
+
+.light .selection-ring-glow {
+  animation: selectionRingMoveLight 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+}
+
+@keyframes selectionRingMoveLight {
+  0%, 100% {
+    transform: scale(1);
+    stroke-width: 4px;
+    opacity: 0.95;
+    stroke: #0284c7;
+  }
+  50% {
+    transform: scale(1.28);
+    stroke-width: 5px;
+    opacity: 0.5;
+    stroke: #0369a1;
+  }
+}
+
+/* 2. Color/Status Breathing Animations */
+
+/* Light Mode Status Dots & Card breathing overrides */
+.light .status-breath-ok {
+  animation: light-breathe-ok 2s infinite ease-in-out !important;
+  box-shadow: 0 0 12px rgba(22, 163, 74, 0.35) !important;
+  border-color: rgba(22, 163, 74, 0.55) !important;
+}
+
+.light .status-breath-warning {
+  animation: light-breathe-warning 2s infinite ease-in-out !important;
+  box-shadow: 0 0 12px rgba(217, 119, 6, 0.35) !important;
+  border-color: rgba(217, 119, 6, 0.55) !important;
+}
+
+.light .status-breath-danger {
+  animation: light-breathe-danger 2s infinite ease-in-out !important;
+  box-shadow: 0 0 12px rgba(220, 38, 38, 0.35) !important;
+  border-color: rgba(220, 38, 38, 0.55) !important;
+}
+
+@keyframes light-breathe-ok {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(22, 163, 74, 0.2);
+    border-color: rgba(22, 163, 74, 0.4);
+    background-color: rgba(22, 163, 74, 0.04);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(22, 163, 74, 0.65);
+    border-color: rgba(22, 163, 74, 0.85);
+    background-color: rgba(22, 163, 74, 0.12);
+  }
+}
+
+@keyframes light-breathe-warning {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(217, 119, 6, 0.2);
+    border-color: rgba(217, 119, 6, 0.4);
+    background-color: rgba(217, 119, 6, 0.04);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(217, 119, 6, 0.65);
+    border-color: rgba(217, 119, 6, 0.85);
+    background-color: rgba(217, 119, 6, 0.12);
+  }
+}
+
+@keyframes light-breathe-danger {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(220, 38, 38, 0.2);
+    border-color: rgba(220, 38, 38, 0.4);
+    background-color: rgba(220, 38, 38, 0.04);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(220, 38, 38, 0.65);
+    border-color: rgba(220, 38, 38, 0.85);
+    background-color: rgba(220, 38, 38, 0.12);
+  }
+}
+
+/* Light Mode SVG Radar Waves animation override */
+.light svg .signal-wave {
+  stroke-opacity: 0.9 !important;
+  stroke-width: 2.5px !important;
+  animation: lightAlarmFlashGlow 2.2s cubic-bezier(0.16, 1, 0.3, 1) infinite !important;
+}
+
+@keyframes lightAlarmFlashGlow {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+    stroke-width: 1.5px;
+  }
+  50% {
+    opacity: 0.55;
+    stroke-width: 3.5px;
+  }
+  100% {
+    transform: scale(1.42);
+    opacity: 0;
+    stroke-width: 0.5px;
+  }
+}
+
+/* Light Mode Pulse Cyan high-tech elements override */
+.light .tech-pulse-cyan {
+  animation: pulse-cyan-light 1.6s infinite ease-in-out !important;
+}
+
+@keyframes pulse-cyan-light {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+    filter: drop-shadow(0 0 1px rgba(3, 105, 161, 0.15));
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 8px rgba(3, 105, 161, 0.5));
+  }
+}

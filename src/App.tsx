@@ -663,6 +663,17 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [isCablePhysicallyConnected]);
 
+  // Synchronize theme onto document.documentElement
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+      document.body.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+      document.body.classList.remove('light');
+    }
+  }, [theme]);
+
   const handleResolveAllVendorsViaApi = async (isAuto = false) => {
     if (isResolvingVendors) return;
     setIsResolvingVendors(true);
@@ -3979,7 +3990,7 @@ export default function App() {
 
               {/* MAPA DE SUBRED GRID */}
               <div className="w-full">
-                <MapSubred devices={mapDevices} onSelectDevice={setSelectedDevice} isDemoMode={isDemoMode} />
+                <MapSubred devices={mapDevices} onSelectDevice={setSelectedDevice} isDemoMode={isDemoMode} selectedDeviceId={selectedDevice?.id} />
               </div>
 
             </div>
