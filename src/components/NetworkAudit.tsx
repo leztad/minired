@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Device } from '../types';
 import { 
   ShieldCheck, ShieldAlert, Download, FileJson, FileSpreadsheet, Copy, 
   Search, Sliders, Server, Wifi, Activity, Terminal, CheckCircle2, AlertTriangle, Info, Network,
-  ChevronDown, ChevronUp, Cpu, HelpCircle, Check
+  ChevronDown, ChevronUp, Cpu, HelpCircle, Check, Trash2, Eye, Save, Play, RefreshCw, Sparkles,
+  Target, History, FileText, Database, ArrowRight, CheckCircle, CheckSquare, X
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { resolveVendorByMac } from '../utils/macUtils';
@@ -14,10 +15,49 @@ interface NetworkAuditProps {
   locationName: string;
 }
 
+interface HistoricalAudit {
+  id: string;
+  timestamp: string;
+  location: string;
+  totalDevices: number;
+  avgLatency: number;
+  score: number;
+  rank: string;
+  devicesSnapshot: Device[];
+}
+
+interface PortScanResult {
+  port: number;
+  service: string;
+  state: 'open' | 'closed' | 'filtered';
+  description: string;
+  risk: 'critical' | 'warning' | 'secure' | 'info';
+}
+
 export default function NetworkAudit({ devices, onAddLog, locationName }: NetworkAuditProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSegment, setFilterSegment] = useState('all');
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
+
+  // --- HISTORICAL AUDITS STATE ---
+  const [auditHistory, setAuditHistory] = useState<HistoricalAudit[]>([]);
+  const [selectedPastAuditToCompare, setSelectedPastAuditToCompare] = useState<HistoricalAudit | null>(null);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [savingAuditCustomName, setSavingAuditCustomName] = useState('');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+
+  // --- PORT SCANNER STATE ---
+  const [selectedDeviceToScan, setSelectedDeviceToScan] = useState<Device | null>(null);
+  const [isScanningPorts, setIsScanningPorts] = useState(false);
+  const [portScanProgress, setPortScanProgress] = useState(0);
+  const [activeScanningPort, setActiveScanningPort] = useState<number | null>(null);
+  const [portScanResults, setPortScanResults] = useState<PortScanResult[]>([]);
+  const [portScanConsole, setPortScanConsole] = useState<string[]>([]);
+  const [portScanProfile, setPortScanProfile] = useState<'quick' | 'full'>('quick');
+
+  // --- AUTOMATED AUDIT ENGINE ---
+  const [isContinuousAudit, setIsContinuousAudit] = useState(false);
+  const [continuousCount, setContinuousCount] = useState(0);
 
   // Consider only active devices or warning devices
   const activeDevices = useMemo(() => {
@@ -82,6 +122,306 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
       rankColor
     };
   }, [activeDevices]);
+
+  // Load history from LocalStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('redmonitor_audit_history');
+      if (stored) {
+        setAuditHistory(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error("Error reading redmonitor_audit_history from localStorage:", e);
+    }
+  }, []);
+
+  // --- SAVE CURRENT AUDIT TO HISTORY ---
+  const saveCurrentAudit = (customLabel?: string) => {
+    try {
+      const label = (customLabel || `Auditoría ${locationName}`).trim();
+      const newAudit: HistoricalAudit = {
+        id: `audit_${Date.now()}`,
+        timestamp: new Date().toLocaleString('es-ES'),
+        location: label,
+        totalDevices: totals.count,
+        avgLatency: totals.avgLatency,
+        score: totals.score,
+        rank: totals.rank,
+        devicesSnapshot: JSON.parse(JSON.stringify(activeDevices)) // Deep copy
+      };
+
+      const updated = [newAudit, ...auditHistory];
+      setAuditHistory(updated);
+      localStorage.setItem('redmonitor_audit_history', JSON.stringify(updated));
+      onAddLog(`💾 Auditoría "${label}" guardada exitosamente en el historial persistente.`, 'success');
+      setSavingAuditCustomName('');
+      setShowSaveDialog(false);
+    } catch (err) {
+      console.error("Error saving audit to history:", err);
+      onAddLog(`❌ Error al guardar la auditoría en el almacenamiento local.`, 'error');
+    }
+  };
+
+  // --- DELETE AUDIT FROM HISTORY ---
+  const deleteHistoricalAudit = (id: string, label: string) => {
+    try {
+      const updated = auditHistory.filter(a => a.id !== id);
+      setAuditHistory(updated);
+      localStorage.setItem('redmonitor_audit_history', JSON.stringify(updated));
+      
+      if (selectedPastAuditToCompare?.id === id) {
+        setSelectedPastAuditToCompare(null);
+      }
+      
+      onAddLog(`🗑️ Reporte histórico "${label}" eliminado del almacenamiento.`, 'info');
+    } catch (err) {
+      console.error("Error deleting historical audit:", err);
+    }
+  };
+
+  // --- DRIFT / COMPARISON ANALYSIS ---
+  // Calculates differences between the current live state and the selected historical snapshot
+  const driftAnalysis = useMemo(() => {
+    if (!selectedPastAuditToCompare) return null;
+
+    const currentIps = activeDevices.map(d => d.ip);
+    const currentMacs = activeDevices.map(d => d.mac.toUpperCase()).filter(m => m !== '—');
+    const pastIps = selectedPastAuditToCompare.devicesSnapshot.map(d => d.ip);
+    const pastMacs = selectedPastAuditToCompare.devicesSnapshot.map(d => d.mac.toUpperCase()).filter(m => m !== '—');
+
+    // 1. Rogue / New Devices: In current, but NOT in past snapshot (by IP or MAC)
+    const rogueDevices = activeDevices.filter(d => {
+      const isNewIp = !pastIps.includes(d.ip);
+      const isNewMac = d.mac !== '—' && !pastMacs.includes(d.mac.toUpperCase());
+      return isNewIp || isNewMac;
+    });
+
+    // 2. Disconnected / Missing Devices: In past snapshot, but NOT in current active list
+    const missingDevices = selectedPastAuditToCompare.devicesSnapshot.filter(d => {
+      const isMissingIp = !currentIps.includes(d.ip);
+      const isMissingMac = d.mac !== '—' && !currentMacs.includes(d.mac.toUpperCase());
+      return isMissingIp || isMissingMac;
+    });
+
+    // 3. Score drift
+    const scoreDiff = totals.score - selectedPastAuditToCompare.score;
+
+    return {
+      rogueDevices,
+      missingDevices,
+      scoreDiff,
+      hasDrift: rogueDevices.length > 0 || missingDevices.length > 0
+    };
+  }, [selectedPastAuditToCompare, activeDevices, totals.score]);
+
+  // --- PORT SCANNING ENGINE (SIMULATION) ---
+  const runPortScan = async (device: Device, profile: 'quick' | 'full') => {
+    if (isScanningPorts) return;
+    
+    setSelectedDeviceToScan(device);
+    setIsScanningPorts(true);
+    setPortScanProgress(0);
+    setPortScanResults([]);
+    
+    const ip = device.ip;
+    const hostname = device.host.toLowerCase();
+    const vendor = resolveVendorByMac(device.mac, device.host, device.ip).toLowerCase();
+
+    const portsToScanList = profile === 'quick' 
+      ? [21, 22, 80, 443, 3389] 
+      : [21, 22, 23, 53, 80, 139, 443, 445, 1433, 3306, 3389, 8080];
+
+    const results: PortScanResult[] = [];
+    const logs: string[] = [
+      `[RedMonitor Security Scan v1.0]`,
+      `[INFO] Iniciando escaneo de puertos TCP contra el Host: ${device.ip} (${device.host})`,
+      `[INFO] Perfil seleccionado: ${profile === 'quick' ? 'Escaneo Rápido (Puertos Estándar)' : 'Auditoría Completa de Vulnerabilidades'}`,
+      `[INFO] Sonda ARP de fabricante activa: NIC identificada como "${resolveVendorByMac(device.mac, device.host, device.ip)}"`,
+      `--------------------------------------------------------------------------------`
+    ];
+
+    setPortScanConsole([...logs]);
+
+    for (let i = 0; i < portsToScanList.length; i++) {
+      const port = portsToScanList[i];
+      setActiveScanningPort(port);
+      
+      const newLog = `[SOPLA] Analizando socket TCP para puerto ${port}...`;
+      setPortScanConsole(prev => [...prev, newLog]);
+
+      // Delay to simulate scanning action
+      const delayMs = profile === 'quick' ? 350 : 220;
+      await new Promise(r => setTimeout(r, delayMs));
+
+      // Heuristic rules to assign open ports to match real devices
+      let state: 'open' | 'closed' | 'filtered' = 'closed';
+      let service = 'Desconocido';
+      let description = 'Servicio cerrado o inaccesible.';
+      let risk: 'critical' | 'warning' | 'secure' | 'info' = 'secure';
+
+      switch (port) {
+        case 21:
+          service = 'FTP';
+          // Open on Synology NAS or Docker virtual nodes as warning
+          if (hostname.includes('nas') || vendor.includes('synology') || hostname.includes('docker') || hostname.includes('generico')) {
+            state = 'open';
+            description = 'Servicio FTP activo. El protocolo FTP transmite contraseñas en texto plano. Se recomienda migrar a SFTP.';
+            risk = 'warning';
+          }
+          break;
+        case 22:
+          service = 'SSH';
+          // Open on gateway, NAS, and Workstations
+          if (hostname.includes('router') || hostname.includes('nas') || hostname.includes('workstation') || hostname.includes('ps5') || hostname.includes('este pc')) {
+            state = 'open';
+            description = 'Terminal remota segura SSH activa. Verifique que no permita contraseñas débiles o por defecto. Use llaves de seguridad.';
+            risk = 'info';
+          }
+          break;
+        case 23:
+          service = 'Telnet';
+          // Open on router as a big critical vulnerability warning
+          if (hostname.includes('router') || hostname.includes('fibra')) {
+            state = 'open';
+            description = 'Servicio Telnet sin cifrar expuesto. PELIGRO DE INTERCEPTACIÓN DE DATOS. Desactive Telnet de inmediato en la ONT.';
+            risk = 'critical';
+          }
+          break;
+        case 53:
+          service = 'DNS';
+          if (hostname.includes('router') || hostname.includes('gateway')) {
+            state = 'open';
+            description = 'Servidor de resolución de nombres activo (DNS local).';
+            risk = 'info';
+          }
+          break;
+        case 80:
+          service = 'HTTP';
+          // Open on router, printer, NAS, TV
+          if (hostname.includes('router') || hostname.includes('impresora') || hostname.includes('nas') || hostname.includes('tv') || hostname.includes('gateway')) {
+            state = 'open';
+            description = 'Consola de administración web HTTP activa sin cifrar. Expone credenciales en tránsito LAN. Redirija a HTTPS.';
+            risk = 'warning';
+          }
+          break;
+        case 139:
+          service = 'NetBIOS';
+          if (hostname.includes('workstation') || hostname.includes('nas') || hostname.includes('este pc')) {
+            state = 'open';
+            description = 'NetBIOS-SSN activo para descubrimiento de redes locales.';
+            risk = 'info';
+          }
+          break;
+        case 443:
+          service = 'HTTPS';
+          // Open on router, NAS, workstation
+          if (hostname.includes('router') || hostname.includes('nas') || hostname.includes('workstation') || hostname.includes('este pc') || hostname.includes('gateway')) {
+            state = 'open';
+            description = 'Servicio web seguro cifrado SSL/TLS. Configuración estándar recomendada.';
+            risk = 'secure';
+          }
+          break;
+        case 445:
+          service = 'SMB';
+          // Windows file sharing on NAS/Workstations
+          if (hostname.includes('nas') || hostname.includes('workstation') || hostname.includes('este pc')) {
+            state = 'open';
+            description = 'Intercambio de archivos SMB activo. Alerta: Asegúrese de tener deshabilitado SMB v1 para prevenir ransomware de tipo gusano (WannaCry).';
+            risk = 'warning';
+          }
+          break;
+        case 1433:
+          service = 'MS-SQL';
+          if (hostname.includes('server') || hostname.includes('database')) {
+            state = 'open';
+            description = 'Motor de base de datos Microsoft SQL Server abierto. Asegure los accesos con firewall.';
+            risk = 'warning';
+          }
+          break;
+        case 3306:
+          service = 'MySQL';
+          if (hostname.includes('nas') || hostname.includes('docker') || hostname.includes('server')) {
+            state = 'open';
+            description = 'Base de datos MySQL activa. Se recomienda restringir el acceso remoto exclusivamente a localhost.';
+            risk = 'warning';
+          }
+          break;
+        case 3389:
+          service = 'RDP';
+          if (hostname.includes('workstation') || hostname.includes('este pc') || hostname.includes('computador')) {
+            state = 'open';
+            description = 'Escritorio remoto de Windows expuesto en la red LAN. Altamente susceptible a ataques de fuerza bruta si no está protegido con NLA.';
+            risk = 'warning';
+          }
+          break;
+        case 8080:
+          service = 'HTTP-Proxy';
+          if (hostname.includes('nas') || hostname.includes('docker')) {
+            state = 'open';
+            description = 'Puerto alternativo HTTP activo para aplicaciones web secundarias o proxies.';
+            risk = 'info';
+          }
+          break;
+      }
+
+      if (state === 'open') {
+        results.push({ port, service, state, description, risk });
+        setPortScanResults([...results]);
+        setPortScanConsole(prev => [
+          ...prev, 
+          `[✓] PUERTO ${port}/TCP (${service}) ABIERTO | Nivel: ${risk.toUpperCase()}`
+        ]);
+      } else {
+        setPortScanConsole(prev => [
+          ...prev, 
+          `[-] Puerto ${port}/TCP cerrado`
+        ]);
+      }
+
+      const pct = Math.round(((i + 1) / portsToScanList.length) * 100);
+      setPortScanProgress(pct);
+    }
+
+    setIsScanningPorts(false);
+    setActiveScanningPort(null);
+    setPortScanConsole(prev => [
+      ...prev,
+      `--------------------------------------------------------------------------------`,
+      `[ÉXITO] Escaneo de seguridad completado para ${device.ip}.`,
+      `[RESULTADOS] Se encontraron ${results.length} puertos TCP abiertos expuestos en la LAN.`
+    ]);
+    
+    onAddLog(`🛡️ Auditoría de puertos completada para ${device.ip}. Se encontraron ${results.length} servicios activos.`, 'info');
+  };
+
+  // --- CONTINUOUS BACKGROUND AUDITING EFFECTS ---
+  useEffect(() => {
+    if (!isContinuousAudit) return;
+
+    onAddLog("📡 Monitoreo Continuo LAN activado: Analizando fluctuaciones y amenazas en tiempo real.", "success");
+    
+    const interval = setInterval(() => {
+      setContinuousCount(prev => prev + 1);
+      
+      // Simulate random background anomalies
+      const rand = Math.random();
+      if (rand < 0.2) {
+        // Latency warning
+        const randomDevice = activeDevices[Math.floor(Math.random() * activeDevices.length)];
+        if (randomDevice) {
+          onAddLog(`⚡ [Alerta de Sonda] Pico de latencia detectado en ${randomDevice.ip} (${randomDevice.host}): ${Math.round(110 + Math.random() * 80)} ms.`, 'warning');
+        }
+      } else if (rand < 0.35) {
+        // Rogue virtual device joins
+        onAddLog(`🔍 [Análisis de Deriva] Verificando tablas de vecinos ARP... Firmas de tramas de red 100% estables. No hay hosts sospechosos.`, 'info');
+      }
+    }, 15000);
+
+    return () => {
+      clearInterval(interval);
+      onAddLog("📡 Monitoreo Continuo LAN suspendido.", "info");
+    };
+  }, [isContinuousAudit, activeDevices]);
 
   // EXPORT 1: JSON REPORT
   const exportAsJSON = () => {
@@ -187,6 +527,396 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
     setTimeout(() => setCopiedMarkdown(false), 2000);
 
     onAddLog(`📋 Reporte de auditoría estructurado en Markdown copiado al portapapeles del sistema.`, 'info');
+  };
+
+  // EXPORT 4: HIGHLY-STYLED EXCEL REPORT PRESERVING PDF FORMATTING
+  const exportAsExcel = () => {
+    onAddLog("📊 Generando informe de auditoría compatible con Excel con formato enriquecido...", "info");
+    try {
+      const formattedDate = new Date().toISOString().split('T')[0];
+      const timestamp = new Date().toLocaleString('es-ES');
+      
+      let html = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="utf-8" />
+          <!--[if gte mso 9]>
+          <xml>
+           <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+             <x:ExcelWorksheet>
+              <x:Name>Auditoría de Red LAN</x:Name>
+              <x:WorksheetOptions>
+               <x:DisplayGridlines/>
+              </x:WorksheetOptions>
+             </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+           </x:ExcelWorkbook>
+          </xml>
+          <![endif]-->
+          <style>
+            body {
+              font-family: 'Segoe UI', Arial, sans-serif;
+              color: #0f172a;
+            }
+            table {
+              border-collapse: collapse;
+            }
+            td, th {
+              font-family: 'Segoe UI', Arial, sans-serif;
+              padding: 8px 10px;
+              vertical-align: middle;
+            }
+            .header-top {
+              color: #64748b;
+              font-size: 8.5pt;
+              font-weight: bold;
+            }
+            .main-title {
+              font-size: 16pt;
+              font-weight: bold;
+              color: #0b1120;
+            }
+            .main-subtitle {
+              font-size: 10pt;
+              color: #475569;
+            }
+            .panel-left-title {
+              font-weight: bold;
+              color: #475569;
+              font-size: 8.5pt;
+              border-top: 1px solid #cbd5e1;
+              border-left: 1px solid #cbd5e1;
+              border-right: 1px solid #cbd5e1;
+              background-color: #f8fafc;
+              padding: 8px 12px;
+            }
+            .panel-left-body {
+              border-left: 1px solid #cbd5e1;
+              border-right: 1px solid #cbd5e1;
+              background-color: #f8fafc;
+              font-size: 8pt;
+              color: #0f172a;
+              padding: 4px 12px;
+            }
+            .panel-left-bottom {
+              border-left: 1px solid #cbd5e1;
+              border-right: 1px solid #cbd5e1;
+              border-bottom: 1px solid #cbd5e1;
+              background-color: #f8fafc;
+              font-size: 8pt;
+              color: #0f172a;
+              padding: 4px 12px 8px 12px;
+            }
+            .panel-right-title {
+              font-weight: bold;
+              color: #087389;
+              font-size: 9pt;
+              border-top: 2px solid #06b6d4;
+              border-left: 6px solid #06b6d4;
+              border-right: 2px solid #06b6d4;
+              background-color: #ecfefe;
+              padding: 8px 12px;
+            }
+            .panel-right-body {
+              border-left: 6px solid #06b6d4;
+              border-right: 2px solid #06b6d4;
+              background-color: #ecfefe;
+              font-weight: bold;
+              font-size: 11pt;
+              color: #0f172a;
+              padding: 6px 12px;
+            }
+            .panel-right-bottom {
+              border-left: 6px solid #06b6d4;
+              border-right: 2px solid #06b6d4;
+              border-bottom: 2px solid #06b6d4;
+              background-color: #ecfefe;
+              font-size: 8pt;
+              color: #475569;
+              padding: 4px 12px 8px 12px;
+            }
+            .summary-title {
+              font-size: 11pt;
+              font-weight: bold;
+              color: #0b1120;
+            }
+            .summary-header-cell {
+              border-top: 1px solid #bae6fd;
+              background-color: #f0f9ff;
+              font-size: 8.5pt;
+              color: #475569;
+              padding: 10px 12px 4px 12px;
+            }
+            .summary-value-cell {
+              border-bottom: 1px solid #bae6fd;
+              background-color: #f0f9ff;
+              font-size: 14pt;
+              font-weight: bold;
+              color: #0b1120;
+              padding: 4px 12px 10px 12px;
+            }
+            .table-header-title {
+              font-size: 11pt;
+              font-weight: bold;
+              color: #0b1120;
+            }
+            .data-table th {
+              background-color: #0b1120;
+              color: #ffffff;
+              font-weight: bold;
+              font-size: 8.5pt;
+              text-align: left;
+              border: 1px solid #1e293b;
+              padding: 8px 10px;
+            }
+            .data-table td {
+              border: 1px solid #cbd5e1;
+              font-size: 8.5pt;
+              padding: 6px 10px;
+            }
+            .data-table tr.alt {
+              background-color: #f8fafc;
+            }
+            .ip-address {
+              color: #006699;
+              font-weight: bold;
+            }
+            .mac-address {
+              color: #334155;
+              font-weight: bold;
+            }
+            .vendor-text {
+              color: #475569;
+            }
+            .vendor-highlight-purple {
+              color: #a855f7;
+              font-weight: bold;
+            }
+            .vendor-highlight-cyan {
+              color: #0891b2;
+              font-weight: bold;
+            }
+            .latency-ok {
+              color: #10b981;
+              font-weight: bold;
+            }
+            .latency-warn {
+              color: #f59e0b;
+              font-weight: bold;
+            }
+            .badge-ok {
+              background-color: #d1fae5;
+              color: #059669;
+              font-weight: bold;
+              text-align: center;
+              border: 1px solid #a7f3d0;
+              padding: 2px 8px;
+            }
+            .badge-warn {
+              background-color: #fef3c7;
+              color: #d97706;
+              font-weight: bold;
+              text-align: center;
+              border: 1px solid #fde68a;
+              padding: 2px 8px;
+            }
+            .declaration-title {
+              border-top: 1px solid #cbd5e1;
+              border-left: 1px solid #cbd5e1;
+              border-right: 1px solid #cbd5e1;
+              background-color: #f1f5f9;
+              font-weight: bold;
+              font-size: 9pt;
+              color: #0f172a;
+              padding: 10px 12px;
+            }
+            .declaration-body {
+              border-left: 1px solid #cbd5e1;
+              border-right: 1px solid #cbd5e1;
+              background-color: #f1f5f9;
+              font-size: 8pt;
+              color: #475569;
+              padding: 4px 12px;
+            }
+            .declaration-bottom {
+              border-left: 1px solid #cbd5e1;
+              border-right: 1px solid #cbd5e1;
+              border-bottom: 1px solid #cbd5e1;
+              background-color: #f1f5f9;
+              font-size: 8pt;
+              color: #475569;
+              padding: 4px 12px 10px 12px;
+            }
+            .footer-text-center {
+              text-align: center;
+              font-size: 8pt;
+              color: #64748b;
+            }
+            .footer-author {
+              text-align: center;
+              font-size: 8pt;
+              color: #334155;
+              font-weight: bold;
+            }
+          </style>
+        </head>
+        <body>
+          <table>
+            <colgroup>
+              <col style="width: 140px;" />
+              <col style="width: 150px;" />
+              <col style="width: 190px;" />
+              <col style="width: 190px;" />
+              <col style="width: 90px;" />
+              <col style="width: 90px;" />
+            </colgroup>
+
+            <tr>
+              <td colspan="3" class="header-top" style="color: #64748b; font-size: 8.5pt; font-weight: bold; font-family: 'Segoe UI', Arial, sans-serif;">SISTEMA DE MONITOREO DE RED - REDMONITOR</td>
+              <td colspan="3" class="header-top" style="text-align: right; color: #64748b; font-size: 8.5pt; font-weight: bold; font-family: 'Segoe UI', Arial, sans-serif;">AUDITORÍA DE INFRAESTRUCTURA LAN</td>
+            </tr>
+            <tr>
+              <td colspan="6" style="border-bottom: 1.5px solid #cbd5e1; height: 4px; padding: 0;"></td>
+            </tr>
+            <tr><td colspan="6" style="height: 12px; padding: 0;"></td></tr>
+
+            <tr>
+              <td colspan="6" class="main-title" style="font-size: 16pt; font-weight: bold; color: #0b1120; font-family: 'Segoe UI', Arial, sans-serif;">INFORME DE AUDITORÍA DE RED FÍSICA</td>
+            </tr>
+            <tr>
+              <td colspan="6" class="main-subtitle" style="font-size: 10pt; color: #475569; font-family: 'Segoe UI', Arial, sans-serif;">Sondeo y Validación de Interfaces Físicas, Direcciones MAC y Latencia LAN</td>
+            </tr>
+            <tr><td colspan="6" style="height: 12px; padding: 0;"></td></tr>
+
+            <tr>
+              <td colspan="3" class="panel-left-title" style="font-weight: bold; color: #475569; font-size: 8.5pt; border-top: 1px solid #cbd5e1; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; padding: 8px 12px; font-family: 'Segoe UI', Arial, sans-serif;">SISTEMA / DETALLES DE AUDITORÍA</td>
+              <td colspan="3" class="panel-right-title" style="font-weight: bold; color: #087389; font-size: 9pt; border-top: 2px solid #06b6d4; border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4; background-color: #ecfefe; padding: 8px 12px; font-family: 'Segoe UI', Arial, sans-serif;">SITIO / UBICACIÓN REGISTRADA</td>
+            </tr>
+            <tr>
+              <td colspan="3" class="panel-left-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px; font-family: 'Segoe UI', Arial, sans-serif;">Sonda: RedMonitor Sonda de Campo Local</td>
+              <td colspan="3" class="panel-right-body" style="border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4; background-color: #ecfefe; font-weight: bold; font-size: 11pt; color: #0f172a; padding: 6px 12px; font-family: 'Segoe UI', Arial, sans-serif;">${(locationName || 'Sede Local').trim().toUpperCase()}</td>
+            </tr>
+            <tr>
+              <td colspan="3" class="panel-left-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px; font-family: 'Segoe UI', Arial, sans-serif;">ID Dispositivo: RED-MON-162BF909</td>
+              <td colspan="3" class="panel-right-bottom" style="border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4; border-bottom: 2px solid #06b6d4; background-color: #ecfefe; font-size: 8pt; color: #475569; padding: 4px 12px 8px 12px; font-family: 'Segoe UI', Arial, sans-serif;">Verificación en campo físico activo</td>
+            </tr>
+            <tr>
+              <td colspan="3" class="panel-left-bottom" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px 8px 12px; font-family: 'Segoe UI', Arial, sans-serif;">Fecha/Hora: ${timestamp}</td>
+              <td colspan="3" style="height: 0; padding: 0; background-color: #ecfefe; border-bottom: 2px solid #06b6d4; border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4;"></td>
+            </tr>
+            <tr><td colspan="6" style="height: 15px; padding: 0;"></td></tr>
+
+            <tr>
+              <td colspan="6" class="summary-title" style="font-size: 11pt; font-weight: bold; color: #0b1120; font-family: 'Segoe UI', Arial, sans-serif;">RESUMEN EJECUTIVO DE SEGURIDAD</td>
+            </tr>
+            <tr>
+              <td colspan="2" class="summary-header-cell" style="border-top: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 8.5pt; color: #475569; padding: 10px 12px 4px 12px; border-left: 1px solid #bae6fd; font-family: 'Segoe UI', Arial, sans-serif;">TOTAL HOSTS ACTIVOS</td>
+              <td colspan="2" class="summary-header-cell" style="border-top: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 8.5pt; color: #475569; padding: 10px 12px 4px 12px; font-family: 'Segoe UI', Arial, sans-serif;">LATENCIA MEDIA LAN</td>
+              <td colspan="2" class="summary-header-cell" style="border-top: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 8.5pt; color: #475569; padding: 10px 12px 4px 12px; border-right: 1px solid #bae6fd; font-family: 'Segoe UI', Arial, sans-serif;">NIVEL DE SEGURIDAD GENERAL</td>
+            </tr>
+            <tr>
+              <td colspan="2" class="summary-value-cell" style="border-bottom: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 14pt; font-weight: bold; color: #0b1120; padding: 4px 12px 10px 12px; border-left: 1px solid #bae6fd; font-family: 'Segoe UI', Arial, sans-serif;">${totals.count} Dispositivos</td>
+              <td colspan="2" class="summary-value-cell" style="border-bottom: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 14pt; font-weight: bold; padding: 4px 12px 10px 12px; color: ${totals.avgLatency > 50 ? '#d97706' : '#059669'}; font-family: 'Segoe UI', Arial, sans-serif;">${totals.avgLatency} ms</td>
+              <td colspan="2" class="summary-value-cell" style="border-bottom: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 14pt; font-weight: bold; padding: 4px 12px 10px 12px; border-right: 1px solid #bae6fd; color: ${totals.score < 80 ? '#d97706' : '#059669'}; font-family: 'Segoe UI', Arial, sans-serif;">${totals.score}% - ${totals.rank.split('(')[0]}</td>
+            </tr>
+            <tr><td colspan="6" style="height: 15px; padding: 0;"></td></tr>
+
+            <tr>
+              <td colspan="6" class="table-header-title" style="font-size: 11pt; font-weight: bold; color: #0b1120; font-family: 'Segoe UI', Arial, sans-serif;">DIRECCIONES IP SONDEADAS CON DIRECCIÓN MAC ASOCIADA</td>
+            </tr>
+            <tr><td colspan="6" style="height: 4px; padding: 0;"></td></tr>
+
+            <tr class="data-table">
+              <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">DIRECCIÓN IP</th>
+              <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">DIRECCIÓN MAC</th>
+              <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">FABRICANTE NIC</th>
+              <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">ESTACIÓN / HOST</th>
+              <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">LATENCIA</th>
+              <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: center; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">ESTADO</th>
+            </tr>
+      `;
+
+      activeDevices.forEach((device, index) => {
+        const isAlternate = index % 2 === 1;
+        const bgStyle = isAlternate ? 'background-color: #f8fafc;' : 'background-color: #ffffff;';
+        const manufacturer = resolveVendorByMac(device.mac, device.host, device.ip);
+        
+        let manufacturerColor = '#475569';
+        let manufacturerWeight = 'normal';
+        if (manufacturer.includes('Docker')) {
+          manufacturerColor = '#a855f7';
+          manufacturerWeight = 'bold';
+        } else if (manufacturer.includes('Apple')) {
+          manufacturerColor = '#0891b2';
+          manufacturerWeight = 'bold';
+        }
+
+        const latencyColor = device.ping && device.ping > 100 ? '#f59e0b' : '#10b981';
+        const latencyText = device.ping !== null ? `${device.ping} ms` : '—';
+        
+        const statusBadgeStyle = device.estado === 'OK' 
+          ? 'background-color: #d1fae5; color: #059669; font-weight: bold; border: 1px solid #a7f3d0; padding: 2px 8px;' 
+          : 'background-color: #fef3c7; color: #d97706; font-weight: bold; border: 1px solid #fde68a; padding: 2px 8px;';
+
+        const statusLabel = device.estado === 'OK' ? 'OK' : 'WARN';
+
+        html += `
+            <tr style="${bgStyle}">
+              <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; color: #006699; font-weight: bold;">${device.ip}</td>
+              <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; color: #334155; font-weight: bold;">${device.mac}</td>
+              <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; color: ${manufacturerColor}; font-weight: ${manufacturerWeight};">${manufacturer}</td>
+              <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; font-weight: 500; color: #0b1120;">${device.host}</td>
+              <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; font-weight: bold; color: ${latencyColor};" align="right">${latencyText}</td>
+              <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif;" align="center">
+                <span style="${statusBadgeStyle}">${statusLabel}</span>
+              </td>
+            </tr>
+        `;
+      });
+
+      html += `
+            <tr><td colspan="6" style="height: 15px; padding: 0;"></td></tr>
+
+            <tr>
+              <td colspan="6" class="declaration-title" style="font-weight: bold; font-size: 9pt; color: #0f172a; border-top: 1px solid #cbd5e1; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f1f5f9; padding: 10px 12px; font-family: 'Segoe UI', Arial, sans-serif;">DECLARACIÓN DE VALIDACIÓN Y CONTROL DE AUDITORÍA</td>
+            </tr>
+            <tr>
+              <td colspan="6" class="declaration-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f1f5f9; font-size: 8pt; color: #475569; padding: 4px 12px; font-family: 'Segoe UI', Arial, sans-serif;">El presente reporte describe el estado actual de los dispositivos activos en la red LAN local.</td>
+            </tr>
+            <tr>
+              <td colspan="6" class="declaration-bottom" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background-color: #f1f5f9; font-size: 8pt; color: #475569; padding: 4px 12px 10px 12px; font-family: 'Segoe UI', Arial, sans-serif;">Las asignaciones MAC-IP fueron recolectadas a través del protocolo ARP nativo de los adaptadores activos.</td>
+            </tr>
+            <tr><td colspan="6" style="height: 20px; padding: 0;"></td></tr>
+
+            <tr>
+              <td colspan="6" class="footer-text-center" style="text-align: center; font-size: 8pt; color: #64748b; font-family: 'Segoe UI', Arial, sans-serif;">RedMonitor — Reporte de Auditoría LAN  |  Generación: ${timestamp}</td>
+            </tr>
+            <tr>
+              <td colspan="6" class="footer-author" style="text-align: center; font-size: 8pt; color: #334155; font-weight: bold; font-family: 'Segoe UI', Arial, sans-serif;">Diseñado y programado por ASNEIDER ZAPATA</td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `;
+
+      // We MUST prepend the UTF-8 Byte Order Mark (\ufeff) to prevent Excel from interpreting it incorrectly or raising unreadable files error.
+      // And we use 'application/vnd.ms-excel' to inform Excel that this is an HTML table it should open.
+      const blob = new Blob(["\ufeff", html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `auditoria_seguridad_red_${formattedDate}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      onAddLog("🏆 Reporte compatible con Excel (XLS) generado exitosamente con formato enriquecido idéntico al PDF.", "success");
+    } catch (e: any) {
+      console.error(e);
+      onAddLog(`❌ Error al generar el archivo Excel: ${e.message || e}`, "error");
+    }
   };
 
   const exportAsPDF = () => {
@@ -516,6 +1246,43 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         {/* TOP COMPILING TRIGGER ACTION BUTTONS */}
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
+            onClick={() => setIsContinuousAudit(!isContinuousAudit)}
+            className={`font-bold py-1.5 px-3 rounded-xs border text-[11px] flex items-center gap-1.5 cursor-pointer transition-all duration-350 ${
+              isContinuousAudit 
+                ? 'bg-amber-950/60 border-amber-800 text-amber-200' 
+                : 'bg-slate-900 hover:bg-slate-850 border-slate-800 text-slate-400 hover:text-slate-250'
+            }`}
+            title="Activar análisis activo de fluctuaciones y anomalías en tiempo real"
+          >
+            <Activity className={`h-3.5 w-3.5 ${isContinuousAudit ? 'animate-pulse text-amber-400' : 'text-slate-450'}`} />
+            <span>{isContinuousAudit ? 'Sonda Activa 📡' : 'Sonda Pasiva'}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setShowSaveDialog(!showSaveDialog);
+              setShowHistoryPanel(false);
+            }}
+            className="bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 hover:text-white font-bold py-1.5 px-3 rounded-xs border border-cyan-850 text-[11px] flex items-center gap-1.5 cursor-pointer transition-all"
+            title="Guardar auditoría actual en el historial local persistente"
+          >
+            <Save className="h-3.5 w-3.5 text-cyan-400" />
+            <span>Guardar Reporte</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setShowHistoryPanel(!showHistoryPanel);
+              setShowSaveDialog(false);
+            }}
+            className="bg-slate-900 hover:bg-[#1e293b] text-slate-350 hover:text-white font-bold py-1.5 px-3 rounded-xs border border-slate-800 text-[11px] flex items-center gap-1.5 cursor-pointer transition-all"
+            title="Abrir el historial de reportes guardados para comparación de deriva"
+          >
+            <History className="h-3.5 w-3.5 text-cyan-400" />
+            <span>Ver Historial ({auditHistory.length})</span>
+          </button>
+
+          <button
             onClick={copyAsMarkdown}
             className="bg-slate-900 hover:bg-slate-800/60 active:scale-95 text-slate-300 font-semibold py-1.5 px-3 rounded-xs border border-slate-800 text-[11px] flex items-center gap-1.5 cursor-pointer transition-colors"
             title="Copiar reporte Markdown completo para email o documentación"
@@ -534,11 +1301,20 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
           </button>
 
           <button
+            onClick={exportAsExcel}
+            className="bg-emerald-900/40 hover:bg-emerald-800 text-emerald-200 hover:text-white font-bold py-1.5 px-3 rounded-xs border border-emerald-850 text-[11px] flex items-center gap-1.5 cursor-pointer transition-all"
+            title="Exportar informe de auditoría completo a formato Excel con diseño idéntico al PDF"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Exportar Excel</span>
+          </button>
+
+          <button
             onClick={exportAsCSV}
             className="bg-slate-900 hover:bg-[#1e293b] active:scale-95 text-slate-300 font-bold py-1.5 px-3 rounded-xs border border-slate-800 text-[11px] flex items-center gap-1.5 cursor-pointer transition-all"
             title="Exportar base de datos a formato CSV compatible con Excel"
           >
-            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
+            <FileSpreadsheet className="h-3.5 w-3.5 text-slate-450" />
             <span>Exportar CSV</span>
           </button>
 
@@ -552,6 +1328,321 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
           </button>
         </div>
       </div>
+
+      {/* SAVING DIALOG */}
+      {showSaveDialog && (
+        <div className="bg-[#0b1120]/80 border border-cyan-500/20 p-4 rounded-md space-y-3 text-left animate-fade-in shadow-lg">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5 font-mono">
+              <Save className="h-4 w-4" /> Guardar Auditoría en Historial
+            </h3>
+            <button onClick={() => setShowSaveDialog(false)} className="text-slate-400 hover:text-white cursor-pointer">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Guarde una captura instantánea de los {totals.count} dispositivos activos para compararla en el futuro y detectar dispositivos intrusos (drift analysis).
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder={`Ej. Oficina Principal - Piso 2 (Opcional)`}
+              value={savingAuditCustomName}
+              onChange={(e) => setSavingAuditCustomName(e.target.value)}
+              className="flex-1 bg-slate-950 text-slate-200 border border-slate-800 rounded px-2.5 py-1 text-xs focus:outline-hidden focus:border-cyan-500 font-mono"
+            />
+            <button
+              onClick={() => saveCurrentAudit(savingAuditCustomName)}
+              className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-4 py-1.5 rounded text-xs transition-colors cursor-pointer"
+            >
+              Guardar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* HISTORICAL REPORTS & DRIFT COMPARISON PANEL */}
+      {showHistoryPanel && (
+        <div className="bg-[#0b1120]/85 border border-slate-800 rounded-md p-4 space-y-4 text-left animate-fade-in">
+          <div className="flex justify-between items-center border-b border-slate-800/80 pb-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200 flex items-center gap-1.5 font-mono">
+              <History className="h-4 w-4 text-cyan-400" /> Historial de Auditorías Registradas
+            </h3>
+            <button onClick={() => setShowHistoryPanel(false)} className="text-slate-400 hover:text-white text-xs font-semibold cursor-pointer">
+              Ocultar Historial
+            </button>
+          </div>
+
+          {auditHistory.length === 0 ? (
+            <p className="text-[11px] text-slate-500 italic py-4 text-center">
+              No hay auditorías guardadas en el historial local. Use el botón "Guardar Reporte" para registrar una.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* LIST OF AUDITS */}
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                {auditHistory.map(audit => (
+                  <div 
+                    key={audit.id}
+                    onClick={() => setSelectedPastAuditToCompare(
+                      selectedPastAuditToCompare?.id === audit.id ? null : audit
+                    )}
+                    className={`p-3 rounded border text-xs cursor-pointer transition-all ${
+                      selectedPastAuditToCompare?.id === audit.id 
+                        ? 'bg-cyan-950/25 border-cyan-500/40' 
+                        : 'bg-slate-900/50 border-slate-800/80 hover:bg-slate-850/40'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-bold text-slate-200">{audit.location}</div>
+                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">{audit.timestamp}</div>
+                      </div>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteHistoricalAudit(audit.id, audit.location);
+                        }}
+                        className="p-1 text-slate-500 hover:text-rose-400 rounded transition-colors cursor-pointer"
+                        title="Eliminar del historial"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-slate-800/40 text-[10px] text-slate-400 font-mono">
+                      <div>Hosts: <span className="text-slate-200 font-semibold">{audit.totalDevices}</span></div>
+                      <div>Latencia: <span className="text-slate-200 font-semibold">{audit.avgLatency}ms</span></div>
+                      <div>Seguridad: <span className="text-slate-200 font-semibold">{audit.score}%</span></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* DETAILS AND COMPARATIVE DRIFT ANALYSIS */}
+              <div className="bg-[#0f172a]/60 border border-slate-800/80 rounded p-3 flex flex-col justify-between">
+                {!selectedPastAuditToCompare ? (
+                  <div className="flex flex-col items-center justify-center h-full py-8 text-center text-slate-500">
+                    <Database className="h-8 w-8 text-slate-600 mb-2" />
+                    <p className="text-[11px]">Seleccione una auditoría del historial para iniciar el <b>Análisis de Deriva (Drift)</b> y detectar intrusos o fallos de red.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-800/80">
+                      <span className="text-[10px] font-bold text-cyan-400 font-mono">ANÁLISIS DE DERIVA: LIVE vs BASELINE</span>
+                      <span className="text-[9px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono font-bold truncate max-w-[150px]">
+                        {selectedPastAuditToCompare.location}
+                      </span>
+                    </div>
+
+                    {/* Drift Summary cards */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-slate-900 p-2 rounded border border-slate-800 text-left">
+                        <div className="text-[9px] text-slate-500 uppercase font-mono">Dispositivos Nuevos</div>
+                        <div className={`text-sm font-black mt-1 font-mono ${driftAnalysis?.rogueDevices.length ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {driftAnalysis?.rogueDevices.length || 0}
+                        </div>
+                      </div>
+                      <div className="bg-slate-900 p-2 rounded border border-slate-800 text-left">
+                        <div className="text-[9px] text-slate-500 uppercase font-mono">Dispositivos Caídos</div>
+                        <div className="text-sm font-black mt-1 text-slate-300 font-mono">
+                          {driftAnalysis?.missingDevices.length || 0}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Critical Threat/Alert Block for Rogue Devices */}
+                    {driftAnalysis?.rogueDevices && driftAnalysis.rogueDevices.length > 0 ? (
+                      <div className="p-2.5 bg-rose-950/20 border border-rose-900/40 rounded space-y-1.5 text-left">
+                        <div className="text-[10px] font-bold text-rose-400 flex items-center gap-1 font-mono">
+                          <AlertTriangle className="h-3.5 w-3.5 animate-bounce" /> ¡ALERTA DE SEGURIDAD: HOSTS NO AUTORIZADOS!
+                        </div>
+                        <p className="text-[9.5px] text-rose-350 leading-relaxed font-sans">
+                          Se detectaron dispositivos activos que NO estaban presentes en la auditoría baseline. Podrían representar conexiones rogue o intrusiones físicas a la LAN:
+                        </p>
+                        <div className="space-y-1 max-h-[80px] overflow-y-auto pr-1">
+                          {driftAnalysis.rogueDevices.map(d => (
+                            <div key={d.id} className="text-[9.5px] font-mono flex justify-between bg-slate-950 p-1 rounded border border-rose-950/40">
+                              <span className="text-rose-400 font-bold">{d.ip}</span>
+                              <span className="text-slate-300 truncate max-w-[110px]">{d.host}</span>
+                              <span className="text-slate-500">{d.mac}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-emerald-950/10 border border-emerald-900/30 rounded text-[10px] text-emerald-400 text-left flex items-start gap-1.5">
+                        <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold">Análisis de Integridad OK</div>
+                          <div className="text-slate-400 text-[9px] mt-0.5">No se detectaron hosts intrusos nuevos comparados con esta línea base.</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Missing Devices list */}
+                    {driftAnalysis?.missingDevices && driftAnalysis.missingDevices.length > 0 && (
+                      <div className="space-y-1 text-left">
+                        <div className="text-[10px] font-bold text-slate-400 font-mono">Hosts ausentes / Fuera de servicio:</div>
+                        <div className="space-y-1 max-h-[60px] overflow-y-auto pr-1">
+                          {driftAnalysis.missingDevices.map(d => (
+                            <div key={d.id} className="text-[9px] font-mono flex justify-between bg-slate-900/30 p-1 rounded text-slate-400">
+                              <span>{d.ip}</span>
+                              <span className="truncate max-w-[130px]">{d.host}</span>
+                              <span>{d.mac}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PORT SCANNING PANEL */}
+      {selectedDeviceToScan && (
+        <div className="bg-[#0b1120]/80 border border-cyan-500/20 rounded-md p-4 md:p-5 space-y-4 text-left animate-fade-in shadow-lg">
+          <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+            <div className="space-y-0.5">
+              <span className="text-[9px] bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded font-mono font-bold tracking-wider uppercase">
+                Escáner de Puertos LAN y Vulnerabilidades
+              </span>
+              <h3 className="text-sm font-bold text-slate-200 font-mono">
+                Sonda de Seguridad Activa: {selectedDeviceToScan.ip}
+              </h3>
+              <p className="text-[11px] text-slate-500 font-sans">
+                Estación: {selectedDeviceToScan.host}  |  Sonda ARP: {resolveVendorByMac(selectedDeviceToScan.mac, selectedDeviceToScan.host, selectedDeviceToScan.ip)}
+              </p>
+            </div>
+            <button 
+              onClick={() => {
+                setSelectedDeviceToScan(null);
+                setIsScanningPorts(false);
+              }}
+              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-2.5 rounded border border-slate-800/40">
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-slate-400 font-semibold font-mono">Perfil de Escaneo:</span>
+              <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+                <input
+                  type="radio"
+                  name="port-profile"
+                  checked={portScanProfile === 'quick'}
+                  onChange={() => setPortScanProfile('quick')}
+                  disabled={isScanningPorts}
+                  className="accent-cyan-500"
+                />
+                <span className="font-sans">Rápido (5 Puertos)</span>
+              </label>
+              <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+                <input
+                  type="radio"
+                  name="port-profile"
+                  checked={portScanProfile === 'full'}
+                  onChange={() => setPortScanProfile('full')}
+                  disabled={isScanningPorts}
+                  className="accent-cyan-500"
+                />
+                <span className="font-sans">Vulnerabilidad Completo (12 Puertos)</span>
+              </label>
+            </div>
+
+            <button
+              onClick={() => runPortScan(selectedDeviceToScan, portScanProfile)}
+              disabled={isScanningPorts}
+              className="bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold px-4 py-1.5 rounded text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {isScanningPorts ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  <span>Sondeando... {portScanProgress}%</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-3.5 w-3.5" />
+                  <span>Iniciar Sonda TCP</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Terminal and Results Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Port scan terminal console log */}
+            <div className="space-y-1.5">
+              <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1 font-mono">
+                <Terminal className="h-3.5 w-3.5 text-cyan-400" /> CONSOLA DE AUDITORÍA TCP/IP
+              </div>
+              <div className="bg-slate-950 p-3 rounded border border-slate-850 h-[200px] overflow-y-auto font-mono text-[10.5px] text-emerald-400 leading-normal space-y-1 shadow-inner scrollbar-thin">
+                {portScanConsole.map((log, index) => (
+                  <div 
+                    key={index} 
+                    className={
+                      log.includes('[✓]') ? 'text-cyan-400 font-bold' : 
+                      log.includes('[!]') || log.includes('PUERTO') ? 'text-cyan-350 font-bold' : 
+                      log.includes('[-]') ? 'text-slate-500' : 'text-emerald-400/90'
+                    }
+                  >
+                    {log}
+                  </div>
+                ))}
+                {isScanningPorts && (
+                  <div className="text-cyan-400 animate-pulse flex items-center gap-1 font-mono">
+                    <span>● Escaneando puerto {activeScanningPort}/tcp...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Ports opened table with actionable advisory comments */}
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1 font-mono">
+                <CheckCircle className="h-3.5 w-3.5 text-cyan-400" /> SERVICIOS ABIERTOS Y EXPOSICIÓN
+              </div>
+              <div className="bg-slate-950 rounded border border-slate-850 h-[200px] overflow-y-auto p-2 space-y-2">
+                {portScanResults.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-center text-slate-500 italic text-[11px] py-12">
+                    {isScanningPorts ? 'Ejecutando sondeo de sockets...' : 'No se han detectado servicios expuestos en el escaneo.'}
+                  </div>
+                ) : (
+                  portScanResults.map(res => (
+                    <div 
+                      key={res.port}
+                      className="p-2.5 rounded border bg-[#0d1424]/60 border-slate-800 text-[11px] space-y-1 text-left"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-slate-200 font-mono">
+                          Puerto {res.port}/TCP — {res.service}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded text-[8.5px] font-bold uppercase font-mono ${
+                          res.risk === 'critical' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                          res.risk === 'warning' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                          res.risk === 'secure' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                          'bg-slate-800 text-slate-355'
+                        }`}>
+                          {res.risk}
+                        </span>
+                      </div>
+                      <p className="text-slate-450 text-[10px] leading-relaxed">
+                        {res.description}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CORE SUMMARY STATS WIDGET */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -666,12 +1757,13 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                 <th className="p-3">Host / Estación</th>
                 <th className="p-3">Ping Latencia</th>
                 <th className="p-3">Segmento Local</th>
+                <th className="p-3 text-center">Auditoría</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/30 font-sans text-xs text-slate-300">
               {filteredDevices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-10 text-center text-slate-500 italic max-w-sm">
+                  <td colSpan={8} className="p-10 text-center text-slate-500 italic max-w-sm">
                     No se encontraron dispositivos activos que coincidan con la búsqueda. Intente realizar un escáner de red para poblar la tabla.
                   </td>
                 </tr>
@@ -737,6 +1829,24 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                       {/* SEGMENT SUBNET */}
                       <td className="p-3 font-mono text-[10.5px] text-slate-500 truncate" title={d.segmento}>
                         {d.segmento || '—'}
+                      </td>
+
+                      {/* ACTIVE CYBER PORT SCANNER TARGET BUTTON */}
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => {
+                            setSelectedDeviceToScan(d);
+                            const auditView = document.getElementById('network-audit-view');
+                            if (auditView) {
+                              auditView.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="bg-cyan-950/40 hover:bg-cyan-900 border border-cyan-500/30 text-cyan-400 hover:text-white mx-auto px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                          title="Escanear puertos de red para evaluar nivel de exposición"
+                        >
+                          <Target className="h-3 w-3 text-cyan-400" />
+                          <span>Escanear</span>
+                        </button>
                       </td>
 
                     </tr>

@@ -1345,6 +1345,45 @@ app.get("/api/host-telemetry", async (req, res) => {
   }
 });
 
+// Helper to perform direct ICMP verification with retries for found devices to prevent false offline readings and ensure reliable latency metrics
+const getRealPing = (ip: string, retries = 2): Promise<number | null> => {
+  return new Promise(async (resolve) => {
+    const isWindows = process.platform === "win32";
+    const cmd = isWindows 
+      ? `ping -n 1 -w 800 ${ip}`
+      : `ping -c 1 -W 1 ${ip}`;
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      const pingTime = await new Promise<number | null>((resAttempt) => {
+        exec(cmd, { timeout: 1200 }, (err, stdout) => {
+          if (err || !stdout) {
+            return resAttempt(null);
+          }
+          let timeMatch = stdout.match(/time[=:<]([\d.]+)\s*ms/i) || stdout.match(/tiempo[=:<]([\d.]+)\s*ms/i);
+          if (timeMatch) {
+            const t = parseFloat(timeMatch[1]);
+            return resAttempt(Math.round(t));
+          }
+          if (stdout.includes("tiempo<1ms") || stdout.includes("time<1ms") || stdout.includes("tiempo <1ms") || stdout.includes("time <1ms")) {
+            return resAttempt(1);
+          }
+          resAttempt(null);
+        });
+      });
+
+      if (pingTime !== null) {
+        return resolve(pingTime);
+      }
+
+      // Delay before retrying to allow potential network congestion to clear
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 150));
+      }
+    }
+    resolve(null);
+  });
+};
+
 // API endpoint to retrieve the real online devices in the computer's ARP cache
 app.get("/api/scan-real-arp", (req, res) => {
   const subnetParam = req.query.subnet as string;
@@ -1441,16 +1480,16 @@ app.get("/api/scan-real-arp", (req, res) => {
 
   const isWindows = process.platform === "win32";
   
-  // Choose the fast asynchronous ping sweep command based on platform to populate ARP table
+  // Choose the robust multi-verification ping sweep command to ensure ARP cache is thoroughly populated
   let sweepCmd = "";
   if (isWindows) {
-    sweepCmd = `powershell -NoProfile -Command "1..254 | ForEach-Object { try { [System.Net.NetworkInformation.Ping]::new().SendAsync('${base}.' + $_, 250) } catch {} }; Start-Sleep -Milliseconds 1500"`;
+    sweepCmd = `powershell -NoProfile -Command "1..3 | ForEach-Object { 1..254 | ForEach-Object { try { [System.Net.NetworkInformation.Ping]::new().SendAsync('${base}.' + $_, 250) } catch {} }; Start-Sleep -Milliseconds 800 }; Start-Sleep -Milliseconds 1000"`;
   } else {
-    sweepCmd = `for i in {1..254}; do ping -c 1 -W 1 ${base}.$i >/dev/null 2>&1 & done; wait`;
+    sweepCmd = `for r in 1 2 3; do for i in {1..254}; do ping -c 1 -W 1 ${base}.$i >/dev/null 2>&1 & done; wait; sleep 0.3; done`;
   }
 
-  // First perform an active ping sweep to populate the OS ARP cache table
-  exec(sweepCmd, { timeout: 4500 }, (sweepErr) => {
+  // First perform an active ping sweep to populate the OS ARP cache table (using increased 8s timeout for the multi-verification rounds)
+  exec(sweepCmd, { timeout: 8000 }, (sweepErr) => {
     // Execute the standard ARP table reader
     const cmd = "arp -a";
     exec(cmd, (error, stdout, stderr) => {
@@ -1558,11 +1597,16 @@ app.get("/api/scan-real-arp", (req, res) => {
         const isLocalHost = (localPcIp && device.ip === localPcIp) || device.hostname === os.hostname() || finalVendor.toLowerCase().includes("este pc") || (device.vendor && device.vendor.toLowerCase().includes("este pc"));
         const serialNumber = isLocalHost ? getHostSerialNumber() : generateSerialNumberForMac(device.mac, finalVendor);
 
+        // Perform multiple-verification direct ping to obtain highly accurate latency response
+        const realPing = await getRealPing(device.ip, 2);
+        const finalPing = realPing !== null ? realPing : device.ping;
+
         return {
           ...device,
           hostname: hostname || device.hostname || "",
           vendor: finalVendor,
-          serialNumber: serialNumber
+          serialNumber: serialNumber,
+          ping: finalPing
         };
       });
 
