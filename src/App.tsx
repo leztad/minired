@@ -26,6 +26,7 @@ import NetworkEnterpriseTools from './components/NetworkEnterpriseTools';
 import NetworkAuthGate from './components/NetworkAuthGate';
 import UserManagement, { AVAILABLE_FEATURES } from './components/UserManagement';
 import TauriInstallerGuide from './components/TauriInstallerGuide';
+import ConfigurationPanel from './components/ConfigurationPanel';
 import OfflineLocationsManager, { LocationProfile } from './components/OfflineLocationsManager';
 
 const extractSubnetFromIp = (ip: string): string => {
@@ -426,7 +427,16 @@ export default function App() {
   const [calcCidr, setCalcCidr] = useState<number>(24);
   
   // Navigation
-  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red' | 'wiki_soporte' | 'event_logger' | 'diseno_red' | 'instalador_desktop'>('vista_general');
+  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red' | 'wiki_soporte' | 'event_logger' | 'diseno_red' | 'instalador_desktop' | 'configuracion'>('vista_general');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('netmonitor_theme') as 'dark' | 'light') || 'dark';
+  });
+
+  const handleSetTheme = (newTheme: 'dark' | 'light') => {
+    setTheme(newTheme);
+    localStorage.setItem('netmonitor_theme', newTheme);
+  };
+
   const [sidebarSearch, setSidebarSearch] = useState<string>('');
   const [isLanTreeOpen, setIsLanTreeOpen] = useState<boolean>(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
@@ -2219,7 +2229,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0B0F19] tech-grid font-sans text-xs text-slate-300">
+    <div className={`min-h-screen flex flex-col bg-[#0B0F19] tech-grid font-sans text-xs text-slate-300 ${theme === 'light' ? 'light' : ''}`}>
       {/* HEADER BAR (Geometric Balance Theme) */}
       <header className="bg-[#070A13]/90 backdrop-blur-md text-slate-300 px-4 py-2.5 border-b border-slate-900/80 flex flex-wrap items-center justify-between gap-3 shadow-md z-40">
         <div className="flex items-center gap-3">
@@ -2894,7 +2904,7 @@ export default function App() {
              activeView === 'dispositivos' ? 'Dispositivos' : 
              activeView === 'ancho_banda' ? 'Ancho de Banda' : 
              activeView === 'wiki_soporte' ? 'Wiki y Soporte' :
-             activeView === 'instalador_desktop' ? 'Instalador Desktop' :
+             activeView === 'configuracion' ? 'Configuración' :
              activeView === 'event_logger' ? 'Consola de Eventos' :
              activeView === 'diseno_red' ? 'Herramientas L2/L3' :
              'Pruebas y Diagnóstico'}
@@ -3191,36 +3201,19 @@ export default function App() {
 
               <li>
                 <button 
-                  onClick={() => { setActiveView('instalador_desktop'); setIsMobileMenuOpen(false); }}
+                  onClick={() => { setActiveView('configuracion'); setIsMobileMenuOpen(false); }}
                   className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                    activeView === 'instalador_desktop' 
+                    activeView === 'configuracion' 
                       ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
                       : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
                   }`}
-                  id="nav-instalador-btn"
+                  id="nav-configuracion-btn"
                 >
-                  <Monitor className="h-3.5 w-3.5 text-cyan-400" />
-                  <span>Instalador Desktop</span>
-                  <span className="ml-auto bg-emerald-500/15 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20 font-bold">DESKTOP</span>
+                  <Settings className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Configuración</span>
+                  <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">SISTEMA</span>
                 </button>
               </li>
-
-              {currentUser && (
-                <li>
-                  <button 
-                    onClick={() => { setActiveView('usuarios' as any); setIsMobileMenuOpen(false); }}
-                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
-                      activeView === ('usuarios' as any) 
-                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
-                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <Shield className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
-                    <span>Seguridad y Accesos</span>
-                    <span className="ml-auto bg-cyan-500/10 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">SISTEMA</span>
-                  </button>
-                </li>
-              )}
 
               {/* Collapsible Subnet Folder Entry */}
               <li className="pt-2">
@@ -4093,8 +4086,16 @@ export default function App() {
             <NetworkWiki />
           )}
 
-          {activeView === 'instalador_desktop' && (
-            <TauriInstallerGuide />
+          {activeView === 'configuracion' && currentUser && (
+            <ConfigurationPanel 
+              theme={theme}
+              setTheme={handleSetTheme}
+              authToken={authToken!}
+              currentUser={currentUser}
+              onAddLog={addAlert}
+              enabledFeatures={enabledFeatures}
+              onUpdateFeatures={handleUpdateFeatures}
+            />
           )}
 
           {activeView === ('ubicaciones_offline' as any) && (
@@ -4123,15 +4124,7 @@ export default function App() {
             <NetworkEnterpriseTools />
           )}
 
-          {activeView === ('usuarios' as any) && currentUser && (
-            <UserManagement 
-              authToken={authToken!}
-              currentUser={currentUser}
-              onAddLog={addAlert}
-              enabledFeatures={enabledFeatures}
-              onUpdateFeatures={handleUpdateFeatures}
-            />
-          )}
+
 
         </main>
       </div>

@@ -159,3 +159,166 @@
   0% { transform: scale(1); opacity: 1; }
   100% { transform: scale(1.4); opacity: 0; }
 }
+
+/* Light theme overrides to dynamically map dark backgrounds to soft light mode colors */
+.light {
+  background-color: #F8FAFC !important;
+  background-image: 
+    radial-gradient(circle at 0% 0%, rgba(6, 182, 212, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.03) 0%, transparent 40%) !important;
+  color: #1E293B !important;
+}
+
+/* Keep headers, text containers, and elements matching */
+.light h1, .light h2, .light h3, .light h4, .light h5, .light h6, .light th, .light legend {
+  color: #0F172A !important;
+}
+
+.light .text-white, 
+.light .text-slate-50, 
+.light .text-slate-100, 
+.light .text-slate-200 {
+  color: #0F172A !important;
+}
+
+.light .text-slate-300, 
+.light .text-slate-400 {
+  color: #334155 !important;
+}
+
+.light .text-slate-500 {
+  color: #64748B !important;
+}
+
+/* Specific component texts to remain readable or match light context */
+.light .text-cyan-400 {
+  color: #0891B2 !important;
+}
+
+.light .text-purple-400 {
+  color: #7C3AED !important;
+}
+
+.light .text-emerald-400 {
+  color: #16A34A !important;
+}
+
+.light .text-amber-400, .light .text-amber-500 {
+  color: #D97706 !important;
+}
+
+/* Background class mappings */
+.light .bg-[#0B0F19], 
+.light .bg-[#070A13], 
+.light .bg-[#050811], 
+.light .bg-slate-950,
+.light .bg-[#020617] {
+  background-color: #F8FAFC !important;
+}
+
+.light .bg-slate-900, 
+.light .bg-slate-900\/40, 
+.light .bg-slate-900\/20,
+.light .bg-[#0B1120],
+.light .bg-[#0b1120],
+.light .bg-[#0f172a], 
+.light .bg-[#0f172a]\/80,
+.light .bg-[#0f172a]\/95 {
+  background-color: #F1F5F9 !important;
+}
+
+.light .bg-slate-950\/50, 
+.light .bg-slate-900\/50, 
+.light .bg-[#070A13]\/90,
+.light .bg-slate-900\/30 {
+  background-color: rgba(241, 245, 249, 0.95) !important;
+}
+
+/* Glass panel and card properties */
+.light .glass-panel {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(203, 213, 225, 0.8) !important;
+  box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.05) !important;
+}
+
+.light .glass-card {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border-color: rgba(226, 232, 240, 0.9) !important;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.03) !important;
+}
+
+.light .glass-card:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: rgba(6, 182, 212, 0.5) !important;
+  box-shadow: 0 10px 20px -10px rgba(6, 182, 212, 0.15) !important;
+}
+
+/* Borders */
+.light .border-slate-800, 
+.light .border-slate-800\/80, 
+.light .border-slate-900\/80, 
+.light .border-slate-800\/50, 
+.light .border-slate-700,
+.light .border-slate-800\/60,
+.light .border-slate-800\/25,
+.light .border-slate-850 {
+  border-color: #E2E8F0 !important;
+}
+
+/* Forms & Inputs */
+.light input, 
+.light select, 
+.light textarea {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #1E293B !important;
+}
+
+.light input::placeholder, 
+.light textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+/* Scrollbars in Light Mode */
+.light ::-webkit-scrollbar-track {
+  background: #F1F5F9 !important;
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: #CBD5E1 !important;
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8 !important;
+}
+
+/* Tech Grids */
+.light .tech-grid {
+  background-image: 
+    linear-gradient(to right, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.06) 1px, transparent 1px) !important;
+}
+
+/* Navigation & Submenu highlights */
+.light .hover\:bg-slate-900\/40:hover, 
+.light .hover\:bg-slate-900\/30:hover {
+  background-color: rgba(226, 232, 240, 0.6) !important;
+}
+
+.light .bg-cyan-500\/10 {
+  background-color: rgba(6, 182, 212, 0.15) !important;
+}
+
+.light .bg-emerald-500\/10, .light .bg-emerald-500\/15 {
+  background-color: rgba(22, 163, 74, 0.12) !important;
+}
+
+.light .bg-[#0f172a] {
+  background-color: #E2E8F0 !important;
+}
+
+.light .bg-[#0f172a].text-cyan-400 {
+  background-color: rgba(6, 182, 212, 0.1) !important;
+  color: #0891B2 !important;
+}
+
