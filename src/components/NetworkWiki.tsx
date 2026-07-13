@@ -39,45 +39,273 @@ export default function NetworkWiki() {
   const wikiItems: WikiItem[] = [
     // --- MANUAL / GUÍA ---
     {
-      id: 'guide-uso-sistema',
+      id: 'guide-vista-general',
       category: 'guide',
-      title: 'Manual de Usuario: Cómo usar el Monitor de Red Capa L2',
-      tags: ['Manual', 'Primeros pasos', 'Simulación'],
-      summary: 'Aprende a navegar por los módulos del sistema, simular anomalías y auditar enlaces de red.',
-      content: `Este panel interactivo simula e inspecciona un segmento de red local (LAN) con capacidades de diagnóstico de Capa 2 (Modelo OSI). 
-      
-      ### Módulos Principales:
-      1. **Vista General**: Muestra la topología del segmento, el estado actual de los hosts (OK/Advertencia/Crítico) y el estado físico del canal.
-      2. **Consola de Sensores**: Informa sobre el estado de telemetría inyectada en switches y enlaces físicos (RSTP, contadores de paquetes, PoE budget).
-      3. **Dispositivos**: Tabla administrativa de hosts detallada con sus direcciones IP, MAC físicas, pings y fabricantes deducidos por OUI.
-      4. **Ancho de Banda**: Gráficas de consumo en Mbps en tiempo real para rastrear saturaciones de puerto.
-      5. **Prueba de Velocidad**: Simula pruebas de velocidad de subida, bajada y jitter para medir capacidades del enlace de borde.
-      6. **Copiloto AI**: Integración inteligente con Google Gemini que analiza los datos telemetry del switch y genera informes de mitigación.`,
+      title: 'Manual: Módulo Vista General - Topología Dinámica e Integridad',
+      tags: ['Vista General', 'Topología', 'Dashboard', 'Mapa de Red'],
+      summary: 'Documentación del panel principal, que representa gráficamente la subred LAN, la conmutación y la salud física.',
+      content: `El módulo de **Vista General** es el centro de operaciones del sistema. Ofrece una representación gráfica en tiempo real de la topología lógica de la Capa 2 (L2), permitiendo identificar visualmente la interconexión entre el Gateway (enrutador central), los conmutadores (Switches) y cada uno de los dispositivos cliente (Hosts).
+
+      ### Elementos Representados en la Topología:
+      * **Gateway Principal (.1)**: El nodo de borde que proporciona direccionamiento DHCP y traducción de direcciones de red (NAT).
+      * **Switch Troncal Administrado**: El nodo de conmutación central que distribuye las tramas de datos Ethernet. Reporta el consumo eléctrico si opera en modalidad PoE.
+      * **Hosts Locales Activos**: Divididos en categorías de integridad según su comportamiento y tiempos de respuesta.
+      * **Medio de Transmisión (Enlaces de Red)**: Los cables físicos representados con animaciones y colores dinámicos (Verde: Enlace óptimo; Amarillo: Latencia elevada; Rojo: Canal desconectado o con pérdida severa de paquetes).
+
+      ### Indicadores Clave en Pantalla (KPIs):
+      1. **Score de Salud de Red**: Un porcentaje calculado dinámicamente que evalúa las alarmas activas del switch, los pings promedio y los puertos fuera de servicio.
+      2. **Contador de Dispositivos**: Desglosa cuántos nodos están activos de manera concurrente frente al total de la base ARP registrada en la subred.
+      3. **Medidor de Latencia Promedio (Ping)**: Tiempo medio de respuesta ICMP del segmento local medido en milisegundos (ms).`,
       steps: [
-        'Selecciona un adaptador de red físico o virtual en el selector superior.',
-        'Pulsa "Iniciar Escaneo de Red" para enviar paquetes de sondeo ICMP generados por simulación.',
-        'Ve a la "Consola de Pruebas" al final del menú de navegación para inyectar fallos (Ej. Caída de Gateway, Latencias artificiales o Loops de capa 2).',
-        'Haz clic en "Copiloto de Red AI" y solicita un "Diagnóstico Completo" para ver el informe de remediación en base al estado de la red.'
+        'Seleccione un adaptador de red o interfaz virtual en la cabecera del monitor.',
+        'Presione "Iniciar Escaneo de Red" para gatillar el ping de sondeo ARP/ICMP interactivo.',
+        'Observe las animaciones de pulso de red: un pulso fluido verde indica canales estables, mientras que líneas punteadas rojas alertan sobre colapsos lógicos.',
+        'Haga clic en cualquiera de los nodos del mapa interactivo para ver detalles específicos de telemetría y direccionamiento físico.'
       ]
     },
     {
-      id: 'guide-anomalias-sim',
+      id: 'guide-sensores',
       category: 'guide',
-      title: 'Guía de Simulación: Comprensión de Anomalías de Red',
-      tags: ['Anomalías', 'Educativo', 'Conmutación'],
-      summary: 'Cómo entender e inyectar problemas típicos de redes LAN desde la terminal de testeo.',
-      content: `El simulador te permite inyectar condiciones de red adversas para entrenar tus capacidades de análisis en redes multitarea.
-      
-      ### Anomalías Disponibles para Pruebas:
-      * **Colapso del Gateway Principal**: Simula una caída del router central (.1). Esto provoca descarte masivo de tráfico WAN y pérdida de rutas externas.
-      * **Latencia Degradada (Spike inyectado)**: Añade retrasos variables de 120ms - 450ms, simulando colas llenas en buffers de switches mal dimensionados o tormentas de broadcast menores.
-      * **Pérdida de Paquetes (Interferencias o Faults)**: Genera descartes intermitentes del 5% al 45% en las tramas de enlace por ruido electromagnético o conectores RJ45 oxidados o flojos.
-      * **Tráfico de Respuesta Lenta (Saturación LAN)**: Eleva el ping en saltos erráticos y simula consumo masivo de ancho de banda.`,
+      title: 'Manual: Módulo Consola de Sensores y Estado de Puertos',
+      tags: ['Sensores', 'Switches', 'Puertos', 'PoE', 'RSTP'],
+      summary: 'Guía sobre el monitoreo detallado de switches de red, presupuestos PoE, estados STP y recuento de tramas.',
+      content: `El módulo **Consola de Sensores** proporciona visibilidad granular sobre la capa física y de enlace de tus switches administrables. Permite inspeccionar qué ocurre a nivel de puertos físicos, previniendo cuellos de botella e identificando fallos de cableado estructurado.
+
+      ### Datos de Telemetría Disponibles:
+      * **Estado del Puerto (Port Link Status)**: Muestra si la interfaz física está Activa (UP), Apagada (Down) o bloqueada por protocolos de prevención de loops.
+      * **Dirección del Enlace (Negotiation)**: Indica la velocidad y método duplex (Ej: 1000 Mbps - Full Duplex para Gigabit Ethernet).
+      * **Métricas PoE (Power over Ethernet)**: Consumo de energía en tiempo real (Watts) por puerto, crucial para evitar sobrecargar la fuente de alimentación del switch al conectar cámaras IP de alta potencia o domótica.
+      * **Métricas de RSTP (Rapid Spanning Tree Protocol)**: Detecta cuál es el switch raíz (Root Bridge) y cuáles puertos están en estado "Forwarding" o "Blocking" para prevenir colapsos por bucles de red.
+      * **Recuento de Paquetes (Unicast / Multicast / Broadcast)**: Permite vigilar si hay ráfagas anómalas de broadcast que puedan saturar el procesador del switch.`,
       steps: [
-        'Navega al módulo "Consola de Pruebas".',
-        'Busca el panel de "Inyector de Red y Enlace Físico".',
-        'Haz clic en "Inyectar" sobre la anomalía deseada.',
-        'Observa cómo cambian en tiempo real los contadores de OK/Caídos y cómo la gráfica de latencia reporta picos de ping insostenibles.'
+        'Navegue a la pestaña "Sensores" para cargar la matriz de telemetría.',
+        'Inspeccione la tabla de puertos del switch administrado para verificar la velocidad de negociación física.',
+        'Valide el "PoE Budget": si el total de Watts consumidos supera el 85% de la capacidad nominal del switch, prepare planes de balanceo de carga energética.',
+        'Observe las tramas de error de puerto: incrementos en descartes (Discards) indican colisiones tardías por tarjetas de red defectuosas o cables dañados.'
+      ]
+    },
+    {
+      id: 'guide-dispositivos',
+      category: 'guide',
+      title: 'Manual: Módulo Tabla de Dispositivos y Rastreo OUI',
+      tags: ['Dispositivos', 'MAC', 'OUI', 'IP', 'Ping'],
+      summary: 'Cómo administrar la base de datos de hosts locales, rastrear fabricantes de tarjetas de red y auditar direcciones físicas.',
+      content: `El módulo **Dispositivos** contiene el registro administrativo de todos los hosts que han sido descubiertos dentro de la subred local mediante tablas de vecinos ARP (Address Resolution Protocol) y escaneo ICMP. Es el inventario físico principal de la LAN.
+
+      ### Características y Funciones Clave:
+      * **Resolución OUI (Organizationally Unique Identifier)**: El sistema analiza automáticamente los primeros tres octetos de la dirección MAC física de cada dispositivo y determina el fabricante de hardware (Ej: Apple, Cisco, Intel, Huawei, etc.).
+      * **Medición de Latencia Individual (Ping)**: Muestra el tiempo de ida y vuelta de un paquete de eco ICMP enviado a cada host para evaluar su tiempo de respuesta local.
+      * **Segmentación de Red**: Clasifica los hosts según el segmento lógico asignado en la subred para aislar grupos de usuarios (Ej: Servidores, Impresoras, Telefonía VoIP, Dispositivos IoT).
+      * **Buscador Multicriterio**: Permite buscar de forma instantánea cualquier host ingresando el nombre, parte de la IP o la dirección MAC.`,
+      steps: [
+        'Vaya a la sección "Dispositivos" del panel de navegación.',
+        'Use la barra de búsqueda para localizar un host por su IP (Ej. 192.168.1.45) o por su dirección MAC.',
+        'Utilice el filtro de segmento para ver únicamente dispositivos IoT o de la infraestructura crítica corporativa.',
+        'Identifique hosts con fabricante "Desconocido": podrían ser hosts virtuales de contenedores locales, o intrusos usando técnicas de MAC aleatoria.'
+      ]
+    },
+    {
+      id: 'guide-ancho-banda',
+      category: 'guide',
+      title: 'Manual: Módulo Ancho de Banda y Tráfico en Mbps',
+      tags: ['Ancho de Banda', 'Tráfico', 'Mbps', 'Red', 'Consumo'],
+      summary: 'Rastreo interactivo y visualización en tiempo real del consumo de ancho de banda por interfaz y por puerto.',
+      content: `El módulo de **Ancho de Banda** se encarga de recolectar estadísticas de transmisión y recepción de datos (Tx/Rx) para mapear el consumo de tráfico local. Ayuda a diagnosticar qué aplicaciones o hosts específicos están saturando la subred.
+
+      ### Métricas Representadas:
+      * **Tráfico de Bajada (Download / Rx)**: Volumen de datos que ingresa al host local desde el gateway o servidores LAN.
+      * **Tráfico de Subida (Upload / Tx)**: Volumen de datos que el host transmite hacia la red.
+      * **Ancho de Banda por Puerto**: Carga de tráfico acumulada en cada boca del switch troncal medida en Mbps.
+
+      ### Utilidad Diagnóstica:
+      Si un canal de red muestra un consumo superior al **90% de su capacidad nominal de forma constante**, el buffer del puerto físico del switch se saturará, induciendo pérdida de paquetes y retardos severos en la transmisión de video-streaming o telefonía VoIP.`,
+      steps: [
+        'Abra el panel de "Ancho de Banda" para inicializar los gráficos de rendimiento.',
+        'Observe las gráficas en tiempo real que desglosan la velocidad de transmisión en Megabits por segundo (Mbps).',
+        'Busque picos de tráfico inusuales: un comportamiento plano al tope de la capacidad indica descargas pesadas concurrentes.',
+        'Use la información de puertos saturados para aplicar políticas de Calidad de Servicio (QoS) en tu enrutador físico.'
+      ]
+    },
+    {
+      id: 'guide-testeo',
+      category: 'guide',
+      title: 'Manual: Módulo Consola de Pruebas e Inyector de Fallas',
+      tags: ['Pruebas', 'Anomalías', 'Inyector', 'Diagnóstico', 'Simulación'],
+      summary: 'Cómo entrenar al personal inyectando fallas y comportamientos anómalos reales de redes de área local.',
+      content: `El **Centro de Pruebas** es un simulador de fallos de red avanzado diseñado con fines educativos y de validación de políticas. Permite "inyectar" de forma segura condiciones anómalas simuladas en el segmento para evaluar cómo reacciona el sistema y cómo se alertarían los usuarios de campo.
+
+      ### Fallos e Interrupciones Disponibles:
+      1. **Caída de Gateway Central**: Bloquea el nodo de salida, dejando a la LAN sin traducción NAT ni enrutamiento WAN.
+      2. **Latencia Excesiva (Ping Spike)**: Agrega retardos variables de más de 200ms para simular saturación en buffers físicos de conmutadores.
+      3. **Pérdida de Paquetes (Packet Loss)**: Descarta tramas simuladas de forma intermitente (del 5% al 45%), simulando ruido electromagnético severo en cableado UTP o fibras ópticas con suciedad.
+      4. **Bucle de Capa 2 (Broadcast Storm)**: Simula un loop físico sin protocolo Spanning Tree activo, lo que desencadena consumo del 100% en los procesadores del switch.`,
+      steps: [
+        'Vaya al módulo "Consola de Pruebas" en el menú lateral.',
+        'Elija una de las anomalías técnicas disponibles en el panel de inyección interactiva.',
+        'Haga clic en "Inyectar Anomalía" y observe los efectos inmediatos en los gráficos de la Vista General.',
+        'Use el botón "Restaurar Red" para limpiar todos los fallos artificiales inyectados y volver al estado óptimo de línea base.'
+      ]
+    },
+    {
+      id: 'guide-copiloto-ai',
+      category: 'guide',
+      title: 'Manual: Módulo Copiloto de Red AI y Generación de Diagnósticos',
+      tags: ['AI', 'Gemini', 'Copiloto', 'Diagnóstico AI', 'Asistente'],
+      summary: 'Guía para utilizar la inteligencia artificial de Google Gemini para auditar logs y diagnosticar topologías de red.',
+      content: `El **Copiloto AI** es un asistente experto integrado que aprovecha la tecnología avanzada de **Google Gemini** para actuar como un ingeniero de redes virtual de nivel superior. Analiza el estado actual de la telemetría, logs del switch y anomalías activas, entregando un reporte técnico explicativo y planes de remediación.
+
+      ### Capacidades del Copiloto AI:
+      * **Análisis de Estado Físico**: Lee los contadores de paquetes del switch, latencias y errores de puertos para encontrar cuellos de botella ocultos.
+      * **Mitigación en Lenguaje Natural**: Explica de forma amena y profesional por qué se están perdiendo paquetes o por qué se caen los servicios PoE.
+      * **Generación de Comandos de CLI**: Proporciona comandos de configuración reales para marcas líderes (Cisco IOS, Juniper, Aruba, Mikrotik RouterOS) que solucionan el problema diagnosticado (Ej: Configurar Spanning Tree, Port-Security o políticas de VLANs).`,
+      steps: [
+        'Ingrese a "Copiloto AI" en el panel lateral.',
+        'Haga clic en "Generar Diagnóstico Completo" para que la inteligencia lea la matriz actual del sistema en tiempo real.',
+        'Revise las recomendaciones estructuradas que incluyen el análisis del problema, diagnóstico causal y comandos de mitigación paso a paso.',
+        'Utilice el chat interactivo para hacer preguntas específicas sobre tu infraestructura o para traducir configuraciones a marcas de hardware particulares.'
+      ]
+    },
+    {
+      id: 'guide-speedtest',
+      category: 'guide',
+      title: 'Manual: Módulo Prueba de Velocidad de Borde (Speedtest)',
+      tags: ['Speedtest', 'Prueba de Velocidad', 'Internet', 'Borde', 'WAN'],
+      summary: 'Simulación detallada de pruebas de rendimiento WAN midiendo subida, bajada, ping y jitter.',
+      content: `El módulo de **Prueba de Velocidad (Speedtest)** está diseñado para medir el rendimiento de la conexión de frontera (hacia Internet o WAN). A diferencia del ping local de la LAN, esta prueba simula una transferencia masiva de archivos contra servidores CDN de borde para calibrar las capacidades máximas de la línea.
+
+      ### Métricas Evaluadas:
+      * **Velocidad de Descarga (Downstream)**: Capacidad para recibir datos desde la red WAN medida en Megabits por segundo (Mbps).
+      * **Velocidad de Subida (Upstream)**: Capacidad para enviar datos hacia la red externa medida en Mbps.
+      * **Ping de Borde (Latency)**: Tiempo de respuesta hacia el servidor de speedtest de borde (generalmente inferior a los pings transcontinentales).
+      * **Jitter**: La fluctuación temporal entre los paquetes ping recibidos. Un jitter superior a **30 ms** degrada de forma severa llamadas de VoIP y videoconferencias.`,
+      steps: [
+        'Navegue a la pestaña "Test de Velocidad".',
+        'Haga clic en el botón circular central "Iniciar Test" para disparar la simulación de transferencia.',
+        'Observe cómo el tacómetro mide secuencialmente el ping/jitter, luego la fase de descarga y finalmente la fase de subida.',
+        'Compare los resultados obtenidos contra el ancho de banda contratado con su ISP para reclamar por bajo rendimiento o sobreventa de línea.'
+      ]
+    },
+    {
+      id: 'guide-auditoria',
+      category: 'guide',
+      title: 'Manual: Módulo Auditorías de Red, Análisis de Deriva y Sondas TCP',
+      tags: ['Auditoría', 'Historial', 'Deriva', 'Drift', 'Sonda', 'Puertos'],
+      summary: 'Cómo registrar reportes históricos, realizar análisis de integridad contra intrusos y escanear puertos abiertos.',
+      content: `El módulo de **Auditorías de Red** es la herramienta de seguridad y cumplimiento de nivel corporativo del sistema. Permite documentar el estado de la red, auditar la seguridad de hosts individuales y detectar cambios no autorizados en la infraestructura física de la LAN.
+
+      ### Funcionalidades de Auditoría:
+      * **Guardado de Reportes en Historial**: Guarda capturas de pantalla lógicas persistentes (snapshots) con la cantidad de hosts activos, latencias y puntuación de seguridad en el navegador local (localStorage).
+      * **Análisis de Deriva (Drift Analysis)**: Compara el estado actual de la red contra una auditoría histórica guardada (Línea Base / Baseline). Detecta inmediatamente **Dispositivos Nuevos (Intrusos / Rogue Devices)** que se hayan conectado a la LAN física sin autorización, así como dispositivos críticos caídos.
+      * **Escáner de Puertos TCP (Port Scanner)**: Sondea de forma segura puertos estándar (Quick: 5 puertos comunes) o avanzados (Full: 12 puertos) en un dispositivo seleccionado. Permite identificar servicios vulnerables activos expuestos (FTP, HTTP sin cifrar, Telnet expuesto, SMB v1, etc.).
+      * **Exportación de Reportes**: Permite descargar informes auditados completos en formatos profesionales: PDF formal con membrete, JSON estructurado y Hoja de Cálculo CSV.`,
+      steps: [
+        'Vaya a la sección "Auditorías de Red" para ver el panel de control de seguridad.',
+        'Utilice "Guardar Reporte" para establecer la línea base de la red en un momento de estabilidad garantizada.',
+        'Para buscar intrusos, abra "Ver Historial", seleccione una auditoría pasada y examine la tarjeta de "Análisis de Deriva".',
+        'Para evaluar la seguridad de un host, haga clic en "Escanear" en la tabla de dispositivos para iniciar el escaneo de puertos TCP y ver las alertas de exposición de servicios.'
+      ]
+    },
+    {
+      id: 'guide-diseno-red',
+      category: 'guide',
+      title: 'Manual: Módulo de Diseño de Red y Herramientas L2/L3',
+      tags: ['Diseño de Red', 'L2/L3', 'Planificador', 'Topología', 'Arquitectura'],
+      summary: 'Cómo utilizar el lienzo interactivo drag-and-drop para planificar ampliaciones de redes locales.',
+      content: `El módulo de **Diseño de Red (Herramientas L2/L3)** es un lienzo CAD interactivo que permite a administradores diseñar y documentar topologías de red lógicas y físicas antes de su despliegue físico en racks de campo.
+
+      ### Características del Diseñador:
+      * **Lienzo Interactivo (Drag & Drop)**: Permite arrastrar elementos como enrutadores, firewalls, switches de core, servidores y estaciones al espacio de trabajo.
+      * **Interconexión Dinámica**: Dibuja líneas de enlace entre puertos de equipos simulando cables de cobre, interfaces de fibra SFP o conexiones Wi-Fi aéreas.
+      * **Configuración de Propiedades**: Permite etiquetar direcciones IP de subredes, máscaras, VLANs y descripciones de puertos de conmutación.
+      * **Exportación**: Ofrece una opción de exportado para guardar el diagrama de arquitectura y compartirlo con ingenieros de soporte o clientes.`,
+      steps: [
+        'Ingrese al módulo "Herramientas L2/L3" en el panel de navegación.',
+        'Utilice el panel izquierdo para arrastrar un nuevo conmutador (Switch) o cortafuegos (Firewall) al lienzo central.',
+        'Haga clic en el icono de enlace, seleccione el dispositivo origen y luego el destino para trazar la conexión física lógica.',
+        'Haga doble clic en cualquier nodo para configurar sus atributos lógicos (Ej: Dirección IP, Segmento, Gateway predeterminado).',
+        'Guarde el diseño utilizando las opciones de exportado para documentar el as-built de la obra de cableado estructurado.'
+      ]
+    },
+    {
+      id: 'guide-ubicaciones-offline',
+      category: 'guide',
+      title: 'Manual: Módulo Ubicaciones Offline y Gestión Multi-Sede',
+      tags: ['Offline', 'Sedes', 'Ubicaciones', 'LocalStorage', 'Multi-sitio'],
+      summary: 'Cómo administrar múltiples sedes físicas de red y almacenar datos de telemetría de forma local.',
+      content: `El módulo de **Ubicaciones Offline** permite a ingenieros itinerantes o integradores de soporte administrar las configuraciones y telemetrías de múltiples oficinas, sucursales o clientes físicos de forma independiente desde una sola aplicación.
+
+      ### Capacidades del Gestor Multi-Sede:
+      * **Creación de Sedes**: Registra sedes independientes con nombres personalizados (Ej: Sucursal Centro, Planta Industrial, Oficina Satélite).
+      * **Persistencia sin Conexión**: Toda la base de hosts e historiales se asocia de forma independiente a cada sede utilizando la base de datos local del navegador web. Puedes operar sin Internet.
+      * **Sincronización Rápida**: Cambia de una sede a otra de forma instantánea. El monitor recargará automáticamente la topología y los sensores correspondientes a la oficina seleccionada.`,
+      steps: [
+        'Vaya a la pestaña de "Ubicaciones Offline" en el menú principal.',
+        'Haga clic en "Nueva Ubicación" y complete los metadatos de la sucursal (Ej: Dirección, Rango IP de subred).',
+        'Establezca una ubicación como "Activa" para que el monitor comience a operar sobre esa sede particular.',
+        'Los datos de auditoría e historial que guarde se separarán automáticamente bajo el contexto de la sucursal activa en ese instante.'
+      ]
+    },
+    {
+      id: 'guide-eventos',
+      category: 'guide',
+      title: 'Manual: Módulo Consola de Eventos e Historial de Syslog',
+      tags: ['Eventos', 'Logs', 'Syslog', 'Consola', 'Historial'],
+      summary: 'Supervisión de registros operativos y auditoría de cambios del sistema tipo servidor Syslog.',
+      content: `El módulo de **Consola de Eventos (Event Logger)** funciona como un recolector Syslog simplificado para registrar todas las alarmas, cambios en puertos de conmutación, pings caídos e inyecciones de fallas que ocurren en el ecosistema.
+
+      ### Clasificación de Logs:
+      * **Éxito (Success / Info)**: Notificaciones de operaciones rutinarias completadas con éxito (Ej: Sonda ARP exitosa, reporte guardado).
+      * **Advertencia (Warning)**: Alertas preventivas que no detienen el tráfico pero requieren atención (Ej: Latencias de ping superiores a 100 ms).
+      * **Error (Critical)**: Fallas graves en la red local que bloquean o degradan la conmutación de tramas (Ej: Caída física del router central, loop detectado, sobrecarga PoE).
+
+      ### Utilidad de Análisis:
+      El log de consola almacena marcas de tiempo de milisegundos precisas, fundamentales para correlacionar en qué minuto exacto se cayó un switch PoE frente a un picos térmicos o sobrecorriente registrada.`,
+      steps: [
+        'Abra la pestaña "Consola de Eventos" para ver el buffer de logs en tiempo real.',
+        'Filtre los registros por gravedad utilizando los botones rápidos (Ver solo Errores o Advertencias).',
+        'Use la barra de búsqueda interna de la consola de logs para buscar cadenas específicas (como "PoE" o "IP 192.168.1.1").',
+        'Exporte los registros a formato de texto plano para adjuntar a tickets de soporte técnico o bitácoras de guardia corporativas.'
+      ]
+    },
+    {
+      id: 'guide-instalador',
+      category: 'guide',
+      title: 'Manual: Módulo Instalador Desktop (Guía de Integración Tauri)',
+      tags: ['Desktop', 'Tauri', 'Instalador', 'Raw Sockets', 'Windows/Linux'],
+      summary: 'Cómo compilar y ejecutar la aplicación como un ejecutable nativo de escritorio para capturar tramas reales.',
+      content: `El módulo **Instalador Desktop** proporciona las directrices y archivos de configuración para empaquetar este panel web en una aplicación nativa de escritorio utilizando el framework **Tauri** o Electron.
+
+      ### ¿Por qué utilizar la versión Desktop?
+      Debido a las políticas de seguridad de los navegadores web modernos (Sandboxing de iFrames), las aplicaciones basadas puramente en navegador no pueden acceder a los sockets de red del sistema operativo de bajo nivel. Por lo tanto, no pueden realizar pings ICMP reales o escuchar tramas Ethernet crudas de la interfaz local sin proxies.
+
+      ### Ventajas de Compilar con Tauri:
+      * **Acceso a Raw Sockets**: Permite inyectar tramas ARP y pings ICMP reales directamente a la tarjeta de red de tu computadora.
+      * **Ejecutable Ultra Liviano**: Aplicación compilada en Rust con un peso inferior a **10 MB** en disco.
+      * **Bajo Consumo de RAM**: Libre de la pesada carga de Chromium que arrastran wrappers tradicionales como Electron.`,
+      steps: [
+        'Navegue a la pestaña "Instalador Desktop" para descargar las plantillas de compilación Tauri.',
+        'Asegúrese de tener instalado Node.js y el compilador de Rust (Cargo) en su computadora de desarrollo.',
+        'Instale las dependencias de compilación y ejecute el comando en consola: \`npm run tauri build\`.',
+        'Instale el instalador generado (.msi para Windows, .deb para Linux o .dmg para macOS) para operar con privilegios de Administrador sobre su interfaz ethernet física.'
+      ]
+    },
+    {
+      id: 'guide-usuarios',
+      category: 'guide',
+      title: 'Manual: Módulo Gestión de Usuarios y Permisos de Acceso',
+      tags: ['Usuarios', 'Roles', 'Firebase', 'Seguridad', 'Permisos'],
+      summary: 'Control de accesos corporativo basado en roles para delimitar las acciones del personal de TI.',
+      content: `El módulo de **Gestión de Usuarios** implementa políticas de seguridad RBAC (Role-Based Access Control) utilizando la infraestructura de **Firebase Authentication** y perfiles de base de datos seguros en la nube. Permite controlar quién tiene acceso de escritura sobre la red y quién es un observador pasivo.
+
+      ### Roles de Usuario Disponibles:
+      1. **Administrador de Red (Admin)**: Acceso total al monitor. Es el único perfil con permisos para inyectar fallos de pruebas, borrar historiales de auditorías de red y configurar usuarios de soporte.
+      2. **Operador Técnico (Operator)**: Permiso para cambiar de sede de monitoreo, inicializar escaneos de red, realizar tests de velocidad y solicitar diagnósticos al Copiloto AI. Tiene prohibido inyectar fallos lógicos a la red.
+      3. **Auditor de Seguridad (Auditor)**: Acceso de solo lectura optimizado para revisar reportes históricos de auditoría, descargar reportes PDF de cumplimiento de la LAN y ejecutar el escáner de puertos de host específicos.`,
+      steps: [
+        'Acceda a la pestaña de "Usuarios" (disponible en la barra superior si ha iniciado sesión con perfil de Administrador).',
+        'Consulte la lista de ingenieros de soporte registrados y su estado de autorización.',
+        'Utilice el formulario de creación para agregar un nuevo técnico, definiendo su correo y asignándole el Rol adecuado para su nivel de responsabilidad.',
+        'Verifique que los operadores de campo no tengan acceso a los controles del Inyector de Anomalías para prevenir accidentes lógicos en entornos productivos.'
       ]
     },
 
