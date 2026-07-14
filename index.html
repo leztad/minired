@@ -4,6 +4,34 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RedMonitor — Network Monitor</title>
+    <script>
+      // Intercept and silence benign WebSocket / Vite HMR errors in the AI Studio sandboxed preview
+      (function() {
+        function shouldIgnore(msg) {
+          if (!msg) return false;
+          const m = String(msg).toLowerCase();
+          return m.includes('websocket') || m.includes('vite') || m.includes('hmr') || m.includes('sockjs');
+        }
+
+        window.addEventListener('unhandledrejection', function(event) {
+          const reason = event.reason;
+          const msg = reason ? (reason.message || reason) : '';
+          if (shouldIgnore(msg)) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+
+        window.addEventListener('error', function(event) {
+          if (shouldIgnore(event.message) || shouldIgnore(event.filename)) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
