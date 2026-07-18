@@ -1828,7 +1828,13 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
 
                       {/* FRIENDLY HOSTNAME */}
                       <td className="p-3 font-medium text-slate-200 font-sans truncate max-w-[170px]" title={d.host}>
-                        {d.host}
+                        <div className="truncate">{d.host}</div>
+                        {d.osDeducido && (
+                          <div className="text-[9.5px] text-slate-400 font-mono flex items-center gap-1 mt-1">
+                            <span className="bg-slate-950 px-1 py-0.5 rounded text-[8px] text-cyan-450 text-cyan-400 font-bold border border-slate-800/50 shrink-0">TTL {d.ttl}</span>
+                            <span className="truncate text-slate-400">{d.osDeducido}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* LATENCY */}

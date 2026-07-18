@@ -146,6 +146,143 @@ const SUBNET_PRESETS: Record<string, {
   }
 };
 
+export interface Fingerprint {
+  ttl: number;
+  ttlOs: string;
+  httpServer?: string;
+  userAgent?: string;
+  osDeducido: string;
+}
+
+export function getFingerprintForDevice(host: string, ip: string, mac: string): Fingerprint {
+  const lowercaseHost = host.toLowerCase();
+  
+  // Default values
+  let ttl = 64;
+  let ttlOs = "Linux Kernel 3.x - 5.x / FreeBSD";
+  let osDeducido = "GNU/Linux OS (Genérico)";
+  let httpServer: string | undefined = undefined;
+  let userAgent: string | undefined = undefined;
+
+  // 1. Router / Gateways / Network Equipment
+  if (
+    lowercaseHost.includes('router') || 
+    lowercaseHost.includes('gateway') || 
+    lowercaseHost.includes('ap principal') || 
+    lowercaseHost.includes('unifi') || 
+    lowercaseHost.includes('switch') ||
+    ip.endsWith('.1')
+  ) {
+    ttl = 255;
+    ttlOs = "Router / Switch L3 / Dispositivo Embebido";
+    osDeducido = "Cisco IOS / Mikrotik RouterOS / Gateway Huawei";
+    httpServer = lowercaseHost.includes('unifi') ? "nginx/1.18.0 (AP Manager)" : "GoAhead-Webs/2.5.0 (ONT Panel)";
+    userAgent = "— (Servicio de Red)";
+  }
+  // 2. Windows PC / Workstation
+  else if (
+    lowercaseHost.includes('este pc') || 
+    lowercaseHost.includes('laptop de trabajo') || 
+    lowercaseHost.includes('laptop invitada') || 
+    lowercaseHost.includes('estación de trabajo') ||
+    lowercaseHost.includes('workstation')
+  ) {
+    ttl = 128;
+    ttlOs = "Microsoft Windows 10/11";
+    osDeducido = "Windows 11 Pro x64 (Build 22621)";
+    userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36";
+    httpServer = "—";
+  }
+  // 3. Apple Device
+  else if (lowercaseHost.includes('macbook') || lowercaseHost.includes('freelancer')) {
+    ttl = 64;
+    ttlOs = "Apple macOS (Darwin)";
+    osDeducido = "macOS Ventura 13.5 (Darwin 22.6.0)";
+    userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15";
+    httpServer = "—";
+  }
+  else if (lowercaseHost.includes('ipad') || lowercaseHost.includes('iphone') || lowercaseHost.includes('apple')) {
+    ttl = 64;
+    ttlOs = "Apple iOS (Darwin)";
+    osDeducido = lowercaseHost.includes('ipad') ? "iPadOS 16.5" : "iOS 16.5.1";
+    userAgent = lowercaseHost.includes('ipad') 
+      ? "Mozilla/5.0 (iPad; CPU OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/605.1.15"
+      : "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/605.1.15";
+    httpServer = "—";
+  }
+  // 4. Android
+  else if (lowercaseHost.includes('android') || lowercaseHost.includes('smartphone') || lowercaseHost.includes('celular') || lowercaseHost.includes('visita')) {
+    ttl = 64;
+    ttlOs = "Linux Kernel (Android OS)";
+    osDeducido = "Android 13.0 (OneUI 5.1 / MIUI 14)";
+    userAgent = "Mozilla/5.0 (Linux; Android 13; SM-S908B Build/TP1A.220624.014) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.196 Mobile Safari/537.36";
+    httpServer = "—";
+  }
+  // 5. IoT & Smart TV & CCTV
+  else if (lowercaseHost.includes('smart tv') || lowercaseHost.includes('livingroom')) {
+    ttl = 64;
+    ttlOs = "Embedded Linux (Tizen / webOS)";
+    osDeducido = "Samsung Tizen OS v7.0 (SmartTV)";
+    userAgent = "Mozilla/5.0 (SMART-TV; Linux; Tizen 7.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.115 Safari/537.36";
+  }
+  else if (lowercaseHost.includes('cámara') || lowercaseHost.includes('ptz') || lowercaseHost.includes('domo') || lowercaseHost.includes('cctv') || lowercaseHost.includes('nvr') || lowercaseHost.includes('hikvision') || lowercaseHost.includes('dahua') || lowercaseHost.includes('axis') || lowercaseHost.includes('ezviz') || lowercaseHost.includes('grabador') || lowercaseHost.includes('grabadora')) {
+    ttl = 64;
+    ttlOs = "Linux Embebido / Real-Time OS";
+    osDeducido = "Firmware Linux Embebido (Cámara IP / NVR DVR)";
+    httpServer = lowercaseHost.includes('hikvision') ? "Hikvision-Webs" 
+                : lowercaseHost.includes('dahua') ? "Dahua-HTTPd" 
+                : lowercaseHost.includes('axis') ? "Axis-HTTP-Server" 
+                : "Embedded-Web-Service/1.0";
+    userAgent = "— (CCTV Agent)";
+  }
+  else if (lowercaseHost.includes('alexa') || lowercaseHost.includes('echo')) {
+    ttl = 64;
+    ttlOs = "Linux Embebido (Amazon FireOS)";
+    osDeducido = "Amazon FireOS (Alexa Echo Client)";
+    userAgent = "AlexaDevice/1.0 (Amazon Echo Dot)";
+    httpServer = "—";
+  }
+  else if (lowercaseHost.includes('termostato') || lowercaseHost.includes('nest') || lowercaseHost.includes('yale') || lowercaseHost.includes('cerradura') || lowercaseHost.includes('bombilla') || lowercaseHost.includes('iot') || lowercaseHost.includes('lector') || lowercaseHost.includes('sensor')) {
+    ttl = 64;
+    ttlOs = "FreeRTOS / Zephyr IoT Core";
+    osDeducido = "Dispositivo IoT Microcontrolado (ESP32/ARM Cortex)";
+    httpServer = "lwIP/2.1.2 (Real-Time OS)";
+    userAgent = "— (M2M Client)";
+  }
+  // 6. Docker / Databases / Linux Servers
+  else if (lowercaseHost.includes('docker') || lowercaseHost.includes('servidor') || lowercaseHost.includes('db') || lowercaseHost.includes('backend') || lowercaseHost.includes('postgres') || lowercaseHost.includes('redis') || lowercaseHost.includes('influx') || lowercaseHost.includes('grafana') || lowercaseHost.includes('rabbitmq')) {
+    ttl = 64;
+    ttlOs = "Linux Kernel 4.x / 5.x (Debian/Ubuntu)";
+    osDeducido = lowercaseHost.includes('ubuntu') ? "Ubuntu Server 22.04 LTS" : "Debian GNU/Linux 11 (Bullseye)";
+    httpServer = lowercaseHost.includes('grafana') ? "Grafana/9.4.3" 
+                : lowercaseHost.includes('nginx') ? "nginx/1.22.1" 
+                : lowercaseHost.includes('backend') ? "NodeJS/v18.16.0 (Express)"
+                : lowercaseHost.includes('postgres') ? "PostgreSQL/15.2 (Alpine)" 
+                : "nginx/1.22.1 (Ubuntu)";
+    userAgent = "Mozilla/5.0 (compatible; curl/7.81.0; GNU/Linux)";
+  }
+  // 7. General OS / Fallback
+  else {
+    ttl = 64;
+    ttlOs = "Linux Kernel 3.x - 5.x / FreeBSD";
+    osDeducido = "Dispositivo Linux / Unix Genérico";
+    userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36";
+  }
+
+  // Ensure down/offline devices have null or empty fingerprint parameters
+  if (host === '—' || host === '') {
+    return {
+      ttl: 64,
+      ttlOs: "Linux / macOS / Android (Predeterminado)",
+      osDeducido: "Firma Inactiva (Host Caído)",
+      userAgent: "—",
+      httpServer: "—"
+    };
+  }
+
+  return { ttl, ttlOs, httpServer, userAgent, osDeducido };
+}
+
 // Generate the full pool of 254 devices for a single segment
 export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean, interfaceName?: string, isDemoMode: boolean = true): Device[] {
   const devices: Device[] = [];
@@ -177,6 +314,7 @@ export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean,
     
     if (activePresets[i]) {
       const preset = activePresets[i];
+      const finger = getFingerprintForDevice(preset.host, ip, preset.mac);
       devices.push({
         id,
         ip,
@@ -192,9 +330,15 @@ export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean,
         totalConsumido: preset.totalConsumido,
         interfaz: interfaceName,
         segmento: subnetBase,
+        ttl: finger.ttl,
+        ttlOs: finger.ttlOs,
+        httpServer: finger.httpServer,
+        userAgent: finger.userAgent,
+        osDeducido: finger.osDeducido,
       });
     } else if (includeVirtuals && virtualPresets[i]) {
       const preset = virtualPresets[i];
+      const finger = getFingerprintForDevice(preset.host, ip, preset.mac);
       devices.push({
         id,
         ip,
@@ -210,9 +354,15 @@ export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean,
         totalConsumido: preset.totalConsumido,
         interfaz: interfaceName,
         segmento: subnetBase,
+        ttl: finger.ttl,
+        ttlOs: finger.ttlOs,
+        httpServer: finger.httpServer,
+        userAgent: finger.userAgent,
+        osDeducido: finger.osDeducido,
       });
     } else {
       // Offline/Down host
+      const finger = getFingerprintForDevice('—', ip, '—');
       devices.push({
         id,
         ip,
@@ -227,6 +377,11 @@ export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean,
         totalConsumido: 0,
         interfaz: interfaceName,
         segmento: subnetBase,
+        ttl: finger.ttl,
+        ttlOs: finger.ttlOs,
+        httpServer: finger.httpServer,
+        userAgent: finger.userAgent,
+        osDeducido: finger.osDeducido,
       });
     }
   }

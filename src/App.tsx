@@ -855,8 +855,14 @@ export default function App() {
   const [tempName, setTempName] = useState<string>('');
   const [isEditingVendor, setIsEditingVendor] = useState<boolean>(false);
   const [tempVendor, setTempVendor] = useState<string>('');
-  const [modalTab, setModalTab] = useState<'info' | 'ports'>('info');
+  const [modalTab, setModalTab] = useState<'info' | 'ports' | 'fingerprint'>('info');
   const [activeAnomaly, setActiveAnomaly] = useState<'none' | 'latency' | 'gateway' | 'loss'>('none');
+
+  // Passive/Active Fingerprint analysis simulation states
+  const [isAnalyzingFingerprint, setIsAnalyzingFingerprint] = useState<boolean>(false);
+  const [fingerprintProgress, setFingerprintProgress] = useState<number>(0);
+  const [fingerprintLogs, setFingerprintLogs] = useState<string[]>([]);
+  const [analyzedSuccessfully, setAnalyzedSuccessfully] = useState<boolean>(false);
 
   // Synchronize renaming and brand fields on selecting a device or state change
   useEffect(() => {
@@ -870,6 +876,10 @@ export default function App() {
       setPortScanProgress(0);
       setPortScanResults([]);
       setActiveScanningPort(null);
+      setIsAnalyzingFingerprint(false);
+      setFingerprintProgress(0);
+      setFingerprintLogs([]);
+      setAnalyzedSuccessfully(false);
     } else {
       const activeDevice = processedDevices.find(d => d.id === selectedDevice.id);
       if (activeDevice) {
@@ -881,6 +891,56 @@ export default function App() {
       }
     }
   }, [selectedDevice, processedDevices]);
+
+  const handleStartFingerprintAnalysis = (device: Device) => {
+    setIsAnalyzingFingerprint(true);
+    setFingerprintProgress(0);
+    setFingerprintLogs([]);
+    setAnalyzedSuccessfully(false);
+
+    const ttlVal = device.ttl || 64;
+    const ttlOsName = device.ttlOs || "Linux Kernel 3.x - 5.x / FreeBSD";
+    const serverVal = device.httpServer || "nginx/1.22.1";
+    const uaVal = device.userAgent || "—";
+    const osDeducVal = device.osDeducido || "Dispositivo Linux / Android";
+
+    const logsSteps = [
+      `[INFO] Iniciando Captura de Paquetes Raw en la interfaz activa...`,
+      `[INFO] Target: IP ${device.ip} [MAC: ${device.mac}]`,
+      `[ICMP] Enviando solicitud ICMP Echo (Ping) para forzar respuesta de red...`,
+      `[ICMP] Recibido ICMP Echo Reply desde ${device.ip}: RTT=3.4ms | TTL recibido = ${ttlVal}`,
+      `[ANALYSIS] Evaluando firma TTL de capa IP: TTL=${ttlVal} (original predeterminado detectado: ${ttlVal === 255 ? '255' : ttlVal === 128 ? '128' : '64'})`,
+      `[ANALYSIS] S.O. sugerido por TTL: ${ttlOsName}`,
+      `[ANALYSIS] Distancia estimada en saltos IP (Hops): 0 (Conectado al mismo segmento local)`,
+      `[TCP/IP] Escaneando puerto TCP 80 / 443 (HTTP/S) en busca de firmas de servidor...`,
+      device.sensorHttp 
+        ? `[TCP] ¡Puerto HTTP ABIERTO! Enviando solicitud HEAD / HTTP/1.1 para obtener cabeceras...`
+        : `[TCP] Puerto HTTP cerrado. Iniciando análisis pasivo de tramas HTTP de tránsito local...`,
+      device.sensorHttp 
+        ? `[HTTP] Respuesta HTTP 200 OK recibida. Cabecera Server: "${serverVal}"`
+        : `[PASSIVE] Interceptada trama de broadcast/multicast local de este host.`,
+      uaVal && uaVal !== '—'
+        ? `[HTTP] Cabecera User-Agent decodificada: "${uaVal.substring(0, 50)}..."`
+        : `[HTTP] No se detectaron cabeceras User-Agent pasivas activas.`,
+      `[CORRELATION] Correlacionando OUI de MAC address [${device.mac.substring(0, 8)}] con base de fabricantes de red...`,
+      `[CORRELATION] Fabricante registrado: ${device.vendor || 'Desconocido'}`,
+      `[DEDUCTION] Correlacionando firma de respuesta con firmas registradas en la base de datos...`,
+      `[SUCCESS] ¡IDENTIFICACIÓN EXITOSA! S.O. final deducido: ${osDeducVal}`
+    ];
+
+    let currentStep = 0;
+    const interval = setInterval(() => {
+      if (currentStep < logsSteps.length) {
+        setFingerprintLogs(prev => [...prev, logsSteps[currentStep]]);
+        setFingerprintProgress(Math.min(100, Math.round((currentStep + 1) * (100 / logsSteps.length))));
+        currentStep++;
+      } else {
+        clearInterval(interval);
+        setIsAnalyzingFingerprint(false);
+        setAnalyzedSuccessfully(true);
+      }
+    }, 280);
+  };
 
   const handleRenameDevice = (id: string, newName: string) => {
     const finalName = newName.trim() || '—';
@@ -4265,7 +4325,7 @@ export default function App() {
                 </div>
 
                 {/* TABS SELECTOR IN MODAL */}
-                <div className="flex border-b border-slate-800/50 text-xs">
+                <div className="flex border-b border-slate-800/50 text-[10.5px]">
                   <button
                     onClick={() => setModalTab('info')}
                     className={`flex-1 py-1.5 font-bold tracking-wide uppercase transition-all duration-150 text-center cursor-pointer ${
@@ -4277,6 +4337,16 @@ export default function App() {
                     📁 Parámetros
                   </button>
                   <button
+                    onClick={() => setModalTab('fingerprint')}
+                    className={`flex-1 py-1.5 font-bold tracking-wide uppercase transition-all duration-150 text-center cursor-pointer ${
+                      modalTab === 'fingerprint'
+                        ? 'border-b-2 border-cyan-500 text-cyan-400 font-semibold'
+                        : 'text-slate-500 hover:text-slate-350 bg-slate-950/20'
+                    }`}
+                  >
+                    🏷️ Huella (TTL/HTTP)
+                  </button>
+                  <button
                     onClick={() => setModalTab('ports')}
                     className={`flex-1 py-1.5 font-bold tracking-wide uppercase transition-all duration-150 text-center cursor-pointer ${
                       modalTab === 'ports'
@@ -4284,7 +4354,7 @@ export default function App() {
                         : 'text-slate-500 hover:text-slate-350 bg-slate-950/20'
                     }`}
                   >
-                    🔍 Escáner Puertos
+                    🔍 Puertos
                   </button>
                 </div>
 
@@ -4442,6 +4512,165 @@ export default function App() {
                         </div>
                       )}
                     </div>
+                  </div>
+                ) : modalTab === 'fingerprint' ? (
+                  <div className="space-y-3.5 text-xs text-slate-300">
+                    <div className="flex justify-between items-center border-b border-slate-800/50 pb-1.5">
+                      <h5 className="font-bold uppercase text-slate-500 text-[10px] tracking-wider font-display text-left">
+                        ANÁLISIS DE HUELLA DIGITAL (TTL/HTTP)
+                      </h5>
+                      {isAnalyzingFingerprint && (
+                        <div className="text-[10px] text-cyan-400 font-mono animate-pulse">
+                          Escuchando red...
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Passive/Active status card */}
+                    <div className="bg-slate-950/40 border border-slate-800/60 rounded-xs p-3 space-y-2">
+                      <div className="flex justify-between items-start">
+                        <div className="text-left">
+                          <span className="text-[9px] text-slate-500 uppercase block font-bold">Postura del Host</span>
+                          <span className="text-[11px] text-slate-300 font-semibold font-sans">
+                            {activeDiagDevice.estado === 'Caído' ? 'Fuera de Línea (No identificable)' : 'Identificación Disponible'}
+                          </span>
+                        </div>
+                        <span className={`px-1.5 py-0.5 rounded-xs text-[8px] font-bold uppercase font-mono ${
+                          activeDiagDevice.estado === 'Caído' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-950/25'
+                        }`}>
+                          {activeDiagDevice.estado === 'Caído' ? 'Inactivo' : 'Listo'}
+                        </span>
+                      </div>
+
+                      {activeDiagDevice.estado !== 'Caído' && (
+                        <div className="grid grid-cols-2 gap-2 text-left pt-1 border-t border-slate-800/30">
+                          <div>
+                            <span className="text-[8px] text-slate-500 font-bold block">S.O. DEDUCIDO</span>
+                            <span className="text-[10px] text-cyan-400 font-bold font-sans">
+                              {analyzedSuccessfully ? activeDiagDevice.osDeducido : '— (Requiere Análisis)'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[8px] text-slate-500 font-bold block">SIGNATURA TTL</span>
+                            <span className="text-[10px] text-slate-300 font-mono">
+                              TTL = {activeDiagDevice.ttl || 64} ({activeDiagDevice.ttl === 255 ? 'Router' : activeDiagDevice.ttl === 128 ? 'Windows' : 'Unix/Linux'})
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Interactive Scan Button / Progress */}
+                    {activeDiagDevice.estado !== 'Caído' && (
+                      <div className="space-y-3">
+                        {!isAnalyzingFingerprint && !analyzedSuccessfully && (
+                          <div className="text-center py-4 space-y-2">
+                            <Sliders className="h-7 w-7 text-cyan-500 mx-auto opacity-60" />
+                            <p className="text-[10.5px] text-slate-400 leading-normal max-w-[280px] mx-auto font-sans text-center">
+                              Ejecute una inspección profunda para recolectar cabeceras HTTP Server/User-Agent y analizar el TTL de respuesta para inferir con precisión el S.O.
+                            </p>
+                            <button
+                              onClick={() => handleStartFingerprintAnalysis(activeDiagDevice)}
+                              className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-4 py-1.5 rounded-xs hover:shadow-cyan-500/10 hover:shadow-md active:scale-95 transition-all text-xs cursor-pointer inline-flex items-center gap-1.5 font-sans"
+                            >
+                              <Search className="h-3.5 w-3.5" />
+                              Analizar Huella Digital
+                            </button>
+                          </div>
+                        )}
+
+                        {isAnalyzingFingerprint && (
+                          <div className="space-y-2.5">
+                            <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
+                              <span>Decodificando Paquetes...</span>
+                              <span>{fingerprintProgress}%</span>
+                            </div>
+                            <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800/40">
+                              <div 
+                                className="bg-cyan-400 h-full transition-all duration-150 ease-out"
+                                style={{ width: `${fingerprintProgress}%` }}
+                              />
+                            </div>
+                            
+                            {/* Live packet logs console */}
+                            <div className="bg-slate-950 border border-slate-800 p-2 rounded-xs h-[160px] overflow-y-auto text-[9.5px] font-mono text-slate-400 space-y-1 scrollbar-thin text-left pr-1 select-none">
+                              {fingerprintLogs.map((log, index) => (
+                                <div key={index} className={`leading-relaxed border-b border-slate-950/20 pb-0.5 last:border-0 ${
+                                  log.includes('[SUCCESS]') ? 'text-emerald-400 font-bold' :
+                                  log.includes('[ICMP]') ? 'text-cyan-300' :
+                                  log.includes('[HTTP]') ? 'text-amber-400' :
+                                  log.includes('[ANALYSIS]') ? 'text-indigo-300' :
+                                  'text-slate-400'
+                                }`}>
+                                  {log}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {analyzedSuccessfully && (
+                          <div className="space-y-3">
+                            {/* Completed telemetry results view */}
+                            <div className="bg-slate-950 border border-slate-800 rounded-xs p-2.5 space-y-2 text-left font-mono text-[10.5px]">
+                              <div className="border-b border-slate-900 pb-1 flex justify-between">
+                                <span className="text-slate-500">MÉTODO DE ANÁLISIS:</span>
+                                <span className="text-cyan-400 font-bold font-sans text-[10px]">INSPECCIÓN ACTIVA (DPI)</span>
+                              </div>
+
+                              <div className="space-y-1.5 pt-0.5">
+                                <div>
+                                  <span className="text-slate-500 text-[9px] block">1. FIRMA TTL (CAPA 3 IP)</span>
+                                  <div className="text-slate-300 pl-1 border-l-2 border-indigo-500">
+                                    Valor TTL = <strong className="text-slate-200">{activeDiagDevice.ttl}</strong> 
+                                    <span className="text-slate-500 text-[9px] ml-1">({activeDiagDevice.ttlOs})</span>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <span className="text-slate-500 text-[9px] block">2. CABECERA HTTP SERVER (CAPA 7 APLICACIÓN)</span>
+                                  <div className="text-slate-300 pl-1 border-l-2 border-amber-500 truncate" title={activeDiagDevice.httpServer || '—'}>
+                                    Server: <strong className="text-slate-200">{activeDiagDevice.httpServer || '— (No expone puerto 80)'}</strong>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <span className="text-slate-500 text-[9px] block">3. USER-AGENT INTERCEPTADO</span>
+                                  <div className="text-slate-400 pl-1 border-l-2 border-emerald-500 break-all text-[9.5px]" title={activeDiagDevice.userAgent || '—'}>
+                                    {activeDiagDevice.userAgent || '— (Sin solicitudes activas)'}
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-slate-900 pt-1.5 mt-2">
+                                  <span className="text-slate-500 text-[9px] block uppercase font-bold">Resultado de Huella Unificada</span>
+                                  <div className="text-emerald-400 font-bold font-sans text-xs flex items-center gap-1.5 mt-0.5 font-sans">
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                    <span>{activeDiagDevice.osDeducido}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => handleStartFingerprintAnalysis(activeDiagDevice)}
+                              className="w-full bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-800 py-1.5 rounded-xs font-bold text-[10.5px] cursor-pointer transition-colors font-sans text-center"
+                            >
+                              Volver a Analizar Huella
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {activeDiagDevice.estado === 'Caído' && (
+                      <div className="text-center py-6 bg-slate-950/20 border border-slate-800/30 rounded p-4 space-y-1">
+                        <AlertTriangle className="h-6 w-6 text-amber-500 mx-auto opacity-60" />
+                        <h6 className="font-bold text-slate-400 text-[11px]">Host Fuera de Línea</h6>
+                        <p className="text-[10px] text-slate-500 max-w-[240px] mx-auto font-sans text-center">
+                          No es posible recolectar firmas TTL ni cabeceras HTTP porque el host no responde a las solicitudes de ping ni de conexión de red.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3.5 text-xs text-slate-300">

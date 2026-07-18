@@ -15,6 +15,11 @@ export interface Device {
   segmento?: string;        // Connected subnet segment
   vendor?: string;          // Brand/Manufacturer name
   serialNumber?: string;    // Real or hardware-derived serial number
+  ttl?: number;             // TTL (Time To Live) signature value
+  ttlOs?: string;           // Operating system family suggested by TTL
+  httpServer?: string;      // Simulated HTTP Response Server header
+  userAgent?: string;       // Simulated intercepted HTTP User-Agent
+  osDeducido?: string;      // Fully consolidated operating system / device type
 }
 
 export interface Sensor {

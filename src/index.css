@@ -171,10 +171,10 @@
   --color-slate-400: #64748b;   /* secondary text */
   --color-slate-500: #94a3b8;   /* muted labels */
   --color-slate-600: #cbd5e1;   /* light borders/dividers */
-  --color-slate-700: #e2e8f0;   /* borders */
-  --color-slate-800: #f1f5f9;   /* card backgrounds */
-  --color-slate-900: #f8fafc;   /* panel background */
-  --color-slate-950: #ffffff;   /* main container background */
+  --color-slate-700: #cbd5e1;   /* borders */
+  --color-slate-800: #ffffff;   /* card backgrounds (crisp white contrast) */
+  --color-slate-900: #f1f5f9;   /* panel backgrounds (secondary containers) */
+  --color-slate-950: #e2e8f0;   /* main container background (matte soft gray) */
 
   /* Customize cyan/purple/emerald/amber accents for high contrast / prolijo look in light mode */
   --color-cyan-50: #ecfeff;
@@ -202,10 +202,10 @@
   --color-amber-400: #ca8a04;
   --color-amber-500: #b45309;
 
-  background-color: #F8FAFC !important;
+  background-color: #E2E8F0 !important; /* Soft muted gray/slate outer page background, which eliminates the glare of white screens */
   background-image: 
-    radial-gradient(circle at 0% 0%, rgba(6, 182, 212, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.04) 0%, transparent 40%) !important;
+    radial-gradient(circle at 0% 0%, rgba(6, 182, 212, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.03) 0%, transparent 40%) !important;
   color: #1E293B !important;
 }
 
@@ -329,60 +329,70 @@
 .light footer,
 .light aside,
 .light [class*="bg-[#070A13]" i],
-.light [class*="bg-[#050811]" i],
+.light [class*="bg-[#050811]" i] {
+  background-color: #F1F5F9 !important; /* Soft distinct header/sidebar background */
+  border-color: #CBD5E1 !important;
+}
+
 .light [class*="bg-slate-950" i] {
-  background-color: #F8FAFC !important;
+  background-color: #E2E8F0 !important; /* Matte page/outer background */
 }
 
 /* Tables & secondary components */
 .light thead tr,
 .light [class*="bg-[#0F172A]" i],
 .light [class*="bg-[#0b1120]" i] {
-  background-color: #F1F5F9 !important;
+  background-color: #E2E8F0 !important; /* Slightly darker row headings or backgrounds */
 }
 
 /* Handle all transparent variations of slate backgrounds */
-.light [class*="bg-slate-9" i],
+.light [class*="bg-slate-9" i] {
+  background-color: #F1F5F9 !important; /* Secondary panels */
+}
+
 .light [class*="bg-slate-8" i] {
-  background-color: #FFFFFF !important;
+  background-color: #FFFFFF !important; /* Primary cards are crisp white */
 }
 
 .light [class*="bg-slate-9/" i],
-.light [class*="bg-slate-8/" i],
 .light [class*="bg-slate-950/" i],
 .light [class*="bg-slate-900/" i] {
-  background-color: #F8FAFC !important;
+  background-color: rgba(226, 232, 240, 0.4) !important;
 }
 
-/* Glass panels & cards - gorgeous professional office aesthetics */
+.light [class*="bg-slate-8/" i] {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Glass panels & cards - gorgeous professional office aesthetics with deep, defined drop shadows and crisp borders */
 .light .glass-panel,
 .light [id*="settings-"],
 .light [id*="tab-"] {
   background: #FFFFFF !important;
-  border-color: #CBD5E1 !important;
-  box-shadow: 0 4px 20px -2px rgba(148, 163, 184, 0.12) !important;
+  border: 1.5px solid #CBD5E1 !important; /* Solid distinct border for panel boundaries */
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.03) !important;
 }
 
 .light .glass-card {
   background: #FFFFFF !important;
-  border-color: #E2E8F0 !important;
-  box-shadow: 0 2px 8px -1px rgba(148, 163, 184, 0.06) !important;
+  border: 1.5px solid #E2E8F0 !important;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.04), 0 2px 4px -1px rgba(15, 23, 42, 0.02) !important;
 }
 
 .light .glass-card:hover {
   background: #FFFFFF !important;
-  border-color: #0369A1 !important;
-  box-shadow: 0 10px 25px -5px rgba(3, 105, 161, 0.12) !important;
+  border-color: #0284C7 !important; /* Highlighted sky blue border */
+  box-shadow: 0 12px 28px -6px rgba(2, 132, 199, 0.16) !important;
 }
 
-/* Borders & Dividers */
+/* Borders & Dividers - make them slightly darker so they are highly perceived */
 .light *,
 .light .border,
 .light .border-t,
 .light .border-b,
 .light .border-l,
 .light .border-r {
-  border-color: #E2E8F0;
+  border-color: #CBD5E1 !important; /* Standardized high contrast borders */
 }
 
 .light .border-slate-800, 
@@ -398,18 +408,30 @@
   border-color: #CBD5E1 !important;
 }
 
-/* Forms, Inputs, Dropdowns, Textareas */
+/* Forms, Inputs, Dropdowns, Textareas - beautifully distinct, recessed with clear active states */
 .light input, 
 .light select, 
 .light textarea {
-  background-color: #FFFFFF !important;
-  border-color: #CBD5E1 !important;
+  background-color: #F8FAFC !important; /* Soft recessed background to stand out from white cards */
+  border: 1.5px solid #94A3B8 !important; /* Clear, visible high contrast borders */
   color: #0F172A !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+  border-radius: 0.375rem !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.light input:focus, 
+.light select:focus, 
+.light textarea:focus {
+  background-color: #FFFFFF !important; /* Active field illuminates */
+  border-color: #0284C7 !important; /* Bright sky-blue border to show active focus */
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.22), inset 0 1px 1px rgba(15, 23, 42, 0.05) !important;
+  outline: none !important;
 }
 
 .light input::placeholder, 
 .light textarea::placeholder {
-  color: #94A3B8 !important;
+  color: #64748B !important; /* Slightly darker placeholders for high contrast */
 }
 
 /* Scrollbars in Light Mode */
