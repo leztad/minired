@@ -922,7 +922,7 @@ export default function App() {
       uaVal && uaVal !== '—'
         ? `[HTTP] Cabecera User-Agent decodificada: "${uaVal.substring(0, 50)}..."`
         : `[HTTP] No se detectaron cabeceras User-Agent pasivas activas.`,
-      `[CORRELATION] Correlacionando OUI de MAC address [${device.mac.substring(0, 8)}] con base de fabricantes de red...`,
+      `[CORRELATION] Correlacionando OUI de MAC address [${(device.mac || '00:00:00:00:00:00').substring(0, 8)}] con base de fabricantes de red...`,
       `[CORRELATION] Fabricante registrado: ${device.vendor || 'Desconocido'}`,
       `[DEDUCTION] Correlacionando firma de respuesta con firmas registradas en la base de datos...`,
       `[SUCCESS] ¡IDENTIFICACIÓN EXITOSA! S.O. final deducido: ${osDeducVal}`
