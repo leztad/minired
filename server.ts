@@ -309,16 +309,17 @@ app.get("/api/system/check-updates", (req, res) => {
   const updateChannels: Record<string, { version: string, releaseDate: string, size: string, severity: 'low' | 'medium' | 'high' | 'critical', changelog: string[], notes: string }> = {
     stable: {
       version: "1.4.0",
-      releaseDate: "2026-07-18",
+      releaseDate: "2026-07-19",
       size: "4.82 MB",
       severity: "medium",
       changelog: [
-        "Añadido módulo avanzado de gestión de actualizaciones y control de versiones integrado.",
+        "Añadido nuevo modelo simplificado de Mapa Topológico Offline (Distribución de Árbol LAN jerárquico top-down).",
+        "Módulo avanzado de gestión de actualizaciones y control de versiones en caliente integrado.",
         "Optimización masiva del barrido de red local mediante timeouts adaptativos (Modo Ultra/Rápido).",
         "Mejoras de rendimiento en el parseador de caché ARP para evitar cuellos de botella.",
         "Actualizado diseño responsivo con controles interactivos en la barra superior."
       ],
-      notes: "Actualización estable recomendada para todos los entornos de monitoreo local."
+      notes: "Actualización estable recomendada para todos los entornos de monitoreo local con soporte de topologías interactivas simplificadas."
     },
     beta: {
       version: "1.4.1-rc2",

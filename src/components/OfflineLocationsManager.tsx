@@ -88,6 +88,11 @@ export default function OfflineLocationsManager({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   
+  // Topology layout type (hierarchical by default for simple top-down understanding)
+  const [layoutType, setLayoutType] = useState<'hierarchical' | 'radial' | 'grid'>(() => {
+    return (localStorage.getItem('redmonitor_topo_layout') as 'hierarchical' | 'radial' | 'grid') || 'hierarchical';
+  });
+  
   // Create / Edit location form states
   const [isCreating, setIsCreating] = useState(false);
   const [formName, setFormName] = useState('');
@@ -238,7 +243,7 @@ export default function OfflineLocationsManager({
     e.target.value = ''; // Reset file input
   };
 
-  // SVG Topology coordinates calculation
+  // SVG Topology coordinates calculation with Layout customization (Jerárquico default)
   const topologyNodes = useMemo(() => {
     if (!selectedProfile) return [];
     
@@ -253,9 +258,6 @@ export default function OfflineLocationsManager({
       device: Device;
     }> = [];
 
-    const centerX = 300;
-    const centerY = 200;
-
     // Detect devices and group
     const gatewayDevice = selectedProfile.devices.find(d => 
       d.host.toLowerCase().includes('gateway') || 
@@ -265,39 +267,8 @@ export default function OfflineLocationsManager({
 
     const otherDevices = selectedProfile.devices.filter(d => d.id !== gatewayDevice?.id);
 
-    // Add central Gateway / Router node
-    if (gatewayDevice) {
-      nodes.push({
-        id: gatewayDevice.id,
-        label: gatewayDevice.host === '—' ? 'Gateway' : gatewayDevice.host,
-        ip: gatewayDevice.ip,
-        role: 'gateway',
-        x: centerX,
-        y: centerY,
-        state: gatewayDevice.estado,
-        device: gatewayDevice
-      });
-    } else {
-      // Create virtual core node representing the subnet backbone
-      nodes.push({
-        id: 'virtual-backbone',
-        label: 'Red Backbone L3',
-        ip: selectedProfile.gateway,
-        role: 'gateway',
-        x: centerX,
-        y: centerY,
-        state: 'OK',
-        device: { id: 'v-core', ip: selectedProfile.gateway, host: 'Core Backbone', mac: '—', ping: 1, estado: 'OK', lastChecked: '', sensorPing: false }
-      });
-    }
-
-    // Distribute other devices in concentric rings
-    const radius = 130;
-    otherDevices.forEach((d, index) => {
-      const angle = (index * 2 * Math.PI) / otherDevices.length;
-      const x = centerX + radius * Math.cos(angle);
-      const y = centerY + radius * Math.sin(angle);
-
+    // Grouping helper to identify device roles
+    const getDeviceRoleAndLabel = (d: Device): { role: 'server' | 'client' | 'printer' | 'other', label: string } => {
       let role: 'server' | 'client' | 'printer' | 'other' = 'client';
       const hostLower = d.host.toLowerCase();
       const vendorLower = d.vendor?.toLowerCase() || '';
@@ -308,20 +279,216 @@ export default function OfflineLocationsManager({
         role = 'printer';
       }
 
-      nodes.push({
-        id: d.id,
-        label: d.host === '—' ? (d.vendor || 'Dispositivo') : d.host,
-        ip: d.ip,
-        role,
-        x,
-        y,
-        state: d.estado,
-        device: d
+      const label = d.host === '—' ? (d.vendor || 'Dispositivo') : d.host;
+      return { role, label };
+    };
+
+    if (layoutType === 'radial') {
+      const centerX = 300;
+      const centerY = 200;
+
+      // Add central Gateway / Router node
+      if (gatewayDevice) {
+        nodes.push({
+          id: gatewayDevice.id,
+          label: gatewayDevice.host === '—' ? 'Gateway' : gatewayDevice.host,
+          ip: gatewayDevice.ip,
+          role: 'gateway',
+          x: centerX,
+          y: centerY,
+          state: gatewayDevice.estado,
+          device: gatewayDevice
+        });
+      } else {
+        nodes.push({
+          id: 'virtual-backbone',
+          label: 'Red Backbone L3',
+          ip: selectedProfile.gateway,
+          role: 'gateway',
+          x: centerX,
+          y: centerY,
+          state: 'OK',
+          device: { id: 'v-core', ip: selectedProfile.gateway, host: 'Core Backbone', mac: '—', ping: 1, estado: 'OK', lastChecked: '', sensorPing: false }
+        });
+      }
+
+      // Distribute on concentric ring
+      const radius = 130;
+      otherDevices.forEach((d, index) => {
+        const angle = (index * 2 * Math.PI) / otherDevices.length;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+        const { role, label } = getDeviceRoleAndLabel(d);
+
+        nodes.push({
+          id: d.id,
+          label,
+          ip: d.ip,
+          role,
+          x,
+          y,
+          state: d.estado,
+          device: d
+        });
       });
-    });
+
+    } else if (layoutType === 'hierarchical') {
+      // Top-Down simplified layout: 3 horizontal levels
+      // Level 1: Gateway/Router at Top center (X=300, Y=60)
+      // Level 2: Servers in middle (X spaced, Y=175)
+      // Level 3: Printers and clients at bottom (X spaced, Y=300)
+      
+      const gatewayX = 300;
+      const gatewayY = 60;
+
+      if (gatewayDevice) {
+        nodes.push({
+          id: gatewayDevice.id,
+          label: gatewayDevice.host === '—' ? 'Gateway' : gatewayDevice.host,
+          ip: gatewayDevice.ip,
+          role: 'gateway',
+          x: gatewayX,
+          y: gatewayY,
+          state: gatewayDevice.estado,
+          device: gatewayDevice
+        });
+      } else {
+        nodes.push({
+          id: 'virtual-backbone',
+          label: 'Red Backbone L3',
+          ip: selectedProfile.gateway,
+          role: 'gateway',
+          x: gatewayX,
+          y: gatewayY,
+          state: 'OK',
+          device: { id: 'v-core', ip: selectedProfile.gateway, host: 'Core Backbone', mac: '—', ping: 1, estado: 'OK', lastChecked: '', sensorPing: false }
+        });
+      }
+
+      // Prepare other devices
+      const typedOtherDevices = otherDevices.map(d => {
+        const { role, label } = getDeviceRoleAndLabel(d);
+        return { device: d, role, label };
+      });
+
+      const servers = typedOtherDevices.filter(item => item.role === 'server');
+      const endpoints = typedOtherDevices.filter(item => item.role !== 'server');
+
+      // Lay out servers (Level 2)
+      const serversY = 175;
+      const serverCount = servers.length;
+      servers.forEach((item, index) => {
+        let x = 300;
+        if (serverCount > 1) {
+          const span = 400; // Total horizontal span width
+          const step = span / (serverCount - 1);
+          x = 100 + index * step;
+        }
+        nodes.push({
+          id: item.device.id,
+          label: item.label,
+          ip: item.device.ip,
+          role: item.role,
+          x,
+          y: serversY,
+          state: item.device.estado,
+          device: item.device
+        });
+      });
+
+      // Lay out endpoints (Level 3 - Printers and clients)
+      const endpointCount = endpoints.length;
+      
+      if (endpointCount > 0) {
+        // If there are many endpoints, split them into two sub-rows (e.g. at Y=280 and Y=340) to make it super simple and clean
+        const splitRows = endpointCount > 6;
+        const row1Count = splitRows ? Math.ceil(endpointCount / 2) : endpointCount;
+        const row2Count = endpointCount - row1Count;
+
+        endpoints.forEach((item, index) => {
+          let x = 300;
+          let y = 300;
+
+          if (splitRows) {
+            const isRow1 = index < row1Count;
+            const rowIndex = isRow1 ? index : index - row1Count;
+            const currentRowCount = isRow1 ? row1Count : row2Count;
+            y = isRow1 ? 275 : 340;
+
+            if (currentRowCount > 1) {
+              const span = 460;
+              const step = span / (currentRowCount - 1);
+              x = 70 + rowIndex * step;
+            } else {
+              x = 300;
+            }
+          } else {
+            y = 300;
+            if (endpointCount > 1) {
+              const span = 460;
+              const step = span / (endpointCount - 1);
+              x = 70 + index * step;
+            } else {
+              x = 300;
+            }
+          }
+
+          nodes.push({
+            id: item.device.id,
+            label: item.label,
+            ip: item.device.ip,
+            role: item.role,
+            x,
+            y,
+            state: item.device.estado,
+            device: item.device
+          });
+        });
+      }
+
+    } else if (layoutType === 'grid') {
+      // 4 Columns Grid layout (Bento block style), extremely clean
+      const cols = 4;
+      const colWidth = 130;
+      const rowHeight = 85;
+      const startX = 300 - ((cols - 1) * colWidth) / 2;
+      const startY = 75;
+
+      const allDevices = [...(gatewayDevice ? [gatewayDevice] : []), ...otherDevices];
+      
+      allDevices.forEach((d, index) => {
+        const row = Math.floor(index / cols);
+        const col = index % cols;
+        const x = startX + col * colWidth;
+        const y = startY + row * rowHeight;
+
+        let role: 'gateway' | 'server' | 'client' | 'printer' | 'other' = 'client';
+        let label = d.host === '—' ? (d.vendor || 'Dispositivo') : d.host;
+
+        if (d.id === gatewayDevice?.id) {
+          role = 'gateway';
+          label = d.host === '—' ? 'Gateway' : d.host;
+        } else {
+          const res = getDeviceRoleAndLabel(d);
+          role = res.role;
+          label = res.label;
+        }
+
+        nodes.push({
+          id: d.id,
+          label,
+          ip: d.ip,
+          role,
+          x,
+          y,
+          state: d.estado,
+          device: d
+        });
+      });
+    }
 
     return nodes;
-  }, [selectedProfile]);
+  }, [selectedProfile, layoutType]);
 
   return (
     <div className="space-y-6 font-sans">
@@ -819,11 +986,57 @@ export default function OfflineLocationsManager({
             {/* COLUMN 2: INTERACTIVE SVG TOPOLOGY MAP (Right Panel - Takes 2 spans) */}
             <div className="lg:col-span-2 space-y-5">
               <div className="bg-[#0a0f1d] border border-slate-850 p-4 rounded-lg space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-850 pb-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-850 pb-2.5">
                   <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                     <Globe className="h-4 w-4 text-cyan-400" /> Mapa Topológico Offline (Instantánea)
                   </h4>
-                  <span className="text-[9.5px] text-slate-550 font-mono">Estructura de Estrella LAN</span>
+                  
+                  {/* Model Graphics / Distribution Selector */}
+                  <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded border border-slate-800">
+                    <span className="text-[9px] font-mono text-slate-500 uppercase px-1 hidden md:inline">Estructura:</span>
+                    <button
+                      onClick={() => {
+                        setLayoutType('hierarchical');
+                        localStorage.setItem('redmonitor_topo_layout', 'hierarchical');
+                      }}
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded-sm transition-all cursor-pointer ${
+                        layoutType === 'hierarchical'
+                          ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
+                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                      }`}
+                      title="Modelo jerárquico simplificado (Árbol LAN)"
+                    >
+                      🌳 Árbol LAN
+                    </button>
+                    <button
+                      onClick={() => {
+                        setLayoutType('radial');
+                        localStorage.setItem('redmonitor_topo_layout', 'radial');
+                      }}
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded-sm transition-all cursor-pointer ${
+                        layoutType === 'radial'
+                          ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
+                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                      }`}
+                      title="Anillo / Estrella clásico"
+                    >
+                      ⭕ Anillo
+                    </button>
+                    <button
+                      onClick={() => {
+                        setLayoutType('grid');
+                        localStorage.setItem('redmonitor_topo_layout', 'grid');
+                      }}
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded-sm transition-all cursor-pointer ${
+                        layoutType === 'grid'
+                          ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
+                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                      }`}
+                      title="Cuadrícula bento alineada"
+                    >
+                      ⊞ Bento Grid
+                    </button>
+                  </div>
                 </div>
 
                 {/* SVG TOPOLOGY RENDERING */}
