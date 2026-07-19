@@ -701,7 +701,7 @@ const fetchOnlineVendor = async (mac: string): Promise<string> => {
   // 3. Online fallback checking free APIs (with short timeout to keep scans snappy and active)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const timeoutId = setTimeout(() => controller.abort(), 300);
 
     const res = await fetch(`https://macvendors.co/api/${mac}`, { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -717,7 +717,7 @@ const fetchOnlineVendor = async (mac: string): Promise<string> => {
   } catch (err) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const timeoutId = setTimeout(() => controller.abort(), 300);
 
       const res = await fetch(`https://api.macvendors.com/${mac}`, { signal: controller.signal });
       clearTimeout(timeoutId);
@@ -1020,7 +1020,7 @@ const resolveHostname = (ip: string): Promise<string> => {
   return new Promise((resolve) => {
     const timeoutId = setTimeout(() => {
       resolve("");
-    }, 1200);
+    }, 300);
 
     const done = (val: string) => {
       clearTimeout(timeoutId);
@@ -1346,16 +1346,16 @@ app.get("/api/host-telemetry", async (req, res) => {
 });
 
 // Helper to perform direct ICMP verification with retries for found devices to prevent false offline readings and ensure reliable latency metrics
-const getRealPing = (ip: string, retries = 2): Promise<number | null> => {
+const getRealPing = (ip: string, retries = 1): Promise<number | null> => {
   return new Promise(async (resolve) => {
     const isWindows = process.platform === "win32";
     const cmd = isWindows 
-      ? `ping -n 1 -w 800 ${ip}`
+      ? `ping -n 1 -w 250 ${ip}`
       : `ping -c 1 -W 1 ${ip}`;
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       const pingTime = await new Promise<number | null>((resAttempt) => {
-        exec(cmd, { timeout: 1200 }, (err, stdout) => {
+        exec(cmd, { timeout: 250 }, (err, stdout) => {
           if (err || !stdout) {
             return resAttempt(null);
           }
@@ -1483,13 +1483,13 @@ app.get("/api/scan-real-arp", (req, res) => {
   // Choose the robust multi-verification ping sweep command to ensure ARP cache is thoroughly populated
   let sweepCmd = "";
   if (isWindows) {
-    sweepCmd = `powershell -NoProfile -Command "1..3 | ForEach-Object { 1..254 | ForEach-Object { try { [System.Net.NetworkInformation.Ping]::new().SendAsync('${base}.' + $_, 250) } catch {} }; Start-Sleep -Milliseconds 800 }; Start-Sleep -Milliseconds 1000"`;
+    sweepCmd = `powershell -NoProfile -Command "1..254 | ForEach-Object { try { [System.Net.NetworkInformation.Ping]::new().SendAsync('${base}.' + $_, 250) } catch {} }; Start-Sleep -Milliseconds 600"`;
   } else {
-    sweepCmd = `for r in 1 2 3; do for i in {1..254}; do ping -c 1 -W 1 ${base}.$i >/dev/null 2>&1 & done; wait; sleep 0.3; done`;
+    sweepCmd = `for i in {1..254}; do ping -c 1 -W 1 ${base}.$i >/dev/null 2>&1 & done; wait; sleep 0.1`;
   }
 
-  // First perform an active ping sweep to populate the OS ARP cache table (using increased 8s timeout for the multi-verification rounds)
-  exec(sweepCmd, { timeout: 8000 }, (sweepErr) => {
+  // First perform an active ping sweep to populate the OS ARP cache table (using optimized timeout for the quick round)
+  exec(sweepCmd, { timeout: 3000 }, (sweepErr) => {
     // Execute the standard ARP table reader
     const cmd = "arp -a";
     exec(cmd, (error, stdout, stderr) => {
@@ -1598,7 +1598,7 @@ app.get("/api/scan-real-arp", (req, res) => {
         const serialNumber = isLocalHost ? getHostSerialNumber() : generateSerialNumberForMac(device.mac, finalVendor);
 
         // Perform multiple-verification direct ping to obtain highly accurate latency response
-        const realPing = await getRealPing(device.ip, 2);
+        const realPing = await getRealPing(device.ip, 1);
         const finalPing = realPing !== null ? realPing : device.ping;
 
         return {

@@ -1919,6 +1919,12 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                     }
                   }
                 });
+
+                // Safely schedule sensor update outside of render cycle
+                setTimeout(() => {
+                  setSensors(generateSensorsForDevices(nextPool));
+                }, 0);
+
                 return nextPool;
               });
             }
@@ -1935,11 +1941,36 @@ Generado por: RedMonitor Network Diagnostic Tool`;
     let segmentIndex = 0;
     let stepCount = 0;
 
-    // Smooth total scanning time of 4.5 seconds
-    const totalDurationMs = 4500;
+    // Smooth total scanning time of 2.2 seconds (reduced from 4.5 seconds for snappy feel)
+    const totalDurationMs = 2200;
     const totalStepsPerSegment = 24; // smooth increments
     const totalSteps = totalStepsPerSegment * segmentsToScan.length;
     const intervalStep = Math.max(80, Math.round(totalDurationMs / totalSteps));
+
+    // Maintain a local mutable copy of devices to prevent stale closure delays and ensure synchronous frame-perfect updates
+    let currentDevicesList: Device[] = [];
+    setDevices(prev => {
+      let nextPool = prev.filter(d => !segmentsToScan.includes(d.segmento));
+      segmentsToScan.forEach(seg => {
+        const currentTargets = finalTargetsMap[seg];
+        if (currentTargets) {
+          currentTargets.forEach(t => {
+            nextPool.push({
+              ...t,
+              estado: 'No_Escaneado' as const,
+              ping: null,
+              lastChecked: null,
+              sensorPing: false,
+              consumoDownload: 0,
+              consumoUpload: 0,
+              totalConsumido: 0
+            });
+          });
+        }
+      });
+      currentDevicesList = [...nextPool];
+      return nextPool;
+    });
 
     const timer = setInterval(() => {
       stepCount++;
@@ -1954,51 +1985,46 @@ Generado por: RedMonitor Network Diagnostic Tool`;
       setScannedIndex(itemsScannedCount);
 
       // Smooth real-time update: gradually transition devices from 'No_Escaneado' to their scanned state
-      // as the scanning index (IP octet) progresses from 1 to 254.
-      setDevices(prev => {
-        const nextPool = [...prev];
-        const currentTargets = finalTargetsMap[currentSegment];
-        if (currentTargets) {
-          currentTargets.forEach(t => {
-            const parts = t.ip.split('.');
-            const lastOctet = parseInt(parts[3] || '0', 10);
-            const isScanned = lastOctet <= itemsScannedCount;
+      const currentTargets = finalTargetsMap[currentSegment];
+      if (currentTargets) {
+        currentTargets.forEach(t => {
+          const parts = t.ip.split('.');
+          const lastOctet = parseInt(parts[3] || '0', 10);
+          const isScanned = lastOctet <= itemsScannedCount;
 
-            const idx = nextPool.findIndex(d => d.ip === t.ip);
-            if (isScanned) {
-              if (idx !== -1) {
-                nextPool[idx] = {
-                  ...t,
-                  lastChecked: new Date().toLocaleTimeString(),
-                };
-              } else {
-                nextPool.push({
-                  ...t,
-                  lastChecked: new Date().toLocaleTimeString(),
-                });
-              }
+          const idx = currentDevicesList.findIndex(d => d.ip === t.ip);
+          if (isScanned) {
+            const updatedDev = {
+              ...t,
+              lastChecked: new Date().toLocaleTimeString(),
+            };
+            if (idx !== -1) {
+              currentDevicesList[idx] = updatedDev;
             } else {
-              // Ensure it remains 'No_Escaneado' until the scan sweeps past its IP
-              const deviceNoScan = {
-                ...t,
-                estado: 'No_Escaneado' as const,
-                ping: null,
-                lastChecked: null,
-                sensorPing: false,
-                consumoDownload: 0,
-                consumoUpload: 0,
-                totalConsumido: 0
-              };
-              if (idx !== -1) {
-                nextPool[idx] = deviceNoScan;
-              } else {
-                nextPool.push(deviceNoScan);
-              }
+              currentDevicesList.push(updatedDev);
             }
-          });
-        }
-        return nextPool;
-      });
+          } else {
+            // Ensure it remains 'No_Escaneado' until the scan sweeps past its IP
+            const deviceNoScan = {
+              ...t,
+              estado: 'No_Escaneado' as const,
+              ping: null,
+              lastChecked: null,
+              sensorPing: false,
+              consumoDownload: 0,
+              consumoUpload: 0,
+              totalConsumido: 0
+            };
+            if (idx !== -1) {
+              currentDevicesList[idx] = deviceNoScan;
+            } else {
+              currentDevicesList.push(deviceNoScan);
+            }
+          }
+        });
+      }
+
+      setDevices([...currentDevicesList]);
 
       // Advance to the next configured segment if step reached threshold
       if (stepCount % totalStepsPerSegment === 0) {
@@ -2015,132 +2041,120 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           hour: '2-digit', minute: '2-digit', second: '2-digit',
           hour12: false
         });
-        const duration = Number((1.5 + Math.random() * 1.5).toFixed(1));
+        const duration = Number((0.8 + Math.random() * 0.7).toFixed(1));
 
         // Calculate and set the final state cleanly
-        setDevices(prev => {
-          const nextPool = [...prev];
-          segmentsToScan.forEach(seg => {
-            const currentTargets = finalTargetsMap[seg];
-            if (currentTargets) {
-              currentTargets.forEach(t => {
-                const idx = nextPool.findIndex(d => d.ip === t.ip);
-                if (idx !== -1) {
-                  nextPool[idx] = {
-                    ...t,
-                    lastChecked: now.toLocaleTimeString(),
-                  };
-                } else {
-                  nextPool.push({
-                    ...t,
-                    lastChecked: now.toLocaleTimeString(),
-                  });
-                }
-              });
-            }
-          });
-
-          // Overlay real host ARP results if retrieved!
-          if (realHosts && realHosts.length > 0) {
-            realHosts.forEach(r => {
-              const rSubnet = extractSubnetFromIp(r.ip);
-              // Ensure this device matches one of our active scan subnets
-              if (segmentsToScan.includes(rSubnet)) {
-                // Find if the IP is already in our nextPool
-                const idx = nextPool.findIndex(d => d.ip === r.ip);
-                
-                // Format MAC nicely
-                const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
-                
-                // Determine whether this is the local computer/gateway or device
-                const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
-                const isThisPc = r.ip === currentInterfaceObj.ip;
-                
-                // Choose the resolved hostname if retrieved, fallback to MAC manufacturer vendor
-                let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
-                const labelLower = nameLabel.toLowerCase();
-                if (
-                  labelLower.includes('genérico') || 
-                  labelLower.includes('generico') || 
-                  labelLower.includes('dispositivo lan') || 
-                  labelLower.includes('dispositivo de red') || 
-                  labelLower.includes('sonda de red') || 
-                  nameLabel === '—'
-                ) {
-                  nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
-                }
-                let hostNameStr = nameLabel;
-                if (isThisPc) {
-                  hostNameStr = `Este PC (${nameLabel})`;
-                } else if (isGateway) {
-                  hostNameStr = `Gateway/Router (${nameLabel})`;
-                }
-
-                const deviceObj = {
-                  id: `host-${r.ip.replace(/\./g, '_')}`,
-                  ip: r.ip,
-                  host: hostNameStr,
-                  mac: macToUse,
-                  ping: r.ping || 4,
-                  estado: 'OK' as const,
+        segmentsToScan.forEach(seg => {
+          const currentTargets = finalTargetsMap[seg];
+          if (currentTargets) {
+            currentTargets.forEach(t => {
+              const idx = currentDevicesList.findIndex(d => d.ip === t.ip);
+              if (idx !== -1) {
+                currentDevicesList[idx] = {
+                  ...t,
                   lastChecked: now.toLocaleTimeString(),
-                  sensorPing: true,
-                  sensorHttp: isGateway || isThisPc,
-                  consumoDownload: isThisPc ? 8.5 : Number((Math.random() * 5).toFixed(1)),
-                  consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
-                  totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
-                  interfaz: selectedInterface,
-                  segmento: rSubnet
                 };
-
-                if (idx !== -1) {
-                  nextPool[idx] = deviceObj;
-                } else {
-                  nextPool.push(deviceObj);
-                }
+              } else {
+                currentDevicesList.push({
+                  ...t,
+                  lastChecked: now.toLocaleTimeString(),
+                });
               }
             });
           }
-
-          // Schedule other state updates safely on the next microtask to avoid nesting state-setter alerts in React 18
-          setTimeout(() => {
-            const generatedSensors = generateSensorsForDevices(nextPool);
-            setSensors(generatedSensors);
-
-            const activeHostsFiltered = nextPool.filter(d => 
-              (d.estado === 'OK' || d.estado === 'Advertencia') && 
-              segmentsToScan.includes(d.segmento || '')
-            );
-            const liveHostsCount = activeHostsFiltered.length;
-
-            addAlert(`Sonda ICMP concluida en ${duration}s. Se encontraron ${liveHostsCount} hosts activos en ${segmentsToScan.length} subredes.`, 'success');
-
-            setLastScanTimeStr(scanTimeStr);
-            setScanDurationSec(duration);
-            setLastScanDone(true);
-            setIsScanning(false);
-
-            // Quietly check internet and resolve MAC manufacturers via the external API in the background if online
-            setTimeout(() => {
-              checkRealInternetConnection(true);
-            }, 600);
-
-            // Latency aggregates
-            const validPings = activeHostsFiltered.filter(d => d.ping !== null).map(d => d.ping as number);
-            const avgPing = validPings.length > 0 ? Math.round(validPings.reduce((a, b) => a + b, 0) / validPings.length) : 0;
-
-            setHistoryData(hPrev => [
-              ...hPrev,
-              {
-                timeLabels: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                hostsActivos: liveHostsCount,
-                latenciaMedia: avgPing
-              }
-            ].slice(-8));
-          }, 0);
-
-          return nextPool;
         });
+
+        // Overlay real host ARP results if retrieved!
+        if (realHosts && realHosts.length > 0) {
+          realHosts.forEach(r => {
+            const rSubnet = extractSubnetFromIp(r.ip);
+            if (segmentsToScan.includes(rSubnet)) {
+              const idx = currentDevicesList.findIndex(d => d.ip === r.ip);
+              const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
+              const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
+              const isThisPc = r.ip === currentInterfaceObj.ip;
+              
+              let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
+              const labelLower = nameLabel.toLowerCase();
+              if (
+                labelLower.includes('genérico') || 
+                labelLower.includes('generico') || 
+                labelLower.includes('dispositivo lan') || 
+                labelLower.includes('dispositivo de red') || 
+                labelLower.includes('sonda de red') || 
+                nameLabel === '—'
+              ) {
+                nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
+              }
+              let hostNameStr = nameLabel;
+              if (isThisPc) {
+                hostNameStr = `Este PC (${nameLabel})`;
+              } else if (isGateway) {
+                hostNameStr = `Gateway/Router (${nameLabel})`;
+              }
+
+              const deviceObj = {
+                id: `host-${r.ip.replace(/\./g, '_')}`,
+                ip: r.ip,
+                host: hostNameStr,
+                mac: macToUse,
+                ping: r.ping || 4,
+                estado: 'OK' as const,
+                lastChecked: now.toLocaleTimeString(),
+                sensorPing: true,
+                sensorHttp: isGateway || isThisPc,
+                consumoDownload: isThisPc ? 8.5 : Number((Math.random() * 5).toFixed(1)),
+                consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
+                totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
+                interfaz: selectedInterface,
+                segmento: rSubnet
+              };
+
+              if (idx !== -1) {
+                currentDevicesList[idx] = deviceObj;
+              } else {
+                currentDevicesList.push(deviceObj);
+              }
+            }
+          });
+        }
+
+        // Apply all state changes atomically in the same frame
+        setDevices([...currentDevicesList]);
+
+        const generatedSensors = generateSensorsForDevices(currentDevicesList);
+        setSensors(generatedSensors);
+
+        const activeHostsFiltered = currentDevicesList.filter(d => 
+          (d.estado === 'OK' || d.estado === 'Advertencia') && 
+          segmentsToScan.includes(d.segmento || '')
+        );
+        const liveHostsCount = activeHostsFiltered.length;
+
+        addAlert(`Sonda ICMP concluida en ${duration}s. Se encontraron ${liveHostsCount} hosts activos en ${segmentsToScan.length} subredes.`, 'success');
+
+        setLastScanTimeStr(scanTimeStr);
+        setScanDurationSec(duration);
+        setLastScanDone(true);
+        setIsScanning(false);
+
+        // Quietly check internet and resolve MAC manufacturers via the external API in the background if online
+        setTimeout(() => {
+          checkRealInternetConnection(true);
+        }, 600);
+
+        // Latency aggregates
+        const validPings = activeHostsFiltered.filter(d => d.ping !== null).map(d => d.ping as number);
+        const avgPing = validPings.length > 0 ? Math.round(validPings.reduce((a, b) => a + b, 0) / validPings.length) : 0;
+
+        setHistoryData(hPrev => [
+          ...hPrev,
+          {
+            timeLabels: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            hostsActivos: liveHostsCount,
+            latenciaMedia: avgPing
+          }
+        ].slice(-8));
       }
     }, intervalStep);
 
