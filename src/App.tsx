@@ -893,53 +893,74 @@ export default function App() {
   }, [selectedDevice, processedDevices]);
 
   const handleStartFingerprintAnalysis = (device: Device) => {
+    if (!device) {
+      console.error("handleStartFingerprintAnalysis called with undefined/null device");
+      return;
+    }
+
     setIsAnalyzingFingerprint(true);
     setFingerprintProgress(0);
     setFingerprintLogs([]);
     setAnalyzedSuccessfully(false);
 
-    const ttlVal = device.ttl || 64;
-    const ttlOsName = device.ttlOs || "Linux Kernel 3.x - 5.x / FreeBSD";
-    const serverVal = device.httpServer || "nginx/1.22.1";
-    const uaVal = device.userAgent || "—";
-    const osDeducVal = device.osDeducido || "Dispositivo Linux / Android";
+    try {
+      const ipVal = device.ip || '0.0.0.0';
+      const macVal = device.mac || '00:00:00:00:00:00';
+      const ttlVal = device.ttl || 64;
+      const ttlOsName = device.ttlOs || "Linux Kernel 3.x - 5.x / FreeBSD";
+      const serverVal = device.httpServer || "nginx/1.22.1";
+      const uaVal = device.userAgent || "—";
+      const osDeducVal = device.osDeducido || "Dispositivo Linux / Android";
 
-    const logsSteps = [
-      `[INFO] Iniciando Captura de Paquetes Raw en la interfaz activa...`,
-      `[INFO] Target: IP ${device.ip} [MAC: ${device.mac}]`,
-      `[ICMP] Enviando solicitud ICMP Echo (Ping) para forzar respuesta de red...`,
-      `[ICMP] Recibido ICMP Echo Reply desde ${device.ip}: RTT=3.4ms | TTL recibido = ${ttlVal}`,
-      `[ANALYSIS] Evaluando firma TTL de capa IP: TTL=${ttlVal} (original predeterminado detectado: ${ttlVal === 255 ? '255' : ttlVal === 128 ? '128' : '64'})`,
-      `[ANALYSIS] S.O. sugerido por TTL: ${ttlOsName}`,
-      `[ANALYSIS] Distancia estimada en saltos IP (Hops): 0 (Conectado al mismo segmento local)`,
-      `[TCP/IP] Escaneando puerto TCP 80 / 443 (HTTP/S) en busca de firmas de servidor...`,
-      device.sensorHttp 
-        ? `[TCP] ¡Puerto HTTP ABIERTO! Enviando solicitud HEAD / HTTP/1.1 para obtener cabeceras...`
-        : `[TCP] Puerto HTTP cerrado. Iniciando análisis pasivo de tramas HTTP de tránsito local...`,
-      device.sensorHttp 
-        ? `[HTTP] Respuesta HTTP 200 OK recibida. Cabecera Server: "${serverVal}"`
-        : `[PASSIVE] Interceptada trama de broadcast/multicast local de este host.`,
-      uaVal && uaVal !== '—'
-        ? `[HTTP] Cabecera User-Agent decodificada: "${uaVal.substring(0, 50)}..."`
-        : `[HTTP] No se detectaron cabeceras User-Agent pasivas activas.`,
-      `[CORRELATION] Correlacionando OUI de MAC address [${(device.mac || '00:00:00:00:00:00').substring(0, 8)}] con base de fabricantes de red...`,
-      `[CORRELATION] Fabricante registrado: ${device.vendor || 'Desconocido'}`,
-      `[DEDUCTION] Correlacionando firma de respuesta con firmas registradas en la base de datos...`,
-      `[SUCCESS] ¡IDENTIFICACIÓN EXITOSA! S.O. final deducido: ${osDeducVal}`
-    ];
+      const logsSteps = [
+        `[INFO] Iniciando Captura de Paquetes Raw en la interfaz activa...`,
+        `[INFO] Target: IP ${ipVal} [MAC: ${macVal}]`,
+        `[ICMP] Enviando solicitud ICMP Echo (Ping) para forzar respuesta de red...`,
+        `[ICMP] Recibido ICMP Echo Reply desde ${ipVal}: RTT=3.4ms | TTL recibido = ${ttlVal}`,
+        `[ANALYSIS] Evaluando firma TTL de capa IP: TTL=${ttlVal} (original predeterminado detectado: ${ttlVal === 255 ? '255' : ttlVal === 128 ? '128' : '64'})`,
+        `[ANALYSIS] S.O. sugerido por TTL: ${ttlOsName}`,
+        `[ANALYSIS] Distancia estimada en saltos IP (Hops): 0 (Conectado al mismo segmento local)`,
+        `[TCP/IP] Escaneando puerto TCP 80 / 443 (HTTP/S) en busca de firmas de servidor...`,
+        device.sensorHttp 
+          ? `[TCP] ¡Puerto HTTP ABIERTO! Enviando solicitud HEAD / HTTP/1.1 para obtener cabeceras...`
+          : `[TCP] Puerto HTTP cerrado. Iniciando análisis pasivo de tramas HTTP de tránsito local...`,
+        device.sensorHttp 
+          ? `[HTTP] Respuesta HTTP 200 OK recibida. Cabecera Server: "${serverVal}"`
+          : `[PASSIVE] Interceptada trama de broadcast/multicast local de este host.`,
+        uaVal && uaVal !== '—'
+          ? `[HTTP] Cabecera User-Agent decodificada: "${String(uaVal).substring(0, 50)}..."`
+          : `[HTTP] No se detectaron cabeceras User-Agent pasivas activas.`,
+        `[CORRELATION] Correlacionando OUI de MAC address [${String(macVal).substring(0, 8)}] con base de fabricantes de red...`,
+        `[CORRELATION] Fabricante registrado: ${device.vendor || 'Desconocido'}`,
+        `[DEDUCTION] Correlacionando firma de respuesta con firmas registradas en la base de datos...`,
+        `[SUCCESS] ¡IDENTIFICACIÓN EXITOSA! S.O. final deducido: ${osDeducVal}`
+      ];
 
-    let currentStep = 0;
-    const interval = setInterval(() => {
-      if (currentStep < logsSteps.length) {
-        setFingerprintLogs(prev => [...prev, logsSteps[currentStep]]);
-        setFingerprintProgress(Math.min(100, Math.round((currentStep + 1) * (100 / logsSteps.length))));
-        currentStep++;
-      } else {
-        clearInterval(interval);
-        setIsAnalyzingFingerprint(false);
-        setAnalyzedSuccessfully(true);
-      }
-    }, 280);
+      let currentStep = 0;
+      const interval = setInterval(() => {
+        try {
+          if (currentStep < logsSteps.length) {
+            const nextLog = logsSteps[currentStep];
+            if (nextLog) {
+              setFingerprintLogs(prev => [...prev, nextLog]);
+            }
+            setFingerprintProgress(Math.min(100, Math.round((currentStep + 1) * (100 / logsSteps.length))));
+            currentStep++;
+          } else {
+            clearInterval(interval);
+            setIsAnalyzingFingerprint(false);
+            setAnalyzedSuccessfully(true);
+          }
+        } catch (innerErr) {
+          console.error("Error in fingerprint step interval:", innerErr);
+          clearInterval(interval);
+          setIsAnalyzingFingerprint(false);
+        }
+      }, 280);
+    } catch (err) {
+      console.error("Error starting fingerprint analysis:", err);
+      setIsAnalyzingFingerprint(false);
+    }
   };
 
   const handleRenameDevice = (id: string, newName: string) => {
@@ -4224,6 +4245,7 @@ export default function App() {
       {/* FLOAT MODE DIAGNOSTIC MODAL */}
       {selectedDevice && (() => {
         const activeDiagDevice = processedDevices.find(d => d.id === selectedDevice.id) || selectedDevice;
+        if (!activeDiagDevice) return null;
         return (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
             <div className="bg-[#0F172A] rounded-xs border border-slate-800 w-full max-w-sm shadow-2xl overflow-hidden font-sans">
@@ -4594,17 +4616,20 @@ export default function App() {
                             
                             {/* Live packet logs console */}
                             <div className="bg-slate-950 border border-slate-800 p-2 rounded-xs h-[160px] overflow-y-auto text-[9.5px] font-mono text-slate-400 space-y-1 scrollbar-thin text-left pr-1 select-none">
-                              {fingerprintLogs.map((log, index) => (
-                                <div key={index} className={`leading-relaxed border-b border-slate-950/20 pb-0.5 last:border-0 ${
-                                  log.includes('[SUCCESS]') ? 'text-emerald-400 font-bold' :
-                                  log.includes('[ICMP]') ? 'text-cyan-300' :
-                                  log.includes('[HTTP]') ? 'text-amber-400' :
-                                  log.includes('[ANALYSIS]') ? 'text-indigo-300' :
-                                  'text-slate-400'
-                                }`}>
-                                  {log}
-                                </div>
-                              ))}
+                              {fingerprintLogs.map((log, index) => {
+                                if (!log || typeof log !== 'string') return null;
+                                return (
+                                  <div key={index} className={`leading-relaxed border-b border-slate-950/20 pb-0.5 last:border-0 ${
+                                    log.includes('[SUCCESS]') ? 'text-emerald-400 font-bold' :
+                                    log.includes('[ICMP]') ? 'text-cyan-300' :
+                                    log.includes('[HTTP]') ? 'text-amber-400' :
+                                    log.includes('[ANALYSIS]') ? 'text-indigo-300' :
+                                    'text-slate-400'
+                                  }`}>
+                                    {log}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
