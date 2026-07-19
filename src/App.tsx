@@ -4,7 +4,7 @@ import {
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
   ChevronDown, Monitor, Copy, Plus, Play, Pause, ExternalLink, HelpCircle, 
   ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable,
-  Gauge, Menu, X, Shield, MapPin
+  Gauge, Menu, X, Shield, MapPin, Tv
 } from 'lucide-react';
 
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
@@ -863,6 +863,51 @@ export default function App() {
   const [fingerprintProgress, setFingerprintProgress] = useState<number>(0);
   const [fingerprintLogs, setFingerprintLogs] = useState<string[]>([]);
   const [analyzedSuccessfully, setAnalyzedSuccessfully] = useState<boolean>(false);
+  const [copiedFingerprint, setCopiedFingerprint] = useState<boolean>(false);
+
+  // Helper to resolve specific Operating System icons and color schemes dynamically
+  const getOSIconAndColor = (os: string) => {
+    const lower = String(os || '').toLowerCase();
+    if (lower.includes('windows')) {
+      return { icon: Monitor, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
+    }
+    if (lower.includes('macos') || lower.includes('ios') || lower.includes('ipad') || lower.includes('apple')) {
+      return { icon: Globe, color: 'text-slate-300 bg-slate-500/10 border-slate-500/20' };
+    }
+    if (lower.includes('linux') || lower.includes('ubuntu') || lower.includes('debian')) {
+      return { icon: Terminal, color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' };
+    }
+    if (lower.includes('android')) {
+      return { icon: Sparkles, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
+    }
+    if (lower.includes('cisco') || lower.includes('router') || lower.includes('mikrotik') || lower.includes('gateway')) {
+      return { icon: Radio, color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' };
+    }
+    if (lower.includes('tv') || lower.includes('tizen')) {
+      return { icon: Tv, color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' };
+    }
+    if (lower.includes('iot') || lower.includes('esp32') || lower.includes('cortex') || lower.includes('microcontrolado') || lower.includes('cámara') || lower.includes('embebido')) {
+      return { icon: Cpu, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+    }
+    return { icon: Cpu, color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' };
+  };
+
+  const copyFingerprintReport = (device: Device) => {
+    const report = `=== REPORTE DE HUELLA DIGITAL (OS FINGERPRINTING) ===
+IP: ${device.ip || '0.0.0.0'}
+MAC: ${device.mac || '00:00:00:00:00:00'}
+Fabricante: ${device.vendor || 'Desconocido'}
+S.O. Deducido: ${device.osDeducido || 'Incierto'}
+Signatura TTL: TTL=${device.ttl || 64} (${device.ttlOs || 'Unix/Linux'})
+HTTP Server Header: ${device.httpServer || 'No expone puerto 80'}
+User-Agent: ${device.userAgent || 'Sin solicitudes capturadas'}
+Metodo: Inspeccion Activa de Capa 3 y Capa 7 (DPI)
+Generado por: RedMonitor Network Diagnostic Tool`;
+
+    navigator.clipboard.writeText(report);
+    setCopiedFingerprint(true);
+    setTimeout(() => setCopiedFingerprint(false), 2000);
+  };
 
   // Synchronize renaming and brand fields on selecting a device or state change
   useEffect(() => {
@@ -4638,9 +4683,25 @@ export default function App() {
                           <div className="space-y-3">
                             {/* Completed telemetry results view */}
                             <div className="bg-slate-950 border border-slate-800 rounded-xs p-2.5 space-y-2 text-left font-mono text-[10.5px]">
-                              <div className="border-b border-slate-900 pb-1 flex justify-between">
+                              <div className="border-b border-slate-900 pb-1 flex justify-between items-center">
                                 <span className="text-slate-500">MÉTODO DE ANÁLISIS:</span>
-                                <span className="text-cyan-400 font-bold font-sans text-[10px]">INSPECCIÓN ACTIVA (DPI)</span>
+                                <button 
+                                  onClick={() => copyFingerprintReport(activeDiagDevice)}
+                                  className="text-[9px] px-1.5 py-0.5 bg-slate-900 hover:bg-slate-850 text-cyan-400 border border-slate-800 rounded flex items-center gap-1 cursor-pointer transition-colors font-sans"
+                                  title="Copiar reporte completo al portapapeles"
+                                >
+                                  {copiedFingerprint ? (
+                                    <>
+                                      <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
+                                      <span className="text-emerald-400 font-bold">¡Copiado!</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="h-2.5 w-2.5 text-cyan-400" />
+                                      <span>Copiar Reporte</span>
+                                    </>
+                                  )}
+                                </button>
                               </div>
 
                               <div className="space-y-1.5 pt-0.5">
@@ -4668,8 +4729,15 @@ export default function App() {
 
                                 <div className="border-t border-slate-900 pt-1.5 mt-2">
                                   <span className="text-slate-500 text-[9px] block uppercase font-bold">Resultado de Huella Unificada</span>
-                                  <div className="text-emerald-400 font-bold font-sans text-xs flex items-center gap-1.5 mt-0.5 font-sans">
-                                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                  <div className="text-emerald-400 font-bold font-sans text-xs flex items-center gap-2 mt-1 font-sans">
+                                    {(() => {
+                                      const { icon: OSIcon, color } = getOSIconAndColor(activeDiagDevice.osDeducido);
+                                      return (
+                                        <div className={`p-1 rounded ${color} border shrink-0 flex items-center justify-center`}>
+                                          <OSIcon className="h-4 w-4" />
+                                        </div>
+                                      );
+                                    })()}
                                     <span>{activeDiagDevice.osDeducido}</span>
                                   </div>
                                 </div>
