@@ -1702,28 +1702,6 @@ Generado por: RedMonitor Network Diagnostic Tool`;
     const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
     const segmentsToScan = scanAllSegments ? currentInterfaceObj.segments : [subnetSegment];
 
-    // Reset scanned segment devices to 'No_Escaneado' so they appear in real-time on the radar in sync with progress
-    setDevices(prev => {
-      const nextPool = [...prev];
-      segmentsToScan.forEach(seg => {
-        nextPool.forEach((d, idx) => {
-          if (d.segmento === seg) {
-            nextPool[idx] = {
-              ...d,
-              estado: 'No_Escaneado' as const,
-              ping: null,
-              lastChecked: null,
-              sensorPing: false,
-              consumoDownload: 0,
-              consumoUpload: 0,
-              totalConsumido: 0
-            };
-          }
-        });
-      });
-      return nextPool;
-    });
-
     // Generate final target pools for all selected segments with custom manual IP overrides
     const finalTargetsMap: Record<string, Device[]> = {};
     segmentsToScan.forEach(seg => {
@@ -1794,6 +1772,29 @@ Generado por: RedMonitor Network Diagnostic Tool`;
       } else {
         finalTargetsMap[seg] = rawTargets;
       }
+    });
+
+    // Pre-populate devices in state with 'No_Escaneado' status so they are found and updated dynamically
+    setDevices(prev => {
+      let nextPool = prev.filter(d => !segmentsToScan.includes(d.segmento));
+      segmentsToScan.forEach(seg => {
+        const currentTargets = finalTargetsMap[seg];
+        if (currentTargets) {
+          currentTargets.forEach(t => {
+            nextPool.push({
+              ...t,
+              estado: 'No_Escaneado' as const,
+              ping: null,
+              lastChecked: null,
+              sensorPing: false,
+              consumoDownload: 0,
+              consumoUpload: 0,
+              totalConsumido: 0
+            });
+          });
+        }
+      });
+      return nextPool;
     });
 
     let realHosts: any[] = [];
@@ -1905,6 +1906,11 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                 ...t,
                 lastChecked: new Date().toLocaleTimeString(),
               };
+            } else {
+              nextPool.push({
+                ...t,
+                lastChecked: new Date().toLocaleTimeString(),
+              });
             }
           });
         }
@@ -1933,6 +1939,11 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                     ...t,
                     lastChecked: new Date().toLocaleTimeString(),
                   };
+                } else {
+                  nextPool.push({
+                    ...t,
+                    lastChecked: new Date().toLocaleTimeString(),
+                  });
                 }
               });
             }
