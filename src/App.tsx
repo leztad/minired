@@ -1697,6 +1697,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
     setIsScanning(true);
     setScanProgress(0);
     setScannedIndex(0);
+    setActiveView('vista_general');
 
     const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
     const segmentsToScan = scanAllSegments ? currentInterfaceObj.segments : [subnetSegment];
@@ -2030,6 +2031,125 @@ Generado por: RedMonitor Network Diagnostic Tool`;
     }, intervalStep);
 
     scanTimerRef.current = timer;
+  };
+
+  const handleSkipScan = () => {
+    if (!isScanning) return;
+    if (scanTimerRef.current) {
+      clearInterval(scanTimerRef.current);
+      scanTimerRef.current = null;
+    }
+    setScanProgress(100);
+    setScannedIndex(254);
+    
+    const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+    const segmentsToScan = scanAllSegments ? currentInterfaceObj.segments : [subnetSegment];
+    
+    setDevices(prev => {
+      const nextPool = [...prev];
+      segmentsToScan.forEach(seg => {
+        const rawTargets = generateFullSubnet(seg, includeVirtuals, selectedInterface, isDemoMode);
+        
+        if (deviceManualIp) {
+          const trimmedManualIp = deviceManualIp.trim();
+          const manualSubnet = extractSubnetFromIp(trimmedManualIp);
+          const isIpInThisSegment = seg === manualSubnet;
+          
+          if (isIpInThisSegment) {
+            rawTargets.forEach((d, idx_t) => {
+              if (d.ip === trimmedManualIp) {
+                let workstationName = 'Laptop de Trabajo (Este PC)';
+                if (selectedInterface.includes('PCIe')) {
+                  workstationName = 'Estación de Trabajo (Este PC)';
+                } else if (selectedInterface.includes('Loopback') || selectedInterface.includes('Virtual')) {
+                  workstationName = 'Nodo Docker Host (Este PC)';
+                }
+                rawTargets[idx_t] = {
+                  ...d,
+                  host: workstationName,
+                  mac: '84:C8:A0:BB:AB:66',
+                  ping: 3,
+                  estado: 'OK' as const,
+                  sensorPing: true,
+                  consumoDownload: 8.5,
+                  consumoUpload: 2.1,
+                  totalConsumido: 1120.0,
+                  interfaz: selectedInterface,
+                  segmento: seg
+                };
+              } else {
+                const parts = d.ip.split('.');
+                if (parts[3] === '55' && d.ip !== trimmedManualIp) {
+                  rawTargets[idx_t] = {
+                    ...d,
+                    host: '—',
+                    mac: '—',
+                    ping: null,
+                    estado: 'Caído' as const,
+                    sensorPing: false,
+                    consumoDownload: 0,
+                    consumoUpload: 0,
+                    totalConsumido: 0,
+                    interfaz: selectedInterface,
+                    segmento: seg
+                  };
+                }
+              }
+            });
+          }
+        }
+        
+        rawTargets.forEach(t => {
+          const idx = nextPool.findIndex(d => d.ip === t.ip);
+          const deviceObj = {
+            ...t,
+            lastChecked: new Date().toLocaleTimeString(),
+          };
+          if (idx !== -1) {
+            nextPool[idx] = deviceObj;
+          } else {
+            nextPool.push(deviceObj);
+          }
+        });
+      });
+      
+      const generatedSensors = generateSensorsForDevices(nextPool);
+      setSensors(generatedSensors);
+      
+      const now = new Date();
+      const scanTimeStr = now.toLocaleString('es-ES', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+      });
+      
+      const activeHostsFiltered = nextPool.filter(d => 
+        (d.estado === 'OK' || d.estado === 'Advertencia') && 
+        segmentsToScan.includes(d.segmento || '')
+      );
+      const liveHostsCount = activeHostsFiltered.length;
+      
+      setLastScanTimeStr(scanTimeStr);
+      setScanDurationSec(0.2);
+      setLastScanDone(true);
+      setIsScanning(false);
+      
+      const validPings = activeHostsFiltered.filter(d => d.ping !== null).map(d => d.ping as number);
+      const avgPing = validPings.length > 0 ? Math.round(validPings.reduce((a, b) => a + b, 0) / validPings.length) : 0;
+      
+      setHistoryData(hPrev => [
+        ...hPrev,
+        {
+          timeLabels: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          hostsActivos: liveHostsCount,
+          latenciaMedia: avgPing
+        }
+      ].slice(-8));
+      
+      return nextPool;
+    });
+    
+    addAlert("⚡ Escaneo acelerado e inyectado con éxito.", "success");
   };
 
   // Preset Segment scan autofills with real-time hardware dynamic detection
@@ -3617,7 +3737,185 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           
           {/* RENDER CHOSEN COMPONENT PATH */}
           {activeView === 'vista_general' && (
-            <div className="space-y-4">
+            isScanning ? (
+              <div className="space-y-6 animate-fade-in font-sans">
+                {/* Sonar de barrido activo panel */}
+                <div className="bg-[#0B1120]/60 border border-slate-800 rounded-xl p-6 shadow-2xl relative overflow-hidden tech-grid">
+                  <div className="absolute top-0 right-0 p-4 font-mono text-[9px] text-cyan-400/40 select-none">
+                    SYS_RADAR_V1.0 // ACTIVE_PING
+                  </div>
+                  
+                  <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
+                    {/* RADAR SWEEP AREA */}
+                    <div className="relative w-72 h-72 sm:w-80 sm:h-80 rounded-full bg-[#050811] border border-cyan-500/20 shadow-[0_0_50px_rgba(6,182,212,0.05)] overflow-hidden flex-shrink-0 flex items-center justify-center">
+                      
+                      {/* Concentric Sonar Rings */}
+                      <div className="absolute inset-0 border border-cyan-500/10 rounded-full scale-95 animate-pulse"></div>
+                      <div className="absolute inset-10 border border-cyan-500/10 rounded-full"></div>
+                      <div className="absolute inset-20 border border-cyan-500/5 rounded-full"></div>
+                      <div className="absolute inset-32 border border-cyan-500/5 rounded-full"></div>
+                      <div className="absolute inset-44 border border-cyan-500/5 rounded-full"></div>
+                      
+                      {/* Grid crosshairs */}
+                      <div className="absolute top-1/2 left-0 right-0 h-px border-t border-dashed border-cyan-500/15"></div>
+                      <div className="absolute left-1/2 top-0 bottom-0 w-px border-l border-dashed border-cyan-500/15"></div>
+                      
+                      {/* Glowing Radar sweep line */}
+                      <div 
+                        className="absolute inset-0 origin-center animate-[spin_4s_linear_infinite]" 
+                        style={{ 
+                          background: 'conic-gradient(from 0deg, transparent 50%, rgba(6, 182, 212, 0.2) 100%)',
+                          borderRadius: '50%'
+                        }}
+                      ></div>
+                      
+                      {/* Central pulsing node */}
+                      <div className="absolute w-4 h-4 bg-cyan-500 rounded-full shadow-[0_0_15px_rgba(6,182,212,0.8)] z-10 flex items-center justify-center border border-white/20">
+                        <div className="absolute inset-0 bg-cyan-400 rounded-full animate-ping opacity-75"></div>
+                      </div>
+
+                      {/* Deterministic Radar targets */}
+                      {(() => {
+                        const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+                        const segmentsToScan = scanAllSegments ? currentInterfaceObj.segments : [subnetSegment];
+                        
+                        return devices
+                          .filter(d => segmentsToScan.includes(d.segmento) && d.estado === 'OK')
+                          .map((d) => {
+                            const parts = d.ip.split('.');
+                            const lastOctet = parseInt(parts[3] || '0', 10);
+                            if (isNaN(lastOctet)) return null;
+                            const angle = (lastOctet * 137.5) * (Math.PI / 180);
+                            const radius = 22 + (lastOctet % 7) * 9; // radius between 22% and 85%
+                            const x = 50 + radius * Math.cos(angle);
+                            const y = 50 + radius * Math.sin(angle);
+                            
+                            return (
+                              <div 
+                                key={d.id} 
+                                className="absolute w-3 h-3 bg-emerald-400 rounded-full border border-emerald-350 shadow-[0_0_10px_rgba(52,211,153,0.8)] flex items-center justify-center animate-pulse animate-fade-in"
+                                style={{ top: `${y}%`, left: `${x}%`, transform: 'translate(-50%, -50%)' }}
+                              >
+                                <span className="absolute text-[8px] font-mono text-emerald-400 font-semibold bg-slate-950/90 border border-emerald-950/40 px-1 py-0.5 rounded -top-5 left-1/2 -translate-x-1/2 opacity-75 whitespace-nowrap">
+                                  {d.ip}
+                                </span>
+                              </div>
+                            );
+                          });
+                      })()}
+                    </div>
+
+                    {/* METRICS AND STATUS AREA */}
+                    <div className="flex-1 text-left space-y-4">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 font-mono bg-cyan-950/40 border border-cyan-800/30 px-2 py-0.5 rounded">
+                          Barrido de Red en Curso
+                        </span>
+                        <h2 className="text-xl font-bold tracking-tight text-white mt-2 font-display">
+                          Escaneando Interfaces y Subredes...
+                        </h2>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Enviando peticiones de ping ICMP activas en paralelo. La topología de red se está resolviendo dinámicamente.
+                        </p>
+                      </div>
+
+                      {/* Giant digital read-out */}
+                      <div className="bg-[#050811] border border-slate-900 rounded-lg p-4 flex items-center justify-between gap-4 shadow-inner">
+                        <div>
+                          <span className="text-[10px] font-mono text-slate-500 uppercase font-semibold">Progreso Unificado</span>
+                          <div className="text-4xl font-mono font-bold tracking-tight text-white mt-1 flex items-baseline gap-1">
+                            <span className="text-cyan-400 font-display">{scanProgress}</span>
+                            <span className="text-sm text-slate-500">%</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] font-mono text-slate-500 uppercase font-semibold">Subred Objetivo</span>
+                          <div className="text-sm font-mono font-bold text-slate-350 mt-1">
+                            {currentScanningSegName || subnetSegment}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Custom styled progress bar */}
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-[11px] font-mono">
+                          <span className="text-slate-400">Ráfagas enviadas: <strong className="text-slate-200">{scannedIndex * 4}</strong></span>
+                          <span className="text-cyan-400 font-bold">{scanProgress}%</span>
+                        </div>
+                        <div className="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-900 shadow-inner">
+                          <div 
+                            className="bg-gradient-to-r from-cyan-500 to-indigo-500 h-full transition-all duration-150 relative" 
+                            style={{ width: `${scanProgress}%` }}
+                          >
+                            <div className="absolute top-0 right-0 bottom-0 w-2 bg-white/40 blur-xs"></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Information logs */}
+                      <div className="grid grid-cols-2 gap-3 text-[11px]">
+                        <div className="bg-[#050811]/50 border border-slate-900 p-2.5 rounded-sm">
+                          <span className="text-slate-500 block">Hosts Activos:</span>
+                          <span className="text-emerald-400 font-bold font-mono text-sm">
+                            {devices.filter(d => {
+                              const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+                              const segmentsToScan = scanAllSegments ? currentInterfaceObj.segments : [subnetSegment];
+                              return segmentsToScan.includes(d.segmento) && d.estado === 'OK';
+                            }).length}
+                          </span>
+                        </div>
+                        <div className="bg-[#050811]/50 border border-slate-900 p-2.5 rounded-sm">
+                          <span className="text-slate-500 block">Tasa de Envío:</span>
+                          <span className="text-cyan-400 font-bold font-mono text-sm">~250 pps</span>
+                        </div>
+                      </div>
+
+                      {/* Skip button container */}
+                      <div className="pt-2 flex gap-3">
+                        <button
+                          onClick={handleSkipScan}
+                          className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-2 px-4 rounded-xs text-xs flex items-center justify-center gap-1.5 transition-all shadow-md hover:shadow-cyan-500/10 cursor-pointer"
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          Presentar Resultados Ahora
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ACTIVE SCROLLING TELEMETRY LOGGER */}
+                  <div className="mt-6 border-t border-slate-800/40 pt-4 text-left">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-display block mb-2 flex items-center gap-1.5">
+                      <Terminal className="h-3.5 w-3.5 text-cyan-400" /> Terminal de Sonda Activa
+                    </span>
+                    <div className="bg-[#050811] border border-slate-900 p-3 rounded-md h-36 overflow-y-auto font-mono text-[10.5px] text-slate-400 space-y-1.5 scrollbar-thin select-none">
+                      <div className="text-cyan-400/70">[SYS] Iniciando hilos paralelos ICMP Socket v4...</div>
+                      <div className="text-cyan-400/70">[SYS] Escaneando interfaz {selectedInterface} ({subnetSegment})</div>
+                      
+                      {devices
+                        .filter(d => {
+                          const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+                          const segmentsToScan = scanAllSegments ? currentInterfaceObj.segments : [subnetSegment];
+                          return segmentsToScan.includes(d.segmento) && d.estado === 'OK';
+                        })
+                        .map((d, idx) => (
+                          <div key={d.id} className="text-emerald-400 flex items-center gap-2 animate-fade-in font-semibold font-mono">
+                            <span className="text-slate-600">[{d.lastChecked}]</span>
+                            <span>✔ [HOST ENCONTRADO] IP: {d.ip} | MAC: {d.mac} | RTT: {d.ping}ms | {d.host}</span>
+                          </div>
+                        ))
+                      }
+                      
+                      <div className="text-slate-500 animate-pulse flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-ping shrink-0" />
+                        <span>[SONDA] Barriendo bloque ip: {subnetSegment.split('.0/')[0] || '192.168.1'}.{scannedIndex}...</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
               
               {/* INTERACTIVE SEGMENTS TAB SELECTOR (Supports custom multi-segment view states) */}
               <div className="bg-[#0B1120]/40 border border-slate-800/80 p-3.5 rounded-md flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -4120,7 +4418,8 @@ Generado por: RedMonitor Network Diagnostic Tool`;
               </div>
 
             </div>
-          )}
+          )
+        )}
 
           {activeView === 'sensores' && (
             <SensorTable sensors={sensors} isScanning={isScanning} />
