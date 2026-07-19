@@ -1702,93 +1702,27 @@ Generado por: RedMonitor Network Diagnostic Tool`;
     const currentInterfaceObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
     const segmentsToScan = scanAllSegments ? currentInterfaceObj.segments : [subnetSegment];
 
-    let realHosts: any[] = [];
-    // Pass the active subnet segment to the backend so it knows exactly which /24 scope to actively ping
-    fetch(`/api/scan-real-arp?subnet=${encodeURIComponent(subnetSegment)}&isCloud=${isHostedInCloud}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && Array.isArray(data.devices)) {
-          realHosts = data.devices;
-          if (realHosts.length > 0) {
-            addAlert(`Sonda ARP física completada: Se encontraron ${realHosts.length} dispositivos reales conectados en tu misma red local.`, 'success');
-            
-            // Immediately apply real host results to React state to prevent timing discard
-            setDevices(prev => {
-              const nextPool = [...prev];
-              realHosts.forEach(r => {
-                const rSubnet = extractSubnetFromIp(r.ip);
-                if (segmentsToScan.includes(rSubnet)) {
-                  const idx = nextPool.findIndex(d => d.ip === r.ip);
-                  const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
-                  const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
-                  const isThisPc = r.ip === currentInterfaceObj.ip;
-                  
-                  let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
-                  const labelLower = nameLabel.toLowerCase();
-                  if (
-                    labelLower.includes('genérico') || 
-                    labelLower.includes('generico') || 
-                    labelLower.includes('dispositivo lan') || 
-                    labelLower.includes('dispositivo de red') || 
-                    labelLower.includes('sonda de red') || 
-                    nameLabel === '—'
-                  ) {
-                    nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
-                  }
-                  let hostNameStr = nameLabel;
-                  if (isThisPc) {
-                    hostNameStr = `Este PC (${nameLabel})`;
-                  } else if (isGateway) {
-                    hostNameStr = `Gateway/Router (${nameLabel})`;
-                  }
-
-                  const deviceObj = {
-                    id: `host-${r.ip.replace(/\./g, '_')}`,
-                    ip: r.ip,
-                    host: hostNameStr,
-                    mac: macToUse,
-                    ping: r.ping || 4,
-                    estado: 'OK' as const,
-                    lastChecked: new Date().toLocaleTimeString(),
-                    sensorPing: true,
-                    sensorHttp: isGateway || isThisPc,
-                    consumoDownload: isThisPc ? 8.5 : Number((Math.random() * 5).toFixed(1)),
-                    consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
-                    totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
-                    interfaz: selectedInterface,
-                    segmento: rSubnet,
-                    vendor: r.vendor,
-                    serialNumber: r.serialNumber
-                  };
-
-                  if (idx !== -1) {
-                    nextPool[idx] = deviceObj;
-                  } else {
-                    nextPool.push(deviceObj);
-                  }
-                }
-              });
-
-              // Recompute sensors immediately for live dashboard health
-              const generatedSensors = generateSensorsForDevices(nextPool);
-              setSensors(generatedSensors);
-              return nextPool;
-            });
+    // Reset scanned segment devices to 'No_Escaneado' so they appear in real-time on the radar in sync with progress
+    setDevices(prev => {
+      const nextPool = [...prev];
+      segmentsToScan.forEach(seg => {
+        nextPool.forEach((d, idx) => {
+          if (d.segmento === seg) {
+            nextPool[idx] = {
+              ...d,
+              estado: 'No_Escaneado' as const,
+              ping: null,
+              lastChecked: null,
+              sensorPing: false,
+              consumoDownload: 0,
+              consumoUpload: 0,
+              totalConsumido: 0
+            };
           }
-        }
-      })
-      .catch(err => {
-        console.warn("ARP real host scanner skipped (sandboxed background controller active):", err);
-        addAlert("🔌 Sonda física offline: No se pudo contactar al router real de la LAN. Operando en modo de simulación segura de hardware.", "warning");
+        });
       });
-
-    addAlert(`Iniciando escaneo secuencial ICMP en ${segmentsToScan.length} segmento(s) registrado(s) para ${selectedInterface}...`, 'info');
-
-    let segmentIndex = 0;
-    let stepCount = 0;
-    const totalStepsPerSegment = 12; // 12 updates per segment is fast and gorgeous
-    const totalSteps = totalStepsPerSegment * segmentsToScan.length;
-    const intervalStep = 100; // total: ~1.2s per subnet, super responsive!
+      return nextPool;
+    });
 
     // Generate final target pools for all selected segments with custom manual IP overrides
     const finalTargetsMap: Record<string, Device[]> = {};
@@ -1861,6 +1795,91 @@ Generado por: RedMonitor Network Diagnostic Tool`;
         finalTargetsMap[seg] = rawTargets;
       }
     });
+
+    let realHosts: any[] = [];
+    // Pass the active subnet segment to the backend so it knows exactly which /24 scope to actively ping
+    fetch(`/api/scan-real-arp?subnet=${encodeURIComponent(subnetSegment)}&isCloud=${isHostedInCloud}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.devices)) {
+          realHosts = data.devices;
+          if (realHosts.length > 0) {
+            addAlert(`Sonda ARP física completada: Se encontraron ${realHosts.length} dispositivos reales conectados en tu misma red local. El radar los mostrará en su barrido.`, 'success');
+            
+            // Merge real hosts into finalTargetsMap so they are discovered dynamically
+            realHosts.forEach(r => {
+              const rSubnet = extractSubnetFromIp(r.ip);
+              const targets = finalTargetsMap[rSubnet];
+              if (targets) {
+                const idx = targets.findIndex(t => t.ip === r.ip);
+                
+                const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
+                const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
+                const isThisPc = r.ip === currentInterfaceObj.ip;
+                
+                let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
+                const labelLower = nameLabel.toLowerCase();
+                if (
+                  labelLower.includes('genérico') || 
+                  labelLower.includes('generico') || 
+                  labelLower.includes('dispositivo lan') || 
+                  labelLower.includes('dispositivo de red') || 
+                  labelLower.includes('sonda de red') || 
+                  nameLabel === '—'
+                ) {
+                  nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
+                }
+                let hostNameStr = nameLabel;
+                if (isThisPc) {
+                  hostNameStr = `Este PC (${nameLabel})`;
+                } else if (isGateway) {
+                  hostNameStr = `Gateway/Router (${nameLabel})`;
+                }
+
+                const updatedDevice = {
+                  id: `host-${r.ip.replace(/\./g, '_')}`,
+                  ip: r.ip,
+                  host: hostNameStr,
+                  mac: macToUse,
+                  ping: r.ping || 4,
+                  estado: 'OK' as const,
+                  lastChecked: new Date().toLocaleTimeString(),
+                  sensorPing: true,
+                  sensorHttp: isGateway || isThisPc,
+                  consumoDownload: isThisPc ? 8.5 : Number((Math.random() * 5).toFixed(1)),
+                  consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
+                  totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
+                  interfaz: selectedInterface,
+                  segmento: rSubnet,
+                  vendor: r.vendor,
+                  serialNumber: r.serialNumber
+                };
+
+                if (idx !== -1) {
+                  targets[idx] = updatedDevice;
+                } else {
+                  targets.push(updatedDevice);
+                }
+              }
+            });
+          }
+        }
+      })
+      .catch(err => {
+        console.warn("ARP real host scanner skipped (sandboxed background controller active):", err);
+        addAlert("🔌 Sonda física offline: No se pudo contactar al router real de la LAN. Operando en modo de simulación segura de hardware.", "warning");
+      });
+
+    addAlert(`Iniciando escaneo secuencial ICMP en ${segmentsToScan.length} segmento(s) registrado(s) para ${selectedInterface}...`, 'info');
+
+    let segmentIndex = 0;
+    let stepCount = 0;
+
+    // Smooth total scanning time of 4.5 seconds
+    const totalDurationMs = 4500;
+    const totalStepsPerSegment = 24; // smooth increments
+    const totalSteps = totalStepsPerSegment * segmentsToScan.length;
+    const intervalStep = Math.max(80, Math.round(totalDurationMs / totalSteps));
 
     const timer = setInterval(() => {
       stepCount++;
