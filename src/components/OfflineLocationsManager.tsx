@@ -92,6 +92,19 @@ export default function OfflineLocationsManager({
   const [layoutType, setLayoutType] = useState<'hierarchical' | 'radial' | 'grid'>(() => {
     return (localStorage.getItem('redmonitor_topo_layout') as 'hierarchical' | 'radial' | 'grid') || 'hierarchical';
   });
+
+  const [showIPs, setShowIPs] = useState<boolean>(() => {
+    return localStorage.getItem('redmonitor_topo_show_ips') !== 'false';
+  });
+
+  const [showLabels, setShowLabels] = useState<boolean>(() => {
+    return localStorage.getItem('redmonitor_topo_show_labels') !== 'false';
+  });
+
+  const [spacingMultiplier, setSpacingMultiplier] = useState<number>(() => {
+    const val = localStorage.getItem('redmonitor_topo_spacing');
+    return val ? parseFloat(val) : 1.4;
+  });
   
   // Create / Edit location form states
   const [isCreating, setIsCreating] = useState(false);
@@ -283,9 +296,13 @@ export default function OfflineLocationsManager({
       return { role, label };
     };
 
+    // Keep nodes within visible bounds
+    const constrainX = (val: number) => Math.max(70, Math.min(880, val));
+    const constrainY = (val: number) => Math.max(55, Math.min(495, val));
+
     if (layoutType === 'radial') {
-      const centerX = 300;
-      const centerY = 200;
+      const centerX = 475;
+      const centerY = 265;
 
       // Add central Gateway / Router node
       if (gatewayDevice) {
@@ -312,12 +329,12 @@ export default function OfflineLocationsManager({
         });
       }
 
-      // Distribute on concentric ring
-      const radius = 130;
+      // Distribute on concentric ring with safety margin
+      const radius = 175 * spacingMultiplier;
       otherDevices.forEach((d, index) => {
         const angle = (index * 2 * Math.PI) / otherDevices.length;
-        const x = centerX + radius * Math.cos(angle);
-        const y = centerY + radius * Math.sin(angle);
+        const x = constrainX(centerX + radius * Math.cos(angle));
+        const y = constrainY(centerY + radius * Math.sin(angle));
         const { role, label } = getDeviceRoleAndLabel(d);
 
         nodes.push({
@@ -333,13 +350,13 @@ export default function OfflineLocationsManager({
       });
 
     } else if (layoutType === 'hierarchical') {
-      // Top-Down simplified layout: 3 horizontal levels
-      // Level 1: Gateway/Router at Top center (X=300, Y=60)
-      // Level 2: Servers in middle (X spaced, Y=175)
-      // Level 3: Printers and clients at bottom (X spaced, Y=300)
+      // Top-Down simplified layout: 3 horizontal levels (perfect for tree topology)
+      // Level 1: Gateway/Router at Top center (X=475, Y=65)
+      // Level 2: Servers in middle (X spaced, Y=190 * spacing)
+      // Level 3: Printers and clients at bottom (X spaced, Y=330 * spacing)
       
-      const gatewayX = 300;
-      const gatewayY = 60;
+      const gatewayX = 475;
+      const gatewayY = 65;
 
       if (gatewayDevice) {
         nodes.push({
@@ -375,14 +392,14 @@ export default function OfflineLocationsManager({
       const endpoints = typedOtherDevices.filter(item => item.role !== 'server');
 
       // Lay out servers (Level 2)
-      const serversY = 175;
+      const serversY = constrainY(65 + 125 * spacingMultiplier);
       const serverCount = servers.length;
       servers.forEach((item, index) => {
-        let x = 300;
+        let x = 475;
         if (serverCount > 1) {
-          const span = 400; // Total horizontal span width
+          const span = Math.min(750, 420 * spacingMultiplier); // Dynamic span width
           const step = span / (serverCount - 1);
-          x = 100 + index * step;
+          x = constrainX(475 - span / 2 + index * step);
         }
         nodes.push({
           id: item.device.id,
@@ -400,36 +417,38 @@ export default function OfflineLocationsManager({
       const endpointCount = endpoints.length;
       
       if (endpointCount > 0) {
-        // If there are many endpoints, split them into two sub-rows (e.g. at Y=280 and Y=340) to make it super simple and clean
-        const splitRows = endpointCount > 6;
+        // If there are many endpoints, split them into two sub-rows to prevent horizontal overlapping
+        const splitRows = endpointCount > 5;
         const row1Count = splitRows ? Math.ceil(endpointCount / 2) : endpointCount;
         const row2Count = endpointCount - row1Count;
 
         endpoints.forEach((item, index) => {
-          let x = 300;
-          let y = 300;
+          let x = 475;
+          let y = constrainY(65 + 260 * spacingMultiplier);
 
           if (splitRows) {
             const isRow1 = index < row1Count;
             const rowIndex = isRow1 ? index : index - row1Count;
             const currentRowCount = isRow1 ? row1Count : row2Count;
-            y = isRow1 ? 275 : 340;
+            
+            // Draw row 1 slightly higher and row 2 slightly lower
+            y = constrainY(isRow1 ? (65 + 235 * spacingMultiplier) : (65 + 325 * spacingMultiplier));
 
+            const span = Math.min(820, 580 * spacingMultiplier);
             if (currentRowCount > 1) {
-              const span = 460;
               const step = span / (currentRowCount - 1);
-              x = 70 + rowIndex * step;
+              x = constrainX(475 - span / 2 + rowIndex * step);
             } else {
-              x = 300;
+              x = 475;
             }
           } else {
-            y = 300;
+            y = constrainY(65 + 260 * spacingMultiplier);
+            const span = Math.min(820, 580 * spacingMultiplier);
             if (endpointCount > 1) {
-              const span = 460;
               const step = span / (endpointCount - 1);
-              x = 70 + index * step;
+              x = constrainX(475 - span / 2 + index * step);
             } else {
-              x = 300;
+              x = 475;
             }
           }
 
@@ -447,20 +466,20 @@ export default function OfflineLocationsManager({
       }
 
     } else if (layoutType === 'grid') {
-      // 4 Columns Grid layout (Bento block style), extremely clean
+      // Columns Grid layout (Bento block style), extremely clean & spacious
       const cols = 4;
-      const colWidth = 130;
-      const rowHeight = 85;
-      const startX = 300 - ((cols - 1) * colWidth) / 2;
-      const startY = 75;
+      const colWidth = Math.min(220, 150 * spacingMultiplier);
+      const rowHeight = Math.min(150, 100 * spacingMultiplier);
+      const startX = 475 - ((cols - 1) * colWidth) / 2;
+      const startY = 85;
 
       const allDevices = [...(gatewayDevice ? [gatewayDevice] : []), ...otherDevices];
       
       allDevices.forEach((d, index) => {
         const row = Math.floor(index / cols);
         const col = index % cols;
-        const x = startX + col * colWidth;
-        const y = startY + row * rowHeight;
+        const x = constrainX(startX + col * colWidth);
+        const y = constrainY(startY + row * rowHeight);
 
         let role: 'gateway' | 'server' | 'client' | 'printer' | 'other' = 'client';
         let label = d.host === '—' ? (d.vendor || 'Dispositivo') : d.host;
@@ -488,7 +507,7 @@ export default function OfflineLocationsManager({
     }
 
     return nodes;
-  }, [selectedProfile, layoutType]);
+  }, [selectedProfile, layoutType, spacingMultiplier]);
 
   return (
     <div className="space-y-6 font-sans">
@@ -986,61 +1005,113 @@ export default function OfflineLocationsManager({
             {/* COLUMN 2: INTERACTIVE SVG TOPOLOGY MAP (Right Panel - Takes 2 spans) */}
             <div className="lg:col-span-2 space-y-5">
               <div className="bg-[#0a0f1d] border border-slate-850 p-4 rounded-lg space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-850 pb-2.5">
-                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                    <Globe className="h-4 w-4 text-cyan-400" /> Mapa Topológico Offline (Instantánea)
-                  </h4>
-                  
-                  {/* Model Graphics / Distribution Selector */}
-                  <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded border border-slate-800">
-                    <span className="text-[9px] font-mono text-slate-500 uppercase px-1 hidden md:inline">Estructura:</span>
-                    <button
-                      onClick={() => {
-                        setLayoutType('hierarchical');
-                        localStorage.setItem('redmonitor_topo_layout', 'hierarchical');
-                      }}
-                      className={`px-2 py-0.5 text-[10px] font-bold rounded-sm transition-all cursor-pointer ${
-                        layoutType === 'hierarchical'
-                          ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
-                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                      }`}
-                      title="Modelo jerárquico simplificado (Árbol LAN)"
-                    >
-                      🌳 Árbol LAN
-                    </button>
-                    <button
-                      onClick={() => {
-                        setLayoutType('radial');
-                        localStorage.setItem('redmonitor_topo_layout', 'radial');
-                      }}
-                      className={`px-2 py-0.5 text-[10px] font-bold rounded-sm transition-all cursor-pointer ${
-                        layoutType === 'radial'
-                          ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
-                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                      }`}
-                      title="Anillo / Estrella clásico"
-                    >
-                      ⭕ Anillo
-                    </button>
-                    <button
-                      onClick={() => {
-                        setLayoutType('grid');
-                        localStorage.setItem('redmonitor_topo_layout', 'grid');
-                      }}
-                      className={`px-2 py-0.5 text-[10px] font-bold rounded-sm transition-all cursor-pointer ${
-                        layoutType === 'grid'
-                          ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
-                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                      }`}
-                      title="Cuadrícula bento alineada"
-                    >
-                      ⊞ Bento Grid
-                    </button>
+                <div className="border-b border-slate-850 pb-3 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                      <Globe className="h-4 w-4 text-cyan-400" /> Mapa Topológico Offline (Instantánea)
+                    </h4>
+                    
+                    {/* Model Graphics / Distribution Selector */}
+                    <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded border border-slate-800 shrink-0">
+                      <span className="text-[9px] font-mono text-slate-500 uppercase px-1 hidden md:inline">Estructura:</span>
+                      <button
+                        onClick={() => {
+                          setLayoutType('hierarchical');
+                          localStorage.setItem('redmonitor_topo_layout', 'hierarchical');
+                        }}
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded-sm transition-all cursor-pointer ${
+                          layoutType === 'hierarchical'
+                            ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                        title="Modelo jerárquico simplificado (Árbol LAN)"
+                      >
+                        🌳 Árbol LAN
+                      </button>
+                      <button
+                        onClick={() => {
+                          setLayoutType('radial');
+                          localStorage.setItem('redmonitor_topo_layout', 'radial');
+                        }}
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded-sm transition-all cursor-pointer ${
+                          layoutType === 'radial'
+                            ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                        title="Anillo / Estrella clásico"
+                      >
+                        ⭕ Anillo
+                      </button>
+                      <button
+                        onClick={() => {
+                          setLayoutType('grid');
+                          localStorage.setItem('redmonitor_topo_layout', 'grid');
+                        }}
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded-sm transition-all cursor-pointer ${
+                          layoutType === 'grid'
+                            ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
+                            : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                        }`}
+                        title="Cuadrícula bento alineada"
+                      >
+                        ⊞ Bento Grid
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Visual controls: spacing and toggles */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1.5 border-t border-slate-900/60">
+                    <div className="flex items-center gap-3.5 text-[10px] text-slate-400">
+                      <label className="flex items-center gap-1.5 cursor-pointer hover:text-slate-200 select-none">
+                        <input
+                          type="checkbox"
+                          checked={showLabels}
+                          onChange={(e) => {
+                            setShowLabels(e.target.checked);
+                            localStorage.setItem('redmonitor_topo_show_labels', String(e.target.checked));
+                          }}
+                          className="rounded bg-slate-950 border-slate-800 text-cyan-500 focus:ring-0 focus:ring-offset-0 h-3 w-3 cursor-pointer"
+                        />
+                        <span>Mostrar Nombres</span>
+                      </label>
+
+                      <label className="flex items-center gap-1.5 cursor-pointer hover:text-slate-200 select-none">
+                        <input
+                          type="checkbox"
+                          checked={showIPs}
+                          onChange={(e) => {
+                            setShowIPs(e.target.checked);
+                            localStorage.setItem('redmonitor_topo_show_ips', String(e.target.checked));
+                          }}
+                          className="rounded bg-slate-950 border-slate-800 text-cyan-500 focus:ring-0 focus:ring-offset-0 h-3 w-3 cursor-pointer"
+                        />
+                        <span>Mostrar IPs</span>
+                      </label>
+                    </div>
+
+                    {/* Spacing multiplier slider */}
+                    <div className="flex items-center gap-2 bg-slate-950/60 px-2.5 py-1 rounded border border-slate-900/60 text-[10px] text-slate-400 w-full sm:w-auto">
+                      <span className="shrink-0 font-mono text-[9px] uppercase tracking-wider text-slate-500">Separación:</span>
+                      <input
+                        type="range"
+                        min="1.0"
+                        max="2.2"
+                        step="0.1"
+                        value={spacingMultiplier}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setSpacingMultiplier(val);
+                          localStorage.setItem('redmonitor_topo_spacing', String(val));
+                        }}
+                        className="h-1 bg-slate-850 rounded-lg appearance-none cursor-pointer accent-cyan-500 w-24 focus:outline-none"
+                      />
+                      <span className="font-mono text-cyan-400 font-bold shrink-0 min-w-[28px] text-right">{spacingMultiplier.toFixed(1)}x</span>
+                    </div>
                   </div>
                 </div>
 
                 {/* SVG TOPOLOGY RENDERING */}
-                <div className="relative bg-slate-950/80 border border-slate-900 rounded-md p-2 overflow-hidden flex items-center justify-center min-h-[380px]">
+                <div className="relative bg-slate-950/80 border border-slate-900 rounded-md p-3 overflow-hidden flex items-center justify-center min-h-[420px]">
                   {selectedProfile.devices.length === 0 ? (
                     <div className="text-center py-12 text-slate-500">
                       <Layers className="h-8 w-8 text-slate-700 mx-auto mb-2 animate-bounce" />
@@ -1048,15 +1119,15 @@ export default function OfflineLocationsManager({
                     </div>
                   ) : (
                     <svg 
-                      viewBox="0 0 600 400" 
-                      className="w-full max-w-[600px] h-auto text-white select-none font-sans"
+                      viewBox="0 0 950 550" 
+                      className="w-full h-auto text-white select-none font-sans"
                     >
                       {/* CONNECTIVITY LINES (Background lines first) */}
                       {topologyNodes.map(node => {
                         if (node.role === 'gateway') return null;
                         
                         // Find the gateway coordinates
-                        const gateway = topologyNodes.find(n => n.role === 'gateway') || { x: 300, y: 200 };
+                        const gateway = topologyNodes.find(n => n.role === 'gateway') || { x: 475, y: 265 };
                         
                         // Set stroke color based on node state
                         let strokeColor = 'rgba(6, 182, 212, 0.25)'; // Default cyan
@@ -1086,23 +1157,23 @@ export default function OfflineLocationsManager({
                       {topologyNodes.map(node => {
                         let nodeColor = 'fill-[#0f172a] stroke-cyan-500';
                         let labelColor = 'text-cyan-400';
-                        let size = 16;
+                        let size = 18;
                         let iconChar = '💻'; // default client PC
 
                         if (node.role === 'gateway') {
                           nodeColor = 'fill-[#0f172a] stroke-amber-500';
                           labelColor = 'text-amber-400';
-                          size = 22;
+                          size = 24;
                           iconChar = '🎛️'; // router switch
                         } else if (node.role === 'server') {
                           nodeColor = 'fill-[#0f172a] stroke-purple-500';
                           labelColor = 'text-purple-400';
-                          size = 18;
+                          size = 20;
                           iconChar = '🗄️'; // rack server
                         } else if (node.role === 'printer') {
                           nodeColor = 'fill-[#0f172a] stroke-emerald-500';
                           labelColor = 'text-emerald-400';
-                          size = 15;
+                          size = 17;
                           iconChar = '🖨️'; // printer
                         }
 
@@ -1111,8 +1182,14 @@ export default function OfflineLocationsManager({
                           nodeColor = 'fill-[#1e1014] stroke-rose-600';
                         }
 
+                        // Short label to prevent overlapping
+                        const shortLabel = node.label.length > 15 ? node.label.substring(0, 13) + '...' : node.label;
+
                         return (
-                          <g key={`node-${node.id}`} className="cursor-help transition-transform hover:scale-110">
+                          <g key={`node-${node.id}`} className="cursor-help transition-transform hover:scale-105">
+                            {/* Native SVG tooltip */}
+                            <title>{`Dispositivo: ${node.label}\nIP: ${node.ip}\nMAC: ${node.device.mac || '—'}\nFabricante: ${node.device.vendor || 'Desconocido'}\nEstado: ${node.state === 'OK' ? 'Conectado (OK)' : node.state === 'Caído' ? 'Fuera de línea (Caído)' : 'Alerta'}`}</title>
+                            
                             {/* Circle Base */}
                             <circle
                               cx={node.x}
@@ -1125,32 +1202,36 @@ export default function OfflineLocationsManager({
                             {/* Emoji Icon overlay */}
                             <text
                               x={node.x}
-                              y={node.y + 4}
+                              y={node.y + 5}
                               textAnchor="middle"
-                              style={{ fontSize: size - 4 }}
+                              style={{ fontSize: size - 3 }}
                             >
                               {iconChar}
                             </text>
 
                             {/* Node Hostname Label */}
-                            <text
-                              x={node.x}
-                              y={node.y - size - 4}
-                              textAnchor="middle"
-                              className="font-bold text-[8.5px] fill-slate-300"
-                            >
-                              {node.label}
-                            </text>
+                            {showLabels && (
+                              <text
+                                x={node.x}
+                                y={node.y - size - 5}
+                                textAnchor="middle"
+                                className="font-bold text-[9px] fill-slate-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+                              >
+                                {shortLabel}
+                              </text>
+                            )}
 
                             {/* Node IP Address Label */}
-                            <text
-                              x={node.x}
-                              y={node.y + size + 11}
-                              textAnchor="middle"
-                              className="font-mono text-[8.5px] fill-cyan-400 font-medium"
-                            >
-                              {node.ip}
-                            </text>
+                            {showIPs && (
+                              <text
+                                x={node.x}
+                                y={node.y + size + 11}
+                                textAnchor="middle"
+                                className="font-mono text-[8px] fill-cyan-400/90 font-medium drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]"
+                              >
+                                {node.ip}
+                              </text>
+                            )}
 
                             {/* Mini Status Dot */}
                             <circle
@@ -1158,7 +1239,7 @@ export default function OfflineLocationsManager({
                               cy={node.y - size + 3}
                               r="3.5"
                               className={
-                                node.state === 'OK' ? 'fill-emerald-400' :
+                                node.state === 'OK' ? 'fill-emerald-400 animate-pulse' :
                                 node.state === 'Advertencia' ? 'fill-amber-400' :
                                 'fill-rose-500'
                               }
