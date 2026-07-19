@@ -420,6 +420,14 @@ export default function App() {
   const [viewedSegmentFilter, setViewedSegmentFilter] = useState<string>('all');
   const [currentScanningSegName, setCurrentScanningSegName] = useState<string>('');
   const [selectedInterval, setSelectedInterval] = useState<string>('1 minuto');
+  const [scanSpeed, setScanSpeed] = useState<'ultra' | 'fast' | 'normal'>(() => {
+    try {
+      const cached = localStorage.getItem('netmonitor_scan_speed');
+      return (cached as 'ultra' | 'fast' | 'normal') || 'fast';
+    } catch {
+      return 'fast';
+    }
+  });
   const [currentTime, setCurrentTime] = useState<string>('');
 
   // Subnet calculator state
@@ -1799,7 +1807,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
 
     let realHosts: any[] = [];
     // Pass the active subnet segment to the backend so it knows exactly which /24 scope to actively ping
-    fetch(`/api/scan-real-arp?subnet=${encodeURIComponent(subnetSegment)}&isCloud=${isHostedInCloud}`)
+    fetch(`/api/scan-real-arp?subnet=${encodeURIComponent(subnetSegment)}&isCloud=${isHostedInCloud}&speed=${scanSpeed}`)
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data.devices)) {
@@ -1941,11 +1949,22 @@ Generado por: RedMonitor Network Diagnostic Tool`;
     let segmentIndex = 0;
     let stepCount = 0;
 
-    // Smooth total scanning time of 2.2 seconds (reduced from 4.5 seconds for snappy feel)
-    const totalDurationMs = 2200;
-    const totalStepsPerSegment = 24; // smooth increments
+    // Determine scanning durations based on selected speed
+    let totalDurationMs = 2200;
+    let totalStepsPerSegment = 24;
+    if (scanSpeed === 'ultra') {
+      totalDurationMs = 500;
+      totalStepsPerSegment = 10;
+    } else if (scanSpeed === 'fast') {
+      totalDurationMs = 1200;
+      totalStepsPerSegment = 16;
+    } else {
+      totalDurationMs = 2500;
+      totalStepsPerSegment = 24;
+    }
+
     const totalSteps = totalStepsPerSegment * segmentsToScan.length;
-    const intervalStep = Math.max(80, Math.round(totalDurationMs / totalSteps));
+    const intervalStep = Math.max(15, Math.round(totalDurationMs / totalSteps));
 
     // Maintain a local mutable copy of devices to prevent stale closure delays and ensure synchronous frame-perfect updates
     let currentDevicesList: Device[] = [];
@@ -2041,7 +2060,15 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           hour: '2-digit', minute: '2-digit', second: '2-digit',
           hour12: false
         });
-        const duration = Number((0.8 + Math.random() * 0.7).toFixed(1));
+        let baseDuration = 1.2;
+        if (scanSpeed === 'ultra') {
+          baseDuration = 0.4;
+        } else if (scanSpeed === 'fast') {
+          baseDuration = 0.8;
+        } else {
+          baseDuration = 1.8;
+        }
+        const duration = Number((baseDuration + Math.random() * 0.2).toFixed(1));
 
         // Calculate and set the final state cleanly
         segmentsToScan.forEach(seg => {
@@ -2880,6 +2907,25 @@ Generado por: RedMonitor Network Diagnostic Tool`;
               <option value="1 minuto">1 minuto</option>
               <option value="5 minutos">5 minutos</option>
               <option value="Manual">Manual</option>
+            </select>
+          </div>
+
+          {/* Velocidad Dropdown */}
+          <div className="flex items-center gap-1.5" title="Ajusta la velocidad del barrido y animación de simulación">
+            <span className="text-slate-500 font-medium">Velocidad</span>
+            <select 
+              value={scanSpeed}
+              onChange={(e) => {
+                const speed = e.target.value as 'ultra' | 'fast' | 'normal';
+                setScanSpeed(speed);
+                localStorage.setItem('netmonitor_scan_speed', speed);
+                addAlert(`Velocidad de escaneo cambiada a: ${speed === 'ultra' ? '🚀 Ultra Rápido (0.5s)' : speed === 'fast' ? '⚡ Rápido (1.2s)' : '⏳ Normal (2.5s)'}`, 'info');
+              }}
+              className="bg-slate-950 text-slate-300 border border-slate-800/50 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-sans font-bold cursor-pointer"
+            >
+              <option value="ultra">🚀 Ultra (0.5s)</option>
+              <option value="fast">⚡ Rápido (1.2s)</option>
+              <option value="normal">⏳ Normal (2.5s)</option>
             </select>
           </div>
 

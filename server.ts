@@ -1388,6 +1388,7 @@ const getRealPing = (ip: string, retries = 1): Promise<number | null> => {
 app.get("/api/scan-real-arp", (req, res) => {
   const subnetParam = req.query.subnet as string;
   const isCloudParam = req.query.isCloud === "true";
+  const speedParam = (req.query.speed as string) || "fast";
   let base = "192.168.1";
   if (subnetParam) {
     const clean = subnetParam.split('/')[0].trim();
@@ -1480,16 +1481,37 @@ app.get("/api/scan-real-arp", (req, res) => {
 
   const isWindows = process.platform === "win32";
   
+  // Dynamically scale ICMP timeouts and sleeping thresholds based on scanning speed
+  let pingTimeout = 250;
+  let winSleep = 500;
+  let linuxTimeout = 1;
+  let execTimeout = 2500;
+
+  if (speedParam === "ultra") {
+    pingTimeout = 100;
+    winSleep = 180;
+    execTimeout = 1000;
+  } else if (speedParam === "fast") {
+    pingTimeout = 180;
+    winSleep = 350;
+    execTimeout = 1800;
+  } else {
+    // normal speed
+    pingTimeout = 300;
+    winSleep = 800;
+    execTimeout = 4000;
+  }
+
   // Choose the robust multi-verification ping sweep command to ensure ARP cache is thoroughly populated
   let sweepCmd = "";
   if (isWindows) {
-    sweepCmd = `powershell -NoProfile -Command "1..254 | ForEach-Object { try { [System.Net.NetworkInformation.Ping]::new().SendAsync('${base}.' + $_, 250) } catch {} }; Start-Sleep -Milliseconds 600"`;
+    sweepCmd = `powershell -NoProfile -Command "1..254 | ForEach-Object { try { [System.Net.NetworkInformation.Ping]::new().SendAsync('${base}.' + $_, ${pingTimeout}) } catch {} }; Start-Sleep -Milliseconds ${winSleep}"`;
   } else {
-    sweepCmd = `for i in {1..254}; do ping -c 1 -W 1 ${base}.$i >/dev/null 2>&1 & done; wait; sleep 0.1`;
+    sweepCmd = `for i in {1..254}; do ping -c 1 -W ${linuxTimeout} ${base}.$i >/dev/null 2>&1 & done; wait; sleep 0.05`;
   }
 
   // First perform an active ping sweep to populate the OS ARP cache table (using optimized timeout for the quick round)
-  exec(sweepCmd, { timeout: 3000 }, (sweepErr) => {
+  exec(sweepCmd, { timeout: execTimeout }, (sweepErr) => {
     // Execute the standard ARP table reader
     const cmd = "arp -a";
     exec(cmd, (error, stdout, stderr) => {
