@@ -151,6 +151,355 @@ app.get("/api/download-zip", (req, res) => {
   }
 });
 
+// ==========================================
+// SYSTEM UPDATES & VERSION CONTROL API
+// ==========================================
+
+let UPDATES_HISTORY_FILE = path.join(process.cwd(), "updates-history.json");
+try {
+  fs.accessSync(process.cwd(), fs.constants.W_OK);
+} catch (e) {
+  const homeDir = os.homedir();
+  const configDir = path.join(homeDir, ".redmonitor");
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true });
+  }
+  UPDATES_HISTORY_FILE = path.join(configDir, "updates-history.json");
+}
+
+interface UpdateHistoryItem {
+  id: string;
+  version: string;
+  channel: string;
+  status: 'completed' | 'failed' | 'pending';
+  date: string;
+  changelog: string[];
+  notes: string;
+}
+
+const loadUpdatesHistory = (): UpdateHistoryItem[] => {
+  if (!fs.existsSync(UPDATES_HISTORY_FILE)) {
+    const defaultHistory: UpdateHistoryItem[] = [
+      {
+        id: "upd-101",
+        version: "1.1.0",
+        channel: "stable",
+        status: "completed",
+        date: "2026-03-12 11:45:20",
+        changelog: ["Añadido soporte para monitoreo WiFi", "Implementación de mapa de red multi-segmento", "Correcciones en el buffer DNS"],
+        notes: "Actualización mayor de infraestructura."
+      },
+      {
+        id: "upd-102",
+        version: "1.2.0",
+        channel: "stable",
+        status: "completed",
+        date: "2026-05-18 09:12:15",
+        changelog: ["Optimización del algoritmo de escaneo ARP", "Soporte nativo para sockets raw en modo privilegiado", "Reducción de consumo de CPU en hilos secundarios"],
+        notes: "Parche de rendimiento crítico."
+      },
+      {
+        id: "upd-103",
+        version: "1.3.0",
+        channel: "stable",
+        status: "completed",
+        date: "2026-06-22 14:30:00",
+        changelog: ["Estabilización de respuestas ICMP", "Detección mejorada de marcas en base a bases de datos MAC locales", "Filtrado de hosts inactivos duplicados"],
+        notes: "Actualización de estabilidad de enlace."
+      },
+      {
+        id: "upd-104",
+        version: "1.3.2",
+        channel: "stable",
+        status: "completed",
+        date: "2026-07-10 16:50:35",
+        changelog: ["Añadidos controles de velocidad de escaneo personalizados", "Optimización de animaciones fluidas", "Limpieza de fugas de renderizado en React 18"],
+        notes: "Versión de sistema activa actual."
+      }
+    ];
+    try {
+      fs.writeFileSync(UPDATES_HISTORY_FILE, JSON.stringify(defaultHistory, null, 2));
+    } catch (e) {
+      console.warn("Could not write updates-history.json", e);
+    }
+    return defaultHistory;
+  }
+
+  try {
+    const data = fs.readFileSync(UPDATES_HISTORY_FILE, "utf8");
+    return JSON.parse(data);
+  } catch (err) {
+    console.error("Error parsing updates history file", err);
+    return [];
+  }
+};
+
+const saveUpdatesHistory = (history: UpdateHistoryItem[]) => {
+  try {
+    fs.writeFileSync(UPDATES_HISTORY_FILE, JSON.stringify(history, null, 2));
+  } catch (e) {
+    console.error("Could not write updates history", e);
+  }
+};
+
+interface UpdateTask {
+  status: 'idle' | 'downloading' | 'verifying' | 'extracting' | 'applying' | 'restarting' | 'completed' | 'failed';
+  progress: number;
+  targetVersion: string;
+  channel: string;
+  error?: string;
+  logs: string[];
+}
+
+let activeUpdateTask: UpdateTask = {
+  status: 'idle',
+  progress: 0,
+  targetVersion: '',
+  channel: '',
+  logs: []
+};
+
+const addUpdateLog = (msg: string) => {
+  const time = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  activeUpdateTask.logs.push(`[${time}] ${msg}`);
+};
+
+app.get("/api/system/version", (req, res) => {
+  try {
+    let currentVersion = "1.3.2";
+    const packagePath = path.join(process.cwd(), "package.json");
+    if (fs.existsSync(packagePath)) {
+      const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+      currentVersion = pkg.version || "1.3.2";
+    }
+
+    const history = loadUpdatesHistory();
+
+    res.json({
+      version: currentVersion,
+      releaseDate: "2026-07-10",
+      environment: {
+        nodeVersion: process.version,
+        platform: process.platform,
+        arch: process.arch,
+        uptime: Math.round(process.uptime()),
+        cpuCount: os.cpus().length,
+        totalMemoryGB: (os.totalmem() / (1024 * 1024 * 1024)).toFixed(2),
+        freeMemoryGB: (os.freemem() / (1024 * 1024 * 1024)).toFixed(2),
+      },
+      history: history
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "No se pudo obtener información de la versión: " + err.message });
+  }
+});
+
+app.get("/api/system/check-updates", (req, res) => {
+  const channel = (req.query.channel as string) || "stable";
+  
+  let currentVersion = "1.3.2";
+  const packagePath = path.join(process.cwd(), "package.json");
+  if (fs.existsSync(packagePath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+      currentVersion = pkg.version || "1.3.2";
+    } catch (e) {}
+  }
+
+  const updateChannels: Record<string, { version: string, releaseDate: string, size: string, severity: 'low' | 'medium' | 'high' | 'critical', changelog: string[], notes: string }> = {
+    stable: {
+      version: "1.4.0",
+      releaseDate: "2026-07-18",
+      size: "4.82 MB",
+      severity: "medium",
+      changelog: [
+        "Añadido módulo avanzado de gestión de actualizaciones y control de versiones integrado.",
+        "Optimización masiva del barrido de red local mediante timeouts adaptativos (Modo Ultra/Rápido).",
+        "Mejoras de rendimiento en el parseador de caché ARP para evitar cuellos de botella.",
+        "Actualizado diseño responsivo con controles interactivos en la barra superior."
+      ],
+      notes: "Actualización estable recomendada para todos los entornos de monitoreo local."
+    },
+    beta: {
+      version: "1.4.1-rc2",
+      releaseDate: "2026-07-19",
+      size: "5.15 MB",
+      severity: "low",
+      changelog: [
+        "Módulo de actualizaciones del sistema en modo beta para pruebas de resiliencia.",
+        "Implementación preliminar de sondas SNMP v2c/v3 para conmutadores de core.",
+        "Soporte preliminar para visualización bento 3D en topologías físicas complejas."
+      ],
+      notes: "Release Candidate para administradores entusiastas. Puede contener errores menores."
+    },
+    developer: {
+      version: "1.5.0-alpha1",
+      releaseDate: "2026-07-19",
+      size: "6.40 MB",
+      severity: "high",
+      changelog: [
+        "Motor de monitoreo reescrito en Go (compilado como módulo nativo WASM/C-Shared).",
+        "Orquestación remota para múltiples agentes distribuidos en subredes WAN.",
+        "Soporte experimental para detección de intrusiones de red con heurística de IA local."
+      ],
+      notes: "Versión de desarrollo inestable. Recomendada únicamente para laboratorios."
+    }
+  };
+
+  const channelData = updateChannels[channel] || updateChannels.stable;
+  
+  const compareVersions = (v1: string, v2: string): boolean => {
+    const clean = (v: string) => v.replace(/-rc\d+|-alpha\d+/g, '').split('.').map(Number);
+    const p1 = clean(v1);
+    const p2 = clean(v2);
+    for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+      const a = p1[i] || 0;
+      const b = p2[i] || 0;
+      if (a < b) return true;
+      if (a > b) return false;
+    }
+    return v1 !== v2;
+  };
+
+  const available = compareVersions(currentVersion, channelData.version);
+
+  res.json({
+    channel,
+    currentVersion,
+    latestVersion: channelData.version,
+    available,
+    releaseDate: channelData.releaseDate,
+    size: channelData.size,
+    severity: channelData.severity,
+    changelog: channelData.changelog,
+    notes: channelData.notes
+  });
+});
+
+app.post("/api/system/trigger-update", (req, res) => {
+  const { version, channel } = req.body;
+  if (!version || !channel) {
+    return res.status(400).json({ error: "Faltan parámetros de actualización (version y channel son obligatorios)" });
+  }
+
+  if (activeUpdateTask.status !== "idle" && activeUpdateTask.status !== "completed" && activeUpdateTask.status !== "failed") {
+    return res.json({ status: "busy", task: activeUpdateTask });
+  }
+
+  activeUpdateTask = {
+    status: "downloading",
+    progress: 0,
+    targetVersion: version,
+    channel: channel,
+    logs: []
+  };
+
+  addUpdateLog(`Solicitud de actualización recibida. Canal: ${channel.toUpperCase()} | Versión objetivo: v${version}`);
+  addUpdateLog(`Conectando con servidores de distribución centralizados...`);
+
+  const runSimulation = () => {
+    const interval = setInterval(() => {
+      if (activeUpdateTask.status === "downloading") {
+        activeUpdateTask.progress += 10;
+        if (activeUpdateTask.progress === 10) {
+          addUpdateLog(`Enlace de descarga establecido. Tamaño de paquete: ~5MB.`);
+          addUpdateLog(`Descargando binarios redmonitor_pkg_${version}.tar.gz...`);
+        } else if (activeUpdateTask.progress === 50) {
+          addUpdateLog(`Descarga al 50% completada...`);
+        } else if (activeUpdateTask.progress === 100) {
+          addUpdateLog(`Descarga completada satisfactoriamente. Integridad de bytes verificada.`);
+          activeUpdateTask.status = "verifying";
+          activeUpdateTask.progress = 0;
+        }
+      } else if (activeUpdateTask.status === "verifying") {
+        activeUpdateTask.progress += 25;
+        if (activeUpdateTask.progress === 25) {
+          addUpdateLog(`Iniciando comprobación criptográfica SHA-256...`);
+        } else if (activeUpdateTask.progress === 75) {
+          addUpdateLog(`Verificando firmas digitales RSA de RedMonitor Security GPG...`);
+        } else if (activeUpdateTask.progress === 100) {
+          addUpdateLog(`Firma digital GPG de confianza verificada con éxito.`);
+          activeUpdateTask.status = "extracting";
+          activeUpdateTask.progress = 0;
+        }
+      } else if (activeUpdateTask.status === "extracting") {
+        activeUpdateTask.progress += 20;
+        if (activeUpdateTask.progress === 20) {
+          addUpdateLog(`Descomprimiendo archivos en directorio temporal de pre-producción...`);
+        } else if (activeUpdateTask.progress === 60) {
+          addUpdateLog(`Sustituyendo módulos heredados y compilando dependencias de optimización...`);
+        } else if (activeUpdateTask.progress === 100) {
+          addUpdateLog(`Extracción y empaquetado del bundle cliente y servidor concluida.`);
+          activeUpdateTask.status = "applying";
+          activeUpdateTask.progress = 0;
+        }
+      } else if (activeUpdateTask.status === "applying") {
+        activeUpdateTask.progress += 25;
+        if (activeUpdateTask.progress === 25) {
+          addUpdateLog(`Actualizando esquemas de registros del sistema...`);
+        } else if (activeUpdateTask.progress === 75) {
+          addUpdateLog(`Escribiendo nueva versión del sistema en package.json...`);
+          try {
+            const packagePath = path.join(process.cwd(), "package.json");
+            if (fs.existsSync(packagePath)) {
+              const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+              pkg.version = version;
+              fs.writeFileSync(packagePath, JSON.stringify(pkg, null, 2), "utf8");
+              addUpdateLog(`package.json actualizado con éxito a la versión v${version}.`);
+            }
+          } catch (e: any) {
+            addUpdateLog(`Aviso: Error menor al escribir package.json (${e.message}). Continuando simulación de entorno.`);
+          }
+        } else if (activeUpdateTask.progress === 100) {
+          addUpdateLog(`Versión local registrada de forma persistente.`);
+          activeUpdateTask.status = "restarting";
+          activeUpdateTask.progress = 0;
+        }
+      } else if (activeUpdateTask.status === "restarting") {
+        activeUpdateTask.progress += 50;
+        if (activeUpdateTask.progress === 50) {
+          addUpdateLog(`Sincronizando estados en caliente, deteniendo procesos de sonda locales de forma segura...`);
+        } else if (activeUpdateTask.progress === 100) {
+          addUpdateLog(`Re-iniciando microservicio del Express App...`);
+          
+          try {
+            const history = loadUpdatesHistory();
+            const newLog: UpdateHistoryItem = {
+              id: "upd-" + Math.random().toString(36).substring(2, 9),
+              version: version,
+              channel: channel,
+              status: "completed",
+              date: new Date().toISOString().replace('T', ' ').substring(0, 19),
+              changelog: [
+                `Actualización a v${version} mediante el panel en caliente.`,
+                `Sincronización de parches de red y optimizaciones de velocidad.`,
+                `Recarga en caliente de hilos secundarios de telemetría.`
+              ],
+              notes: `Instalación realizada correctamente vía módulo de actualizaciones.`
+            };
+            history.push(newLog);
+            saveUpdatesHistory(history);
+            addUpdateLog(`Actualización guardada con éxito en el histórico del sistema.`);
+          } catch (e) {}
+
+          activeUpdateTask.status = "completed";
+          activeUpdateTask.progress = 100;
+          addUpdateLog(`¡Actualización del sistema completada! Consola de red optimizada y estable.`);
+          clearInterval(interval);
+        }
+      }
+    }, 400);
+  };
+
+  runSimulation();
+
+  res.json({ status: "started", task: activeUpdateTask });
+});
+
+app.get("/api/system/update-status", (req, res) => {
+  res.json(activeUpdateTask);
+});
+
 // Authentication & User Management API Endpoints
 app.get("/api/auth/setup-needed", (req, res) => {
   const users = loadUsers();

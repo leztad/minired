@@ -376,6 +376,15 @@ export default function App() {
       });
     }
 
+    fetch('/api/system/version')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.version) {
+          setSystemVersion(data.version);
+        }
+      })
+      .catch(err => console.warn("Could not fetch system version:", err));
+
     fetch('/api/interfaces')
       .then(res => res.json())
       .then(data => {
@@ -429,6 +438,7 @@ export default function App() {
     }
   });
   const [currentTime, setCurrentTime] = useState<string>('');
+  const [systemVersion, setSystemVersion] = useState<string>('1.3.2');
 
   // Subnet calculator state
   const [calcIp, setCalcIp] = useState<string>('192.168.1.0');
@@ -4775,6 +4785,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
               onAddLog={addAlert}
               enabledFeatures={enabledFeatures}
               onUpdateFeatures={handleUpdateFeatures}
+              onVersionUpdate={(v) => setSystemVersion(v)}
             />
           )}
 
@@ -4825,8 +4836,10 @@ Generado por: RedMonitor Network Diagnostic Tool`;
             <span>Listo — Esperando primer escaneo de la subred {subnetSegment}...</span>
           )}
         </div>
-        <div className="font-sans text-slate-600">
-          RedMonitor v1.0 • Inspirado en **PRTG Network Monitor**
+        <div className="font-sans text-slate-600 flex items-center gap-1.5">
+          <span>RedMonitor v{systemVersion}</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-slate-700">• Inspirado en PRTG Network Monitor</span>
         </div>
       </footer>
 

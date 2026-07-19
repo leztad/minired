@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import TauriInstallerGuide from './TauriInstallerGuide';
 import UserManagement from './UserManagement';
+import SystemUpdatesPanel from './SystemUpdatesPanel';
 
 interface ConfigurationPanelProps {
   theme: 'dark' | 'light';
@@ -16,6 +17,7 @@ interface ConfigurationPanelProps {
   onAddLog: (msg: string, type: 'success' | 'info' | 'warning' | 'error') => void;
   enabledFeatures: Record<string, boolean>;
   onUpdateFeatures: (features: Record<string, boolean>) => void;
+  onVersionUpdate?: (version: string) => void;
 }
 
 const BACKUP_KEYS = [
@@ -39,9 +41,10 @@ export default function ConfigurationPanel({
   currentUser,
   onAddLog,
   enabledFeatures,
-  onUpdateFeatures
+  onUpdateFeatures,
+  onVersionUpdate
 }: ConfigurationPanelProps) {
-  const [activeTab, setActiveTab] = useState<'visualizacion' | 'installer' | 'seguridad' | 'respaldo'>('visualizacion');
+  const [activeTab, setActiveTab] = useState<'visualizacion' | 'installer' | 'seguridad' | 'respaldo' | 'actualizaciones'>('visualizacion');
 
   // Backup / Restore states
   const [pendingBackup, setPendingBackup] = useState<any>(null);
@@ -281,6 +284,18 @@ export default function ConfigurationPanel({
           >
             <Database className="h-4 w-4" />
             <span>Respaldo y Recuperación</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('actualizaciones')}
+            className={`flex-1 lg:flex-none text-left py-2.5 px-3 rounded-md flex items-center gap-2 text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer ${
+              activeTab === 'actualizaciones'
+                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/30 border border-transparent'
+            }`}
+          >
+            <RefreshCw className="h-4 w-4" />
+            <span>Actualizaciones y Versión</span>
           </button>
         </div>
 
@@ -650,6 +665,22 @@ export default function ConfigurationPanel({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'actualizaciones' && (
+            <div className="glass-panel rounded-lg p-6 border border-slate-800/80 space-y-6 animate-fade-in" id="settings-updates-tab">
+              <div>
+                <h3 className="text-base font-bold text-white font-display flex items-center gap-2">
+                  <RefreshCw className="h-4.5 w-4.5 text-cyan-400" />
+                  Actualizaciones del Sistema y Control de Versiones
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Gestione las versiones y parches locales de red, compruebe la integridad de los módulos y consulte el histórico de compilaciones instaladas.
+                </p>
+              </div>
+
+              <SystemUpdatesPanel onAddLog={onAddLog} onVersionUpdate={onVersionUpdate} />
             </div>
           )}
         </div>
