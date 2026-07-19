@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   MapPin, Database, Save, Download, Upload, Trash2, Eye, Play, Check, Plus, 
   Search, Share2, FileText, Layers, Activity, Cpu, Server, Globe, Clock, 
-  ArrowLeft, AlertTriangle, CheckCircle2, Info, FileCode, CheckSquare, PlusCircle, HelpCircle, Key, ChevronRight
+  ArrowLeft, AlertTriangle, CheckCircle2, Info, FileCode, CheckSquare, PlusCircle, HelpCircle, Key, ChevronRight,
+  Filter
 } from 'lucide-react';
 import { Device } from '../types';
 
@@ -105,6 +106,10 @@ export default function OfflineLocationsManager({
     const val = localStorage.getItem('redmonitor_topo_spacing');
     return val ? parseFloat(val) : 1.4;
   });
+
+  // State filters for offline devices list and map
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [pingFilter, setPingFilter] = useState<string>('all');
   
   // Create / Edit location form states
   const [isCreating, setIsCreating] = useState(false);
@@ -133,6 +138,12 @@ export default function OfflineLocationsManager({
   const selectedProfile = useMemo(() => {
     return profiles.find(p => p.id === selectedProfileId) || null;
   }, [profiles, selectedProfileId]);
+
+  // Reset filters when switching profiles
+  useEffect(() => {
+    setStatusFilter('all');
+    setPingFilter('all');
+  }, [selectedProfileId]);
 
   // Handler to open create form (prefilling with active network settings if requested)
   const handleOpenCreate = () => {
@@ -256,6 +267,34 @@ export default function OfflineLocationsManager({
     e.target.value = ''; // Reset file input
   };
 
+  // Filter devices based on state and ping filters
+  const filteredDevices = useMemo(() => {
+    if (!selectedProfile) return [];
+    
+    return selectedProfile.devices.filter(d => {
+      // 1. Status Filter
+      if (statusFilter !== 'all' && d.estado !== statusFilter) {
+        return false;
+      }
+      
+      // 2. Ping Filter
+      if (pingFilter !== 'all') {
+        const pingVal = d.ping;
+        if (pingFilter === 'fast') {
+          return pingVal !== null && pingVal > 0 && pingVal < 10;
+        } else if (pingFilter === 'medium') {
+          return pingVal !== null && pingVal >= 10 && pingVal <= 50;
+        } else if (pingFilter === 'slow') {
+          return pingVal !== null && pingVal > 50;
+        } else if (pingFilter === 'offline') {
+          return pingVal === null || d.estado === 'Caído';
+        }
+      }
+      
+      return true;
+    });
+  }, [selectedProfile, statusFilter, pingFilter]);
+
   // SVG Topology coordinates calculation with Layout customization (Jerárquico default)
   const topologyNodes = useMemo(() => {
     if (!selectedProfile) return [];
@@ -278,7 +317,7 @@ export default function OfflineLocationsManager({
       d.ip.endsWith('.1')
     );
 
-    const otherDevices = selectedProfile.devices.filter(d => d.id !== gatewayDevice?.id);
+    const otherDevices = filteredDevices.filter(d => d.id !== gatewayDevice?.id);
 
     // Grouping helper to identify device roles
     const getDeviceRoleAndLabel = (d: Device): { role: 'server' | 'client' | 'printer' | 'other', label: string } => {
@@ -507,7 +546,7 @@ export default function OfflineLocationsManager({
     }
 
     return nodes;
-  }, [selectedProfile, layoutType, spacingMultiplier]);
+  }, [selectedProfile, filteredDevices, layoutType, spacingMultiplier]);
 
   return (
     <div className="space-y-6 font-sans">
@@ -927,6 +966,84 @@ export default function OfflineLocationsManager({
             </div>
           </div>
 
+          {/* CONTROL PANEL FOR FILTERS */}
+          <div className="bg-[#0a0f1d] border border-slate-850 p-4 rounded-lg space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-850 pb-2">
+              <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Filter className="h-4 w-4 text-cyan-400" /> Filtros de Inspección de Red (Offline)
+              </h4>
+              
+              {(statusFilter !== 'all' || pingFilter !== 'all') && (
+                <button
+                  onClick={() => {
+                    setStatusFilter('all');
+                    setPingFilter('all');
+                  }}
+                  className="text-[10px] text-rose-400 hover:text-rose-300 font-bold font-mono uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  ✕ Limpiar Filtros
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* STATUS FILTER GROUP */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Filtrar por Estado de Conexión:
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: 'all', label: 'Todos', colorClass: 'border-slate-850 text-slate-400 hover:text-slate-200' },
+                    { id: 'OK', label: '🟢 Conectado (OK)', colorClass: 'border-emerald-950/40 text-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10' },
+                    { id: 'Advertencia', label: '🟡 Alerta', colorClass: 'border-amber-950/40 text-amber-500 bg-amber-500/5 hover:bg-amber-500/10' },
+                    { id: 'Caído', label: '🔴 Caído (Offline)', colorClass: 'border-rose-950/40 text-rose-500 bg-rose-500/5 hover:bg-rose-500/10' }
+                  ].map(btn => (
+                    <button
+                      key={btn.id}
+                      onClick={() => setStatusFilter(btn.id)}
+                      className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer ${
+                        statusFilter === btn.id
+                          ? 'border-cyan-500 bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/20'
+                          : btn.colorClass
+                      }`}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* PING FILTER GROUP */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Filtrar por Latencia de Ping:
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: 'all', label: 'Todos', colorClass: 'border-slate-850 text-slate-400 hover:text-slate-200' },
+                    { id: 'fast', label: '⚡ Rápido (<10 ms)', colorClass: 'border-cyan-950/40 text-cyan-500 bg-cyan-500/5 hover:bg-cyan-500/10' },
+                    { id: 'medium', label: '⏳ Medio (10-50 ms)', colorClass: 'border-blue-950/40 text-blue-500 bg-blue-500/5 hover:bg-blue-500/10' },
+                    { id: 'slow', label: '🐢 Lento (>50 ms)', colorClass: 'border-orange-950/40 text-orange-500 bg-orange-500/5 hover:bg-orange-500/10' },
+                    { id: 'offline', label: '❌ Inalcanzable', colorClass: 'border-rose-950/40 text-rose-500 bg-rose-500/5 hover:bg-rose-500/10' }
+                  ].map(btn => (
+                    <button
+                      key={btn.id}
+                      onClick={() => setPingFilter(btn.id)}
+                      className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all cursor-pointer ${
+                        pingFilter === btn.id
+                          ? 'border-cyan-500 bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/20'
+                          : btn.colorClass
+                      }`}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* TWO COLUMN GRID FOR DETAILED STATS & MAP */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
@@ -1278,9 +1395,14 @@ export default function OfflineLocationsManager({
 
           {/* SECTION 3: TABULAR DEVICE INVENTARY (Bottom Full Width) */}
           <div className="bg-[#0a0f1d] border border-slate-850 p-4 rounded-lg space-y-4">
-            <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider border-b border-slate-850 pb-2 flex items-center gap-1.5">
-              <Database className="h-4 w-4 text-cyan-400" /> Inventario de Dispositivos Registrados ({selectedProfile.devices.length} Hosts)
-            </h4>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-850 pb-2">
+              <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Database className="h-4 w-4 text-cyan-400" /> Inventario de Dispositivos Registrados
+              </h4>
+              <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-900">
+                Mostrando <strong className="text-cyan-400">{filteredDevices.length}</strong> de <strong className="text-slate-300">{selectedProfile.devices.length}</strong> hosts
+              </span>
+            </div>
 
             <div className="overflow-x-auto text-xs">
               <table className="w-full text-left border-collapse">
@@ -1295,14 +1417,23 @@ export default function OfflineLocationsManager({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-900/60 font-mono text-[11px]">
-                  {selectedProfile.devices.length === 0 ? (
+                  {filteredDevices.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-6 text-center text-slate-650">
-                        No hay dispositivos registrados en esta sede física.
+                      <td colSpan={6} className="py-8 text-center text-slate-500 bg-slate-950/20">
+                        <p className="font-sans text-slate-400">Ningún dispositivo coincide con los filtros activos.</p>
+                        <button
+                          onClick={() => {
+                            setStatusFilter('all');
+                            setPingFilter('all');
+                          }}
+                          className="mt-2 text-[10px] text-cyan-400 font-bold hover:underline cursor-pointer"
+                        >
+                          Restablecer Filtros
+                        </button>
                       </td>
                     </tr>
                   ) : (
-                    selectedProfile.devices.map(d => (
+                    filteredDevices.map(d => (
                       <tr key={d.id} className="hover:bg-slate-900/40">
                         <td className="py-2.5 px-3 font-bold text-slate-200">{d.ip}</td>
                         <td className="py-2.5 px-3 text-slate-300 font-sans">{d.host === '—' ? '—' : d.host}</td>
