@@ -229,20 +229,35 @@ export default function NetworkWiki() {
     {
       id: 'guide-ubicaciones-offline',
       category: 'guide',
-      title: 'Manual: Módulo Ubicaciones Offline y Gestión Multi-Sede',
-      tags: ['Offline', 'Sedes', 'Ubicaciones', 'LocalStorage', 'Multi-sitio'],
-      summary: 'Cómo administrar múltiples sedes físicas de red y almacenar datos de telemetría de forma local.',
-      content: `El módulo de **Ubicaciones Offline** permite a ingenieros itinerantes o integradores de soporte administrar las configuraciones y telemetrías de múltiples oficinas, sucursales o clientes físicos de forma independiente desde una sola aplicación.
+      title: 'Manual: Módulo Ubicaciones Offline y Gestión de Inspección',
+      tags: ['Offline', 'Filtros', 'Ping', 'Topología', 'Multi-sitio', 'Sedes'],
+      summary: 'Cómo administrar múltiples sedes físicas de red, modelar mapas topológicos personalizados y filtrar dispositivos por estado o latencia de ping.',
+      content: `El módulo de **Ubicaciones Offline** permite a ingenieros de soporte técnico administrar configuraciones y telemetrías de múltiples sucursales, oficinas o clientes locales de forma aislada, utilizando almacenamiento persistente sin necesidad de conexión activa a Internet.
 
-      ### Capacidades del Gestor Multi-Sede:
-      * **Creación de Sedes**: Registra sedes independientes con nombres personalizados (Ej: Sucursal Centro, Planta Industrial, Oficina Satélite).
-      * **Persistencia sin Conexión**: Toda la base de hosts e historiales se asocia de forma independiente a cada sede utilizando la base de datos local del navegador web. Puedes operar sin Internet.
-      * **Sincronización Rápida**: Cambia de una sede a otra de forma instantánea. El monitor recargará automáticamente la topología y los sensores correspondientes a la oficina seleccionada.`,
+      ### Capacidades del Gestor Multi-Sede y Visualización:
+      * **Persistencia Multi-Sede**: Toda la base de hosts, perfiles e historiales se asocia de forma independiente a la sede activa en el almacenamiento local del navegador (\`localStorage\`).
+      * **Modelos de Distribución (Layouts)**: Puede estructurar el mapa topológico en tres modos dinámicos según el tipo de red:
+        * 🌳 *Árbol LAN*: Ideal para topologías jerárquicas clásicas (Gateway en la cabecera, servidores en capa de distribución, impresoras y clientes en la base).
+        * ⭕ *Anillo*: Distribución circular concéntrica ideal para topologías en estrella y anillos redundantes.
+        * ⊞ *Bento Grid*: Cuadrícula bento alineada de alta densidad, idónea para depurar inventarios voluminosos de forma ultra-ordenada.
+      * **Controles de Separación y Visualización**: Cuenta con un regulador de espaciado interactivo para escalar el mapa de nodos (de 1.0x a 2.2x) y selectores booleanos para mostrar u ocultar de manera dinámica las etiquetas de hostname e IP de cada host.
+
+      ### Filtros de Inspección Avanzados (Estado y Latencia de Ping):
+      Para facilitar el análisis y aislamiento de problemas de red en sedes offline, el sistema incorpora controles dinámicos de filtrado que actualizan instantáneamente el mapa gráfico y la tabla del inventario de hosts:
+      1. **Filtrado por Estado de Conexión**: Permite aislar rápidamente equipos sanos de aquellos que reportan anomalías:
+        * 🟢 *Conectado (OK)*: Filtra únicamente nodos operativos estables.
+        * 🟡 *Alerta*: Muestra hosts con latencia inestable o alertas activas de telemetría.
+        * 🔴 *Caído (Offline)*: Aísla instantáneamente los hosts caídos o inaccesibles.
+      2. **Filtrado por Latencia de Ping (ICMP)**: Clasifica los equipos según el retardo de respuesta para diagnosticar Bufferbloat o problemas físicos:
+        * ⚡ *Rápido (< 10 ms)*: Equipos de baja latencia con respuesta inmediata.
+        * ⏳ *Medio (10 - 50 ms)*: Equipos con respuesta típica o leve retardo.
+        * 🐢 *Lento (> 50 ms)*: Identifica saturaciones de buffer o canales con atenuación severa.
+        * ❌ *Inalcanzable*: Filtra aquellos dispositivos caídos o sin respuesta ICMP activa.`,
       steps: [
         'Vaya a la pestaña de "Ubicaciones Offline" en el menú principal.',
-        'Haga clic en "Nueva Ubicación" y complete los metadatos de la sucursal (Ej: Dirección, Rango IP de subred).',
-        'Establezca una ubicación como "Activa" para que el monitor comience a operar sobre esa sede particular.',
-        'Los datos de auditoría e historial que guarde se separarán automáticamente bajo el contexto de la sucursal activa en ese instante.'
+        'Haga clic en "Nueva Ubicación" para registrar una sucursal, o seleccione una de las sedes existentes.',
+        'Use el panel de "Filtros de Inspección de Red" para segmentar los equipos según su "Estado de Conexión" o "Latencia de Ping". Verá que tanto el mapa SVG como la tabla de abajo se actualizan al instante.',
+        'Ajuste el control deslizante de "Separación" y alterne los interruptores "Mostrar Nombres" y "Mostrar IPs" para optimizar la claridad visual del plano físico.'
       ]
     },
     {
