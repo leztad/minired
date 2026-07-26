@@ -63,6 +63,7 @@ const SUBNET_PRESETS: Record<string, {
       22: { host: 'Impresora de Red', mac: '3C:D9:2B:44:A8:12', ping: 45, estado: 'OK', consumoDownload: 0, consumoUpload: 0, totalConsumido: 4.8 },
       60: { host: 'Cámara IP Pasillo Acceso (Axis CCTV)', mac: 'AC:CC:8E:B1:01:CC', ping: 12, estado: 'OK', consumoDownload: 0.05, consumoUpload: 3.5, totalConsumido: 841.5 },
       61: { host: 'Cámara IP Domo Sala Reuniones (EZVIZ)', mac: 'D4:43:EB:A0:FC:92', ping: 14, estado: 'OK', consumoDownload: 0.05, consumoUpload: 2.2, totalConsumido: 512.4 },
+      66: { host: 'Raspberry Pi 4 - Servidor Linux Embebido (Home Assistant / Pi-hole)', mac: 'DC:A6:32:11:22:33', ping: 4, estado: 'OK', consumoDownload: 0.8, consumoUpload: 0.4, totalConsumido: 412.5, sensorHttp: true },
       70: { host: 'Dispositivo IoT (DHCP .70)', mac: 'FC:A6:67:88:AC:3B', ping: 75, estado: 'OK', consumoDownload: 0.2, consumoUpload: 0.1, totalConsumido: 55.4 },
       102: { host: 'Módulo IoT (DHCP .102)', mac: 'EC:FA:BC:11:22:33', ping: 140, estado: 'Advertencia', consumoDownload: 0.05, consumoUpload: 0.05, totalConsumido: 12.3 },
       200: { host: 'Máquina Virtual (VM Ubuntu)', mac: '08:00:27:8C:1D:64', ping: 8, estado: 'OK', consumoDownload: 1.4, consumoUpload: 0.3, totalConsumido: 341.1 }

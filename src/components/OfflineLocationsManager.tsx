@@ -6,6 +6,7 @@ import {
   Filter
 } from 'lucide-react';
 import { Device } from '../types';
+import { resolveDeviceNameByMac, resolveVendorByMac } from '../utils/macUtils';
 
 export interface LocationProfile {
   id: string;
@@ -1433,16 +1434,19 @@ export default function OfflineLocationsManager({
                       </td>
                     </tr>
                   ) : (
-                    filteredDevices.map(d => (
-                      <tr key={d.id} className="hover:bg-slate-900/40">
-                        <td className="py-2.5 px-3 font-bold text-slate-200">{d.ip}</td>
-                        <td className="py-2.5 px-3 text-slate-300 font-sans">{d.host === '—' ? '—' : d.host}</td>
-                        <td className="py-2.5 px-3 text-slate-400">{d.mac}</td>
-                        <td className="py-2.5 px-3 text-slate-400 font-sans">{d.vendor || 'Desconocido'}</td>
-                        <td className="py-2.5 px-3 text-center text-slate-300">
-                          {d.ping !== null ? `${d.ping} ms` : '—'}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
+                    filteredDevices.map(d => {
+                      const hostName = resolveDeviceNameByMac(d.mac, d.host, d.ip);
+                      const vendorName = d.vendor && d.vendor !== 'Desconocido' && d.vendor !== 'Dispositivo de Red Activo' ? d.vendor : resolveVendorByMac(d.mac, d.host, d.ip);
+                      return (
+                        <tr key={d.id} className="hover:bg-slate-900/40">
+                          <td className="py-2.5 px-3 font-bold text-slate-200">{d.ip}</td>
+                          <td className="py-2.5 px-3 text-cyan-300 font-semibold font-sans">{hostName}</td>
+                          <td className="py-2.5 px-3 text-slate-400">{d.mac}</td>
+                          <td className="py-2.5 px-3 text-slate-400 font-sans">{vendorName}</td>
+                          <td className="py-2.5 px-3 text-center text-slate-300">
+                            {d.ping !== null ? `${d.ping} ms` : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold ${
                             d.estado === 'OK' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
                             d.estado === 'Advertencia' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
@@ -1452,7 +1456,8 @@ export default function OfflineLocationsManager({
                           </span>
                         </td>
                       </tr>
-                    ))
+                    );
+                  })
                   )}
                 </tbody>
               </table>

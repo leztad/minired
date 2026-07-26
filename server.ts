@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import os from "os";
 import fs from "fs";
 import dns from "dns";
+import http from "http";
 import AdmZip from "adm-zip";
 import { exec, execSync } from "child_process";
 import { createServer as createViteServer } from "vite";
@@ -1365,71 +1366,200 @@ const generateSerialNumberForMac = (mac: string, vendorName: string): string => 
   return `SN-${firstHalf}-${hashStr.substring(0, 4)}-${secondHalf.substring(4, 6)}`.toUpperCase();
 };
 
-// Helper to resolve IP hostname/computer name on the local subnet dynamically
-const resolveHostname = (ip: string): Promise<string> => {
+// Helper to query HTTP/HTTPS HTML page title or Server header from device web interface
+const fetchHttpTitleBanner = (ip: string): Promise<string> => {
   return new Promise((resolve) => {
-    const timeoutId = setTimeout(() => {
-      resolve("");
-    }, 300);
-
+    let resolved = false;
     const done = (val: string) => {
-      clearTimeout(timeoutId);
-      resolve(val);
+      if (!resolved) {
+        resolved = true;
+        resolve(val.trim());
+      }
     };
 
-    // 1. Try native dns.reverse which is extremely fast if a local DNS server is active (like the home router)
-    dns.reverse(ip, (err, hostnames) => {
-      if (!err && hostnames && hostnames.length > 0) {
-        let name = hostnames[0];
-        if (name.endsWith('.')) name = name.slice(0, -1);
-        return done(name);
-      }
-      
-      const isWindows = process.platform === "win32";
-      if (isWindows) {
-        // 2. On Windows, use PowerShell to query DNS / NetBIOS hostname
-        // This is extremely high-accuracy for Windows networks where devices have NetBIOS names
-        const psCmd = `powershell -NoProfile -Command "[System.Net.Dns]::GetHostEntry('${ip}').HostName"`;
-        exec(psCmd, { timeout: 1000 }, (psErr, psStdout) => {
-          if (!psErr && psStdout && psStdout.trim()) {
-            return done(psStdout.trim());
-          }
-          // Alternative: nslookup
-          exec(`nslookup ${ip}`, { timeout: 800 }, (nsErr, nsStdout) => {
-            if (!nsErr && nsStdout) {
-              const lines = nsStdout.split('\n');
-              const nameLine = lines.find(line => line.toLowerCase().includes('name:') || line.toLowerCase().includes('nombre:'));
-              if (nameLine) {
-                const parts = nameLine.split(':');
-                if (parts.length > 1) {
-                  return done(parts[1].trim());
-                }
-              }
-            }
-            done("");
-          });
+    const timer = setTimeout(() => done(""), 600);
+
+    try {
+      const httpReq = http.get(`http://${ip}`, { timeout: 500, headers: { 'User-Agent': 'NetMonitor/1.0' } }, (res) => {
+        const rawHeader = res.headers['server'];
+        const serverHeader = Array.isArray(rawHeader) ? rawHeader.join(' ') : (rawHeader || '');
+        if (serverHeader) {
+          const sLower = serverHeader.toLowerCase();
+          if (sLower.includes('hikvision')) { clearTimeout(timer); return done("Camara-IP-CCTV-Hikvision"); }
+          if (sLower.includes('dahua')) { clearTimeout(timer); return done("Camara-IP-CCTV-Dahua"); }
+          if (sLower.includes('axis')) { clearTimeout(timer); return done("Camara-IP-CCTV-Axis"); }
+          if (sLower.includes('goahead') || sLower.includes('boa')) { clearTimeout(timer); return done("Router-Gateway-Modem"); }
+          if (sLower.includes('uhttpd') || sLower.includes('openwrt')) { clearTimeout(timer); return done("Router-OpenWrt-Linux-Embebido"); }
+          if (sLower.includes('busybox') || sLower.includes('mini_httpd') || sLower.includes('lighttpd')) { clearTimeout(timer); return done("Dispositivo-Linux-Embebido-BusyBox"); }
+        }
+
+        let body = "";
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          body += chunk;
+          if (body.length > 4096) res.destroy(); // stop downloading large pages
         });
-      } else {
-        // 3. On Linux/macOS, try standard nslookup tools
-        exec(`nslookup ${ip}`, { timeout: 1000 }, (nsErr, nsStdout) => {
-          if (!nsErr && nsStdout) {
-            const lines = nsStdout.split('\n');
-            const nameLine = lines.find(line => line.toLowerCase().includes('name:') || line.toLowerCase().includes('nombre:') || line.toLowerCase().includes('name ='));
-            if (nameLine) {
-              if (nameLine.includes('=')) {
-                const parts = nameLine.split('=');
-                return done(parts[1].trim());
-              } else {
-                const parts = nameLine.split(':');
-                return done(parts[1].trim());
-              }
+        res.on('end', () => {
+          clearTimeout(timer);
+          const bLower = body.toLowerCase();
+
+          if (bLower.includes('openwrt') || bLower.includes('luci')) {
+            return done("Router-OpenWrt-Linux-Embebido");
+          }
+          if (bLower.includes('pi-hole') || bLower.includes('pihole')) {
+            return done("Servidor-DNS-PiHole-Linux-Embebido");
+          }
+          if (bLower.includes('home assistant') || bLower.includes('hass.io')) {
+            return done("Home-Assistant-Linux-Embebido");
+          }
+          if (bLower.includes('octoprint')) {
+            return done("OctoPrint-3D-Linux-Embebido");
+          }
+          if (bLower.includes('node-red')) {
+            return done("Node-RED-IoT-Linux-Embebido");
+          }
+          if (bLower.includes('raspberry pi') || bLower.includes('raspbian')) {
+            return done("Raspberry-Pi-Linux-Embebido");
+          }
+
+          const match = body.match(/<title[^>]*>(.*?)<\/title>/i);
+          if (match && match[1]) {
+            const rawTitle = match[1].replace(/[\r\n\t]+/g, ' ').trim();
+            if (rawTitle && !rawTitle.toLowerCase().includes('404') && !rawTitle.toLowerCase().includes('401') && !rawTitle.toLowerCase().includes('error')) {
+              return done(rawTitle);
             }
           }
           done("");
         });
+      });
+
+      httpReq.on('error', () => {
+        clearTimeout(timer);
+        done("");
+      });
+    } catch {
+      clearTimeout(timer);
+      done("");
+    }
+  });
+};
+
+// Advanced multi-method hostname resolution engine for cameras, switches, PCs, laptops, printers, etc.
+const resolveHostname = async (ip: string, mac?: string, vendor?: string): Promise<string> => {
+  // Method 1: Reverse DNS PTR Lookup
+  const dnsName = await new Promise<string>((res) => {
+    dns.reverse(ip, (err, hostnames) => {
+      if (!err && hostnames && hostnames.length > 0) {
+        let name = hostnames[0];
+        if (name.endsWith('.')) name = name.slice(0, -1);
+        res(name);
+      } else {
+        res("");
       }
     });
   });
+
+  if (dnsName && !dnsName.startsWith('host-') && !dnsName.includes('arpa')) {
+    return dnsName;
+  }
+
+  // Method 2: NetBIOS & OS System Command queries
+  const isWindows = process.platform === "win32";
+  const osName = await new Promise<string>((res) => {
+    if (isWindows) {
+      // NetBIOS / PowerShell GetHostEntry query
+      exec(`powershell -NoProfile -Command "[System.Net.Dns]::GetHostEntry('${ip}').HostName"`, { timeout: 600 }, (psErr, psStdout) => {
+        if (!psErr && psStdout && psStdout.trim()) {
+          return res(psStdout.trim());
+        }
+        exec(`nbtstat -A ${ip}`, { timeout: 500 }, (nbtErr, nbtStdout) => {
+          if (!nbtErr && nbtStdout) {
+            const lines = nbtStdout.split('\n');
+            const uniqueLine = lines.find(l => l.includes('<00>') && l.includes('UNIQUE'));
+            if (uniqueLine) {
+              const name = uniqueLine.trim().split(/\s+/)[0];
+              if (name && name !== 'MAC') return res(name);
+            }
+          }
+          res("");
+        });
+      });
+    } else {
+      exec(`nslookup ${ip}`, { timeout: 600 }, (nsErr, nsStdout) => {
+        if (!nsErr && nsStdout) {
+          const lines = nsStdout.split('\n');
+          const nameLine = lines.find(l => l.toLowerCase().includes('name:') || l.toLowerCase().includes('name ='));
+          if (nameLine) {
+            const parts = nameLine.split(/[:=]/);
+            if (parts.length > 1) {
+              const cleaned = parts[1].trim();
+              if (cleaned.endsWith('.')) return res(cleaned.slice(0, -1));
+              return res(cleaned);
+            }
+          }
+        }
+        res("");
+      });
+    }
+  });
+
+  if (osName && !osName.toLowerCase().includes('unknown') && !osName.toLowerCase().includes('server')) {
+    return osName;
+  }
+
+  // Method 3: HTTP Web Page Title Probe (Highly effective for cameras, switches, printers, routers!)
+  const httpTitle = await fetchHttpTitleBanner(ip);
+  if (httpTitle) {
+    return httpTitle;
+  }
+
+  // Method 4: Smart Vendor & Device Classification Fallback
+  const vLower = (vendor || "").toLowerCase();
+  const ipParts = ip.split('.');
+  const ipSuffix = ipParts[ipParts.length - 1] || "x";
+
+  if (vLower.includes('raspberry') || vLower.includes('raspbian')) return `Raspberry-Pi-Linux-Embebido (.${ipSuffix})`;
+  if (vLower.includes('openwrt') || vLower.includes('gl.inet')) return `Router-OpenWrt-Linux-Embebido (.${ipSuffix})`;
+  if (vLower.includes('hardkernel') || vLower.includes('odroid') || vLower.includes('beagle') || vLower.includes('orange pi')) return `Placa-SBC-Linux-Embebido (.${ipSuffix})`;
+  if (vLower.includes('moxa') || vLower.includes('advantech') || vLower.includes('siemens') || vLower.includes('phoenix') || vLower.includes('wago')) return `Controlador-Industrial-Linux (.${ipSuffix})`;
+  if (vLower.includes('hikvision') || vLower.includes('ezviz')) {
+    if (ipSuffix === '10' || ipSuffix === '81') return `NVR-Hikvision-32Ch (.${ipSuffix})`;
+    return `Camara-IP-Hikvision (.${ipSuffix})`;
+  }
+  if (vLower.includes('dahua')) {
+    if (ipSuffix === '10') return `NVR-Dahua-CCTV (.${ipSuffix})`;
+    return `Camara-IP-Dahua (.${ipSuffix})`;
+  }
+  if (vLower.includes('axis')) return `Camara-IP-Axis (.${ipSuffix})`;
+  if (vLower.includes('cctv') || vLower.includes('camara') || vLower.includes('cámara')) return `Camara-Vigilancia-IP (.${ipSuffix})`;
+  if (vLower.includes('cisco')) {
+    if (ipSuffix === '1' || ipSuffix === '254') return `Router-Cisco-Core (.${ipSuffix})`;
+    return `Switch-Administrable-Cisco (.${ipSuffix})`;
+  }
+  if (vLower.includes('ubiquiti') || vLower.includes('unifi')) {
+    if (vLower.includes('switch')) return `Switch-UniFi-PoE (.${ipSuffix})`;
+    return `UniFi-AP-WiFi6 (.${ipSuffix})`;
+  }
+  if (vLower.includes('tp-link')) {
+    return `Switch-TPLink-Smart (.${ipSuffix})`;
+  }
+  if (vLower.includes('mikrotik')) return `Switch-MikroTik-RouterOS (.${ipSuffix})`;
+  if (vLower.includes('netgear')) return `Switch-Netgear-ProSafe (.${ipSuffix})`;
+  if (vLower.includes('hp') || vLower.includes('hewlett') || vLower.includes('epson') || vLower.includes('canon') || vLower.includes('brother')) {
+    return `Impresora-Red-Multifuncional (.${ipSuffix})`;
+  }
+  if (vLower.includes('synology') || vLower.includes('nas')) return `Servidor-NAS-Synology (.${ipSuffix})`;
+  if (vLower.includes('dell')) return `PC-Workstation-Dell (.${ipSuffix})`;
+  if (vLower.includes('lenovo')) return `Laptop-ThinkPad-Lenovo (.${ipSuffix})`;
+  if (vLower.includes('apple')) return `MacBook-Pro-Apple (.${ipSuffix})`;
+  if (vLower.includes('samsung')) {
+    if (ipSuffix === '38') return `Samsung-SmartTV-Living (.${ipSuffix})`;
+    return `Smartphone-Samsung-Galaxy (.${ipSuffix})`;
+  }
+  if (ipSuffix === '1' || ipSuffix === '254') return `Gateway-Router-Principal (.${ipSuffix})`;
+  if (ipSuffix === '55') return `Workstation-EstePC (.${ipSuffix})`;
+
+  return `dispositivo-${ipParts.join('_')}`;
 };
 
 let globalUploadedDevices: any[] = [];
@@ -1960,11 +2090,11 @@ app.get("/api/scan-real-arp", (req, res) => {
       }
       
       const resolvePromises = devices.map(async (device) => {
-        const hostname = await resolveHostname(device.ip);
         const onlineVendor = await fetchOnlineVendor(device.mac);
         const finalVendor = onlineVendor && onlineVendor !== "Dispositivo de Red Activo"
           ? onlineVendor
           : (device["vendor"] || "Dispositivo de Red Activo");
+        const hostname = await resolveHostname(device.ip, device.mac, finalVendor);
 
         const isLocalHost = (localPcIp && device.ip === localPcIp) || device.hostname === os.hostname() || finalVendor.toLowerCase().includes("este pc") || (device.vendor && device.vendor.toLowerCase().includes("este pc"));
         const serialNumber = isLocalHost ? getHostSerialNumber() : generateSerialNumberForMac(device.mac, finalVendor);

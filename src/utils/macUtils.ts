@@ -110,6 +110,30 @@ export const fetchVendorFromApi = async (mac: string): Promise<string | null> =>
 
 // Precise database of common network vendors and consumer tech electronics
 const OUI_DATABASE: Record<string, string> = {
+  // Raspberry Pi Foundation & Trading (Embedded Linux Systems)
+  'B8:27:EB': 'Raspberry Pi Foundation (Linux Embebido)',
+  'DC:A6:32': 'Raspberry Pi Foundation (Linux Embebido)',
+  'E4:5F:01': 'Raspberry Pi Foundation (Linux Embebido)',
+  '28:CD:C1': 'Raspberry Pi Foundation (Linux Embebido)',
+  'D8:3A:DD': 'Raspberry Pi Foundation (Linux Embebido)',
+  '2C:CF:67': 'Raspberry Pi Foundation (Linux Embebido)',
+  '00:25:90': 'Raspberry Pi Foundation (Linux Embebido)',
+
+  // SBCs & Edge Computing (Hardkernel Odroid, BeagleBoard, GL.iNet, Teltonika)
+  '00:1E:C0': 'Hardkernel Odroid (Linux Embebido)',
+  '00:02:F7': 'BeagleBoard Foundation (Linux Embebido)',
+  '1C:BA:8C': 'BeagleBone IoT (Linux Embebido)',
+  '94:83:C4': 'GL.iNet OpenWrt (Linux Embebido)',
+  '00:1E:42': 'Teltonika RUT Gateway (Linux Embebido)',
+
+  // Industrial Embedded Linux & IoT PLCs (Moxa, Advantech, Siemens, WAGO, Phoenix Contact)
+  '00:90:E8': 'Moxa Industrial IoT (Linux Embebido)',
+  '00:D0:C9': 'Advantech Edge IPC (Linux Embebido)',
+  '00:0E:8C': 'Siemens Industrial IoT (Linux Embebido)',
+  '00:A0:45': 'Phoenix Contact PLC (Linux Embebido)',
+  '00:30:DE': 'WAGO Controlador (Linux Embebido)',
+  '00:14:2D': 'Toradex CoM (Linux Embebido)',
+
   // Ubiquiti Networks / Intel etc.
   '84:C8:A0': 'Ubiquiti Networks',
   '44:D9:E7': 'Ubiquiti Networks',
@@ -401,6 +425,14 @@ export const resolveVendorByMac = (mac?: string, hostname?: string, ip?: string)
   // 2. Try keyword matching on hostname if present and valid
   if (hostname && hostname !== '—' && hostname.trim() !== '') {
     const hn = hostname.toLowerCase();
+    if (hn.includes('raspberry') || hn.includes('raspbian') || hn.includes('rpi')) return 'Raspberry Pi Foundation (Linux Embebido)';
+    if (hn.includes('openwrt') || hn.includes('luci') || hn.includes('gl.inet') || hn.includes('gl-inet')) return 'GL.iNet / OpenWrt (Linux Embebido)';
+    if (hn.includes('busybox') || hn.includes('yocto') || hn.includes('buildroot') || hn.includes('armbian') || hn.includes('orange-pi') || hn.includes('khadas') || hn.includes('odroid') || hn.includes('beaglebone')) return 'Módulo SBC Edge (Linux Embebido)';
+    if (hn.includes('pihole') || hn.includes('pi-hole')) return 'Servidor DNS Pi-hole (Linux Embebido)';
+    if (hn.includes('homeassistant') || hn.includes('hassio') || hn.includes('hass')) return 'Home Assistant Hub (Linux Embebido)';
+    if (hn.includes('octoprint')) return 'OctoPrint 3D Engine (Linux Embebido)';
+    if (hn.includes('node-red') || hn.includes('nodered')) return 'Servidor Node-RED (Linux Embebido)';
+    if (hn.includes('moxa') || hn.includes('advantech') || hn.includes('siemens-iot') || hn.includes('wago')) return 'Controlador Industrial IoT (Linux Embebido)';
     if (hn.includes('iphone') || hn.includes('ipad') || hn.includes('macbook') || hn.includes('apple') || hn.includes('apple-device')) return 'Apple Inc.';
     if (hn.includes('samsung') || hn.includes('galaxy') || hn.includes('tv-sala') || hn.includes('smart tv') || hn.includes('smarttv')) return 'Samsung Electronics';
     if (hn.includes('playstation') || hn.includes('ps5') || hn.includes('sony')) return 'Sony Interactive';
@@ -469,10 +501,13 @@ export const resolveDeviceNameByMac = (mac?: string, hostname?: string, ip?: str
     cleanHostname === '—' || 
     norm.startsWith('dispositivo') || 
     norm.startsWith('equipo activo') || 
-    norm.startsWith('sonda de red') || 
+    norm.startsWith('sonda') || 
+    norm.startsWith('host-sonda') ||
+    norm.startsWith('host-') ||
     norm.includes('genérico') || 
     norm.includes('generico') || 
-    norm.includes('dispositivo lan');
+    norm.includes('dispositivo lan') ||
+    /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(cleanHostname);
 
   let resolvedCore = cleanHostname;
 
@@ -480,101 +515,154 @@ export const resolveDeviceNameByMac = (mac?: string, hostname?: string, ip?: str
     const vendor = resolveVendorByMac(mac, cleanHostname || undefined, ip);
     const vLower = vendor.toLowerCase();
   
-    if (vLower.includes('apple')) {
+    if (vLower.includes('raspberry') || vLower.includes('raspbian') || cleanHostname.toLowerCase().includes('raspberry') || cleanHostname.toLowerCase().includes('rpi')) {
+      resolvedCore = 'Raspberry Pi 4/5 (Linux Embebido)';
+    } else if (vLower.includes('openwrt') || vLower.includes('gl.inet') || cleanHostname.toLowerCase().includes('openwrt') || cleanHostname.toLowerCase().includes('luci')) {
+      resolvedCore = 'Router Gateway (OpenWrt Linux Embebido)';
+    } else if (vLower.includes('hardkernel') || vLower.includes('odroid') || vLower.includes('beagle') || vLower.includes('orange pi') || cleanHostname.toLowerCase().includes('orange') || cleanHostname.toLowerCase().includes('odroid') || cleanHostname.toLowerCase().includes('beaglebone')) {
+      resolvedCore = 'Placa Edge SBC (Linux Embebido)';
+    } else if (cleanHostname.toLowerCase().includes('pihole') || cleanHostname.toLowerCase().includes('pi-hole')) {
+      resolvedCore = 'Servidor DNS Pi-hole (Linux Embebido)';
+    } else if (cleanHostname.toLowerCase().includes('homeassistant') || cleanHostname.toLowerCase().includes('hass')) {
+      resolvedCore = 'Central Domótica Home Assistant (Linux Embebido)';
+    } else if (cleanHostname.toLowerCase().includes('octoprint')) {
+      resolvedCore = 'Servidor Impresión 3D OctoPrint (Linux Embebido)';
+    } else if (cleanHostname.toLowerCase().includes('node-red') || cleanHostname.toLowerCase().includes('nodered')) {
+      resolvedCore = 'Motor de Flujos IoT Node-RED (Linux Embebido)';
+    } else if (vLower.includes('moxa') || vLower.includes('advantech') || vLower.includes('siemens') || vLower.includes('phoenix') || vLower.includes('wago') || vLower.includes('toradex')) {
+      resolvedCore = 'Controlador Industrial / Gateway IoT (Linux Embebido)';
+    } else if (vLower.includes('apple')) {
       if (cleanHostname.toLowerCase().includes('macbook')) {
-        resolvedCore = 'MacBook Pro / iMac';
+        resolvedCore = 'MacBook Pro / Air (Apple)';
       } else if (cleanHostname.toLowerCase().includes('ipad')) {
         resolvedCore = 'Apple iPad Tablet';
+      } else if (cleanHostname.toLowerCase().includes('imac')) {
+        resolvedCore = 'iMac Workstation (Apple)';
       } else {
         resolvedCore = 'iPhone / Dispositivo Apple';
       }
     } else if (vLower.includes('playstation') || vLower.includes('sony interactive')) {
-      resolvedCore = 'Consola Sony PlayStation';
+      resolvedCore = 'Consola Sony PlayStation 5/4';
     } else if (vLower.includes('sony')) {
-      resolvedCore = 'Sony Smart TV / Bravia';
-    } else if (vLower.includes('samsung techwin') || vLower.includes('wisenet')) {
-      resolvedCore = 'Cámara Domo Profesional (Wisenet)';
+      resolvedCore = 'Sony Smart TV / Bravia 4K';
+    } else if (vLower.includes('samsung techwin') || vLower.includes('wisenet') || vLower.includes('hanwha')) {
+      resolvedCore = 'Cámara Domo IP Profesional (Wisenet CCTV)';
     } else if (vLower.includes('hikvision') || vLower.includes('ezviz')) {
-      if (cleanHostname.toLowerCase().includes('nvr') || cleanHostname.toLowerCase().includes('grabador')) {
-        resolvedCore = 'Soporte Grabador NVR (Hikvision)';
+      if (cleanHostname.toLowerCase().includes('nvr') || cleanHostname.toLowerCase().includes('grabador') || (ip && (ip.endsWith('.10') || ip.endsWith('.81')))) {
+        resolvedCore = 'Grabador NVR IP CCTV 32Ch (Hikvision)';
       } else {
-        resolvedCore = 'Cámara Vigilancia IP CCTV (Hikvision)';
+        resolvedCore = 'Cámara IP Domo / PTZ CCTV (Hikvision)';
       }
     } else if (vLower.includes('dahua')) {
       if (cleanHostname.toLowerCase().includes('nvr') || cleanHostname.toLowerCase().includes('grabador')) {
-        resolvedCore = 'Soporte Grabador NVR (Dahua)';
+        resolvedCore = 'Grabador NVR CCTV MultiCanal (Dahua)';
       } else {
-        resolvedCore = 'Cámara IP Domo CCTV (Dahua)';
+        resolvedCore = 'Cámara IP Varifocal CCTV (Dahua)';
       }
     } else if (vLower.includes('axis')) {
-      resolvedCore = 'Cámara IP Alta Gama (Axis CCTV)';
+      resolvedCore = 'Cámara IP Perimetral Alta Gama (Axis CCTV)';
     } else if (vLower.includes('uniview') || vLower.includes('unv')) {
-      resolvedCore = 'Cámara de Seguridad IP (Uniview)';
+      resolvedCore = 'Cámara de Seguridad IP (Uniview UNV)';
     } else if (vLower.includes('reolink')) {
-      resolvedCore = 'Cámara WiFi Residencial (Reolink)';
+      resolvedCore = 'Cámara WiFi Residencial (Reolink CCTV)';
     } else if (vLower.includes('vivotek')) {
-      resolvedCore = 'Cámara Perimetral CCTV (Vivotek)';
+      resolvedCore = 'Cámara Perimetral Industrial (Vivotek)';
+    } else if (vLower.includes('bosch')) {
+      resolvedCore = 'Cámara IP de Seguridad (Bosch Security)';
+    } else if (vLower.includes('cctv') || vLower.includes('cámara') || vLower.includes('camara') || vLower.includes('nvr') || vLower.includes('dvr')) {
+      resolvedCore = 'Cámara IP / Grabador CCTV de Vigilancia';
     } else if (vLower.includes('espressif')) {
-      resolvedCore = 'Sensor Domótico IoT (Espressif ESP32)';
+      resolvedCore = 'Módulo Sensor IoT Domótico (Espressif ESP32)';
     } else if (vLower.includes('amazon') || vLower.includes('echo')) {
-      resolvedCore = 'Asistente de Voz Inteligente (Amazon Echo/Alexa)';
+      resolvedCore = 'Asistente Inteligente (Amazon Echo Dot/Alexa)';
     } else if (vLower.includes('nest') || vLower.includes('google nest')) {
-      resolvedCore = 'Termostato o Chromecast (Google Nest)';
+      resolvedCore = 'Termostato / Cast (Google Nest)';
     } else if (vLower.includes('google')) {
-      resolvedCore = 'Dispositivo Cast / Google Pixel';
+      resolvedCore = 'Google Chromecast / Pixel Phone';
     } else if (vLower.includes('samsung')) {
       if (cleanHostname.toLowerCase().includes('tv') || cleanHostname.toLowerCase().includes('smarttv')) {
-        resolvedCore = 'Samsung Smart TV 4K';
+        resolvedCore = 'Samsung Smart TV 4K Living';
       } else {
         resolvedCore = 'Smartphone Samsung Galaxy';
       }
     } else if (cleanHostname.toLowerCase().includes('tv') || cleanHostname.toLowerCase().includes('smarttv')) {
-      resolvedCore = 'Smart TV de Red';
-    } else if (vLower.includes('hp') || vLower.includes('hewlett-packard')) {
-      resolvedCore = 'Impresora Multifuncional (HP)';
+      resolvedCore = 'Smart TV de Red Corporativa';
+    } else if (vLower.includes('hp') || vLower.includes('hewlett-packard') || vLower.includes('canon') || vLower.includes('epson') || vLower.includes('brother') || vLower.includes('lexmark') || vLower.includes('xerox') || vLower.includes('kyocera') || vLower.includes('ricoh')) {
+      const brand = vLower.includes('hp') || vLower.includes('hewlett') ? 'HP LaserJet' : vLower.includes('epson') ? 'Epson EcoTank' : vLower.includes('brother') ? 'Brother MFC' : vLower.includes('canon') ? 'Canon imageRUNNER' : 'Red';
+      resolvedCore = `Impresora Multifuncional (${brand})`;
     } else if (vLower.includes('docker')) {
-      resolvedCore = 'Contenedor Virtual Interno (Docker)';
+      resolvedCore = 'Contenedor Virtual Interno (Docker Engine)';
     } else if (vLower.includes('synology')) {
-      resolvedCore = 'Servidor NAS Storage (Synology)';
+      resolvedCore = 'Servidor NAS Storage Almacenamiento (Synology)';
     } else if (vLower.includes('ubiquiti')) {
-      resolvedCore = 'Punto de Acceso WiFi (Ubiquiti UniFi AP)';
-    } else if (vLower.includes('cisco')) {
-      if (cleanHostname.toLowerCase().includes('switch')) {
-        resolvedCore = 'Switch Administrable Giga L3 (Cisco)';
+      if (vLower.includes('switch') || cleanHostname.toLowerCase().includes('switch')) {
+        resolvedCore = 'Switch PoE Administrable (Ubiquiti UniFi)';
       } else {
-        resolvedCore = 'Router Acceso Profesional (Cisco)';
+        resolvedCore = 'Punto de Acceso Wi-Fi 6 (Ubiquiti UniFi AP)';
       }
+    } else if (vLower.includes('cisco')) {
+      if (cleanHostname.toLowerCase().includes('switch') || cleanHostname.toLowerCase().includes('catalyst')) {
+        resolvedCore = 'Switch Administrable Giga L2/L3 (Cisco Catalyst)';
+      } else {
+        resolvedCore = 'Router de Acceso Principal (Cisco Systems)';
+      }
+    } else if (vLower.includes('mikrotik')) {
+      resolvedCore = 'Switch Administrable RouterOS (MikroTik Cloud Router)';
     } else if (vLower.includes('tp-link')) {
-      resolvedCore = 'Switch L2 / Router Hogar (TP-Link)';
+      if (cleanHostname.toLowerCase().includes('switch') || cleanHostname.toLowerCase().includes('smart')) {
+        resolvedCore = 'Switch Gigabit Administrable L2 (TP-Link JetStream)';
+      } else {
+        resolvedCore = 'Switch L2 / Router Inalámbrico (TP-Link)';
+      }
+    } else if (vLower.includes('netgear')) {
+      resolvedCore = 'Switch Administrable Gigabit (Netgear ProSafe)';
+    } else if (vLower.includes('d-link')) {
+      resolvedCore = 'Switch de Red Conmutador (D-Link Systems)';
+    } else if (vLower.includes('zyxel')) {
+      resolvedCore = 'Switch / Router de Fibra Óptica (ZyXEL)';
+    } else if (vLower.includes('switch') || cleanHostname.toLowerCase().includes('switch') || cleanHostname.toLowerCase().includes('conmutador')) {
+      resolvedCore = 'Switch / Conmutador de Red Administrable';
     } else if (vLower.includes('xiaomi')) {
-      resolvedCore = 'Dispositivo Móvil o Domótica (Xiaomi)';
+      resolvedCore = 'Dispositivo Móvil / Domótica (Xiaomi)';
     } else if (vLower.includes('motorola')) {
       resolvedCore = 'Smartphone Android (Motorola)';
-    } else if (vLower.includes('virtualbox') || vLower.includes('oracle')) {
-      resolvedCore = 'Máquina Virtual de Servidor (Oracle VirtualBox)';
+    } else if (vLower.includes('virtualbox') || vLower.includes('oracle') || vLower.includes('qemu') || vLower.includes('vmware')) {
+      resolvedCore = 'Máquina Virtual de Servidor (VMware / Oracle VirtualBox)';
     } else if (vLower.includes('huawei')) {
-      if (cleanHostname.toLowerCase().includes('ont') || cleanHostname.toLowerCase().includes('modem') || cleanHostname.toLowerCase().includes('router')) {
+      if (cleanHostname.toLowerCase().includes('ont') || cleanHostname.toLowerCase().includes('modem') || cleanHostname.toLowerCase().includes('router') || (ip && (ip.endsWith('.1') || ip.endsWith('.254')))) {
         resolvedCore = 'Módem Router Fibra Óptica (Huawei ONT)';
       } else {
         resolvedCore = 'Dispositivo / Móvil Huawei';
       }
     } else if (vLower.includes('dell')) {
-      resolvedCore = 'Computadora de Escritorio (Dell PC)';
+      resolvedCore = 'Computadora de Escritorio / Servidor (Dell OptiPlex/PowerEdge)';
     } else if (vLower.includes('lenovo')) {
-      resolvedCore = 'Laptop ThinkPad (Lenovo)';
+      resolvedCore = 'Laptop Workstation ThinkPad (Lenovo)';
+    } else if (vLower.includes('asus') || vLower.includes('asustek')) {
+      resolvedCore = 'Laptop / PC de Trabajo (ASUS)';
     } else if (vLower.includes('lg electronics') || vLower.includes('lg')) {
-      resolvedCore = 'LG Smart TV OLED';
+      resolvedCore = 'LG Smart TV OLED 4K';
     } else if (vLower.includes('nintendo')) {
       resolvedCore = 'Consola de Juegos Nintendo Switch';
-    } else if (vLower.includes('realtek')) {
-      resolvedCore = 'Adaptador de Red Realtek';
+    } else if (vLower.includes('realtek') || vLower.includes('intel')) {
+      if (ip && ip.endsWith('.55')) {
+        resolvedCore = 'Laptop de Trabajo Workstation (Este PC)';
+      } else {
+        resolvedCore = 'Computadora de Escritorio / Laptop PC';
+      }
     } else if (vendor && vendor !== '—' && vendor !== 'Sonda de Red Genérica' && vendor !== 'Dispositivo de Red Activo') {
       resolvedCore = `Equipo Activo (${vendor})`;
     } else if (ip) {
       if (ip.endsWith('.1') || ip.endsWith('.254')) {
-        resolvedCore = 'Gateway Router Principal';
+        resolvedCore = 'Gateway / Router Principal';
       } else if (ip.endsWith('.55')) {
         resolvedCore = 'Computadora Principal (Este PC)';
+      } else if (ip.endsWith('.81') || ip.endsWith('.82') || ip.endsWith('.60') || ip.endsWith('.61')) {
+        resolvedCore = 'Cámara Vigilancia IP CCTV';
+      } else if (ip.endsWith('.20') || ip.endsWith('.21') || ip.endsWith('.22')) {
+        resolvedCore = 'Switch Administrable de Red';
+      } else if (ip.endsWith('.102') || ip.endsWith('.50')) {
+        resolvedCore = 'Impresora de Red Multifuncional';
       } else {
         resolvedCore = 'Dispositivo de Red Activo';
       }
