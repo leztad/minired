@@ -149,26 +149,6 @@ const OUI_DATABASE: Record<string, string> = {
   '30:AE:A4': 'Espressif Systems (IoT)',
   '4E:1A:87': 'Espressif Systems (IoT)',
 
-  // Apple Inc.
-  '7C:B0:C2': 'Apple Inc.',
-  '90:72:40': 'Apple Inc.',
-  '88:C2:23': 'Apple Inc.',
-  'F0:18:98': 'Apple Inc.',
-  '14:D4:37': 'Apple Inc.',
-  '24:A0:74': 'Apple Inc.',
-  '40:A3:CC': 'Apple Inc.',
-  'D8:45:03': 'Apple Inc.',
-  'B0:C5:54': 'Apple Inc.',
-  'B4:18:D1': 'Apple Inc.',
-  '7C:70:DB': 'Apple Inc.',
-  '9C:F3:87': 'Apple Inc.',
-  '8C:85:90': 'Apple Inc.',
-  '00:25:00': 'Apple Inc.',
-  '28:E1:4C': 'Apple Inc.',
-  '74:10:4F': 'Apple Inc.',
-  '88:66:5A': 'Apple Inc.',
-  '18:34:51': 'Apple Inc.',
-
   // Sony Interactive Entertainment (PlayStation, BRAVIA TVs, etc.)
   'D4:E4:C4': 'Sony Interactive (PlayStation/TV)',
   'FE:33:DE': 'Sony Interactive (PlayStation/TV)',
@@ -228,26 +208,105 @@ const OUI_DATABASE: Record<string, string> = {
   'C4:4F:33': 'Amazon Technologies (Echo/Alexa)',
   'A0:D0:5B': 'Amazon Technologies (Echo/Alexa)',
 
-  // Google / Nest Labs
-  '00:1E:C5': 'Google Nest / Chromecast',
-  '20:DF:B9': 'Google Nest / Chromecast',
-  'F4:F5:D8': 'Google Inc.',
-  '48:D6:D5': 'Google Inc.',
-  'A4:77:33': 'Google Nest',
+  // Samsung Electronics (Smartphones Galaxy, Tablets, Smart TVs)
+  'EC:AA:23': 'Samsung Electronics (Galaxy / TV)',
+  '94:9F:3E': 'Samsung Electronics (Galaxy Smartphone)',
+  'A0:0B:BA': 'Samsung Electronics (Galaxy Smartphone)',
+  'C0:BD:C8': 'Samsung Electronics (Galaxy Smartphone)',
+  'E4:E0:C5': 'Samsung Electronics (Galaxy Smartphone)',
+  'F4:7B:5E': 'Samsung Electronics (Galaxy Smartphone)',
+  'AC:E0:10': 'Samsung Electronics (Galaxy Smartphone)',
+  '3C:5A:37': 'Samsung Electronics (Galaxy Smartphone)',
+  '50:32:75': 'Samsung Electronics (Galaxy Smartphone)',
+  '10:3B:59': 'Samsung Electronics (Galaxy Smartphone)',
+  '28:27:BF': 'Samsung Electronics (Galaxy Smartphone)',
+  '78:BD:BC': 'Samsung Electronics (Galaxy Smartphone)',
+  '84:25:DB': 'Samsung Electronics (Galaxy Smartphone)',
+  'D0:03:DF': 'Samsung Electronics (Galaxy Smartphone)',
+  'EC:E0:9B': 'Samsung Electronics (Galaxy Smartphone)',
+  'FC:A1:3E': 'Samsung Electronics (Galaxy Smartphone)',
 
-  // Samsung Electronics
-  'EC:AA:23': 'Samsung Electronics',
-  '94:9F:3E': 'Samsung Electronics',
-  'A0:0B:BA': 'Samsung Electronics',
-  'C0:BD:C8': 'Samsung Electronics',
-  'E4:E0:C5': 'Samsung Electronics',
-  'F4:7B:5E': 'Samsung Electronics',
-  'AC:E0:10': 'Samsung Electronics',
-  '3C:5A:37': 'Samsung Electronics',
+  // Apple Inc. (iPhone, iPad, Mac)
+  '7C:B0:C2': 'Apple Inc. (iPhone / iOS)',
+  '90:72:40': 'Apple Inc. (iPhone / iOS)',
+  '88:C2:23': 'Apple Inc. (iPhone / iOS)',
+  'F0:18:98': 'Apple Inc. (iPhone / Mac)',
+  '14:D4:37': 'Apple Inc. (iPhone / iOS)',
+  '24:A0:74': 'Apple Inc. (iPhone / iOS)',
+  '40:A3:CC': 'Apple Inc. (iPhone / iOS)',
+  'D8:45:03': 'Apple Inc. (iPhone / iOS)',
+  'B0:C5:54': 'Apple Inc. (iPhone / iOS)',
+  'B4:18:D1': 'Apple Inc. (iPhone / iOS)',
+  '7C:70:DB': 'Apple Inc. (iPhone / iOS)',
+  '9C:F3:87': 'Apple Inc. (iPhone / iOS)',
+  '8C:85:90': 'Apple Inc. (iPhone / iOS)',
+  '00:25:00': 'Apple Inc. (iPhone / iOS)',
+  '28:E1:4C': 'Apple Inc. (iPhone / iOS)',
+  '74:10:4F': 'Apple Inc. (iPhone / iOS)',
+  '88:66:5A': 'Apple Inc. (iPhone / iOS)',
+  '18:34:51': 'Apple Inc. (iPhone / iOS)',
+  '04:15:52': 'Apple Inc. (iPhone / iOS)',
+  '20:A2:E4': 'Apple Inc. (iPhone / iOS)',
+  'A4:C3:61': 'Apple Inc. (iPhone / iOS)',
 
-  // Huawei Technologies
-  '10:7B:44': 'Huawei Technologies',
-  '2C:96:82': 'Huawei Technologies / ONT',
+  // Xiaomi / Redmi / POCO Communications
+  '54:A7:2A': 'Xiaomi Communications (Redmi / POCO)',
+  '64:90:C1': 'Xiaomi Communications (Redmi / POCO)',
+  '8C:BE:BE': 'Xiaomi Communications (Redmi / POCO)',
+  '98:FA:E3': 'Xiaomi Communications (Redmi / POCO)',
+  'A4:50:46': 'Xiaomi Communications (Redmi / POCO)',
+  'E4:47:90': 'Xiaomi Communications (Redmi / POCO)',
+  '30:F7:72': 'Xiaomi Communications (Redmi / POCO)',
+  '1C:99:4C': 'Xiaomi Communications (Redmi / POCO)',
+  '28:6C:07': 'Xiaomi (Móvil Smartphone)',
+  '34:80:B3': 'Xiaomi (Móvil Smartphone)',
+  '3C:12:AA': 'Xiaomi (Móvil Smartphone)',
+  '50:04:B8': 'Xiaomi (Móvil Smartphone)',
+  '5C:E4:3B': 'Xiaomi (Móvil Smartphone)',
+  'AC:F1:DF': 'Xiaomi (Móvil Smartphone)',
+  'FC:E5:52': 'Xiaomi (Móvil Smartphone)',
+  '18:58:3B': 'Xiaomi (Móvil Smartphone)',
+  '70:8A:09': 'Xiaomi (Móvil Smartphone)',
+
+  // Motorola Mobility / Lenovo Mobile
+  '2C:F0:EE': 'Motorola Mobility (Moto Smartphone)',
+  '00:1A:66': 'Motorola Mobility (Moto Smartphone)',
+  '00:24:37': 'Motorola Mobility (Moto Smartphone)',
+  '14:1A:A3': 'Motorola Mobility (Moto Smartphone)',
+  '30:3B:18': 'Motorola Mobility (Moto Smartphone)',
+  '40:78:6A': 'Motorola Mobility (Moto Smartphone)',
+  '84:38:35': 'Motorola Mobility (Moto Smartphone)',
+  'A4:70:D6': 'Motorola Mobility (Moto Smartphone)',
+  'BC:6E:64': 'Motorola Mobility (Moto Smartphone)',
+
+  // OPPO / Vivo / Realme / OnePlus (BBK Electronics)
+  '1C:52:16': 'OnePlus / OPPO / Vivo (Smartphone)',
+  '2C:22:8B': 'OnePlus / OPPO / Vivo (Smartphone)',
+  '38:53:9C': 'Realme / OPPO (Smartphone)',
+  '3C:DC:BC': 'OPPO Mobile (Smartphone)',
+  '48:0E:EC': 'Vivo Mobile (Smartphone)',
+  '50:85:22': 'OnePlus Mobile (Smartphone)',
+  '60:AF:6D': 'OPPO Mobile (Smartphone)',
+  '74:A7:22': 'Realme / OPPO (Smartphone)',
+  '80:7A:BF': 'Vivo Mobile (Smartphone)',
+  '88:A9:A7': 'OnePlus Mobile (Smartphone)',
+  '90:3C:92': 'OPPO Mobile (Smartphone)',
+  'AC:C1:EE': 'Realme / OPPO (Smartphone)',
+
+  // Google Pixel
+  'F4:F5:D8': 'Google Pixel (Smartphone)',
+  '48:D6:D5': 'Google Pixel / Nest',
+  '84:17:15': 'Google Pixel (Smartphone)',
+  '3C:52:82': 'Google Pixel (Smartphone)',
+
+  // Huawei Technologies / Honor
+  '10:7B:44': 'Huawei Mobile (Smartphone)',
+  '2C:96:82': 'Huawei Technologies',
+  '08:63:61': 'Huawei Mobile (Smartphone)',
+  '20:0B:C7': 'Huawei Mobile (Smartphone)',
+  '24:09:95': 'Huawei Mobile (Smartphone)',
+  '34:00:A3': 'Huawei Mobile (Smartphone)',
+  '54:89:98': 'Honor / Huawei Mobile',
 
   // HP (Hewlett-Packard)
   '50:3E:AA': 'Hewlett-Packard (HP)',
@@ -265,42 +324,9 @@ const OUI_DATABASE: Record<string, string> = {
   // Open vSwitch
   '00:00:00': 'Open vSwitch SDN Controller',
 
-  // Motorola / Lenovo
-  '2C:F0:EE': 'Motorola Mobility',
-
   // Intel Corporation (NICs, Mainboards)
   'A4:C5:12': 'Intel Corporation',
   '00:1F:3B': 'Intel Corporation',
-
-  // Cisco / Linksys
-  '00:22:6B': 'Cisco Systems (Catalyst)',
-  '00:14:D1': 'Linksys Router',
-  '00:1D:7E': 'Cisco Linksys AP',
-
-  // TP-Link
-  'D0:03:4B': 'TP-Link Technologies',
-  'C0:25:E9': 'TP-Link Technologies',
-  'E8:DE:27': 'TP-Link Technologies',
-  'B0:4E:26': 'TP-Link Technologies',
-  '74:DA:38': 'TP-Link Technologies',
-  '00:14:78': 'TP-Link Technologies',
-
-  // Xiaomi Communications
-  '54:A7:2A': 'Xiaomi Communications',
-  '64:90:C1': 'Xiaomi Communications',
-  '8C:BE:BE': 'Xiaomi Communications',
-  '98:FA:E3': 'Xiaomi Communications',
-  'A4:50:46': 'Xiaomi Communications',
-  'E4:47:90': 'Xiaomi Communications',
-  '30:F7:72': 'Xiaomi Communications',
-  '1C:99:4C': 'Xiaomi Communications',
-  '28:6C:07': 'Xiaomi',
-  '34:80:B3': 'Xiaomi',
-  '3C:12:AA': 'Xiaomi',
-  '50:04:B8': 'Xiaomi',
-  '5C:E4:3B': 'Xiaomi',
-  'AC:F1:DF': 'Xiaomi',
-  'FC:E5:52': 'Xiaomi (Móvil)',
 
   // TP-Link
   'D8:47:3C': 'TP-Link Technologies',
@@ -433,8 +459,15 @@ export const resolveVendorByMac = (mac?: string, hostname?: string, ip?: string)
     if (hn.includes('octoprint')) return 'OctoPrint 3D Engine (Linux Embebido)';
     if (hn.includes('node-red') || hn.includes('nodered')) return 'Servidor Node-RED (Linux Embebido)';
     if (hn.includes('moxa') || hn.includes('advantech') || hn.includes('siemens-iot') || hn.includes('wago')) return 'Controlador Industrial IoT (Linux Embebido)';
-    if (hn.includes('iphone') || hn.includes('ipad') || hn.includes('macbook') || hn.includes('apple') || hn.includes('apple-device')) return 'Apple Inc.';
-    if (hn.includes('samsung') || hn.includes('galaxy') || hn.includes('tv-sala') || hn.includes('smart tv') || hn.includes('smarttv')) return 'Samsung Electronics';
+    if (hn.includes('iphone') || hn.includes('ipad') || hn.includes('macbook') || hn.includes('apple') || hn.includes('apple-device')) return 'Apple Inc. (iPhone / iOS)';
+    if (hn.includes('samsung') || hn.includes('galaxy')) return 'Samsung Electronics (Smartphone)';
+    if (hn.includes('xiaomi') || hn.includes('redmi') || hn.includes('poco')) return 'Xiaomi Communications (Smartphone)';
+    if (hn.includes('moto') || hn.includes('motorola')) return 'Motorola Mobility (Smartphone)';
+    if (hn.includes('pixel')) return 'Google Pixel (Smartphone)';
+    if (hn.includes('huawei') || hn.includes('honor')) return 'Huawei Technologies (Smartphone)';
+    if (hn.includes('oppo') || hn.includes('realme') || hn.includes('vivo') || hn.includes('oneplus')) return 'OPPO / Vivo / OnePlus (Smartphone)';
+    if (hn.includes('android')) return 'Google Android (Smartphone)';
+    if (hn.includes('tv-sala') || hn.includes('smart tv') || hn.includes('smarttv')) return 'Samsung Electronics (Smart TV)';
     if (hn.includes('playstation') || hn.includes('ps5') || hn.includes('sony')) return 'Sony Interactive';
     if (hn.includes('huawei') || hn.includes('ont')) return 'Huawei Technologies';
     if (hn.includes('impresora') || hn.includes('printer') || hn.includes('hp') || hn.includes('laserjet') || hn.includes('deskjet') || hn.includes('officejet')) return 'Hewlett-Packard (HP)';
@@ -495,10 +528,14 @@ export const resolveDeviceNameByMac = (mac?: string, hostname?: string, ip?: str
     cleanHostname = cleanHostname.slice("Dispositivo (".length, -1).trim();
   }
 
+  const isAndroidHash = /^android[-_][0-9a-fA-F]{4,16}$/i.test(cleanHostname) || cleanHostname.toLowerCase() === 'android';
+  const isIphoneHost = /^iphone/i.test(cleanHostname) || /^ipad/i.test(cleanHostname);
+
   const norm = cleanHostname.toLowerCase();
   const isGeneric = 
     !cleanHostname || 
     cleanHostname === '—' || 
+    isAndroidHash ||
     norm.startsWith('dispositivo') || 
     norm.startsWith('equipo activo') || 
     norm.startsWith('sonda') || 
@@ -514,33 +551,55 @@ export const resolveDeviceNameByMac = (mac?: string, hostname?: string, ip?: str
   if (isGeneric) {
     const vendor = resolveVendorByMac(mac, cleanHostname || undefined, ip);
     const vLower = vendor.toLowerCase();
+    const cleanMacStr = (mac || '').replace(/[:-]/g, '').toUpperCase();
+    const isRandomizedMac = /^[0-9a-f][26ae]/i.test(cleanMacStr);
   
-    if (vLower.includes('raspberry') || vLower.includes('raspbian') || cleanHostname.toLowerCase().includes('raspberry') || cleanHostname.toLowerCase().includes('rpi')) {
+    if (vLower.includes('apple') || isIphoneHost || norm.includes('iphone') || norm.includes('ipad')) {
+      if (norm.includes('macbook')) {
+        resolvedCore = 'MacBook Pro / Air (Apple macOS)';
+      } else if (norm.includes('ipad')) {
+        resolvedCore = 'Apple iPad (iOS Tablet)';
+      } else if (norm.includes('imac')) {
+        resolvedCore = 'iMac Workstation (Apple macOS)';
+      } else {
+        resolvedCore = 'iPhone (Apple iOS)';
+      }
+    } else if (vLower.includes('samsung') || norm.includes('galaxy') || norm.includes('s21') || norm.includes('s22') || norm.includes('s23') || norm.includes('s24') || norm.includes('a54')) {
+      if (norm.includes('tv') || norm.includes('smarttv')) {
+        resolvedCore = 'Samsung Smart TV 4K Living';
+      } else {
+        resolvedCore = 'Smartphone Samsung Galaxy (Android)';
+      }
+    } else if (vLower.includes('xiaomi') || vLower.includes('redmi') || vLower.includes('poco') || norm.includes('xiaomi') || norm.includes('redmi') || norm.includes('poco')) {
+      resolvedCore = 'Smartphone Xiaomi / Redmi (Android)';
+    } else if (vLower.includes('motorola') || vLower.includes('moto') || norm.includes('motorola') || norm.includes('moto')) {
+      resolvedCore = 'Smartphone Motorola Moto (Android)';
+    } else if (vLower.includes('pixel') || norm.includes('pixel')) {
+      resolvedCore = 'Smartphone Google Pixel (Android)';
+    } else if (vLower.includes('huawei') || vLower.includes('honor') || norm.includes('huawei') || norm.includes('honor')) {
+      resolvedCore = 'Smartphone Huawei / Honor (Android)';
+    } else if (vLower.includes('oppo') || vLower.includes('realme') || vLower.includes('vivo') || vLower.includes('oneplus') || norm.includes('oneplus')) {
+      resolvedCore = 'Smartphone OPPO / Vivo / OnePlus (Android)';
+    } else if (vLower.includes('android') || isAndroidHash) {
+      resolvedCore = 'Celular Smartphone (Android OS)';
+    } else if (isRandomizedMac) {
+      resolvedCore = 'Celular Smartphone (MAC Privada Wi-Fi)';
+    } else if (vLower.includes('raspberry') || vLower.includes('raspbian') || norm.includes('raspberry') || norm.includes('rpi')) {
       resolvedCore = 'Raspberry Pi 4/5 (Linux Embebido)';
-    } else if (vLower.includes('openwrt') || vLower.includes('gl.inet') || cleanHostname.toLowerCase().includes('openwrt') || cleanHostname.toLowerCase().includes('luci')) {
+    } else if (vLower.includes('openwrt') || vLower.includes('gl.inet') || norm.includes('openwrt') || norm.includes('luci')) {
       resolvedCore = 'Router Gateway (OpenWrt Linux Embebido)';
-    } else if (vLower.includes('hardkernel') || vLower.includes('odroid') || vLower.includes('beagle') || vLower.includes('orange pi') || cleanHostname.toLowerCase().includes('orange') || cleanHostname.toLowerCase().includes('odroid') || cleanHostname.toLowerCase().includes('beaglebone')) {
+    } else if (vLower.includes('hardkernel') || vLower.includes('odroid') || vLower.includes('beagle') || vLower.includes('orange pi') || norm.includes('orange') || norm.includes('odroid') || norm.includes('beaglebone')) {
       resolvedCore = 'Placa Edge SBC (Linux Embebido)';
-    } else if (cleanHostname.toLowerCase().includes('pihole') || cleanHostname.toLowerCase().includes('pi-hole')) {
+    } else if (norm.includes('pihole') || norm.includes('pi-hole')) {
       resolvedCore = 'Servidor DNS Pi-hole (Linux Embebido)';
-    } else if (cleanHostname.toLowerCase().includes('homeassistant') || cleanHostname.toLowerCase().includes('hass')) {
+    } else if (norm.includes('homeassistant') || norm.includes('hass')) {
       resolvedCore = 'Central Domótica Home Assistant (Linux Embebido)';
-    } else if (cleanHostname.toLowerCase().includes('octoprint')) {
+    } else if (norm.includes('octoprint')) {
       resolvedCore = 'Servidor Impresión 3D OctoPrint (Linux Embebido)';
-    } else if (cleanHostname.toLowerCase().includes('node-red') || cleanHostname.toLowerCase().includes('nodered')) {
+    } else if (norm.includes('node-red') || norm.includes('nodered')) {
       resolvedCore = 'Motor de Flujos IoT Node-RED (Linux Embebido)';
     } else if (vLower.includes('moxa') || vLower.includes('advantech') || vLower.includes('siemens') || vLower.includes('phoenix') || vLower.includes('wago') || vLower.includes('toradex')) {
       resolvedCore = 'Controlador Industrial / Gateway IoT (Linux Embebido)';
-    } else if (vLower.includes('apple')) {
-      if (cleanHostname.toLowerCase().includes('macbook')) {
-        resolvedCore = 'MacBook Pro / Air (Apple)';
-      } else if (cleanHostname.toLowerCase().includes('ipad')) {
-        resolvedCore = 'Apple iPad Tablet';
-      } else if (cleanHostname.toLowerCase().includes('imac')) {
-        resolvedCore = 'iMac Workstation (Apple)';
-      } else {
-        resolvedCore = 'iPhone / Dispositivo Apple';
-      }
     } else if (vLower.includes('playstation') || vLower.includes('sony interactive')) {
       resolvedCore = 'Consola Sony PlayStation 5/4';
     } else if (vLower.includes('sony')) {

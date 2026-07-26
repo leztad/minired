@@ -50,8 +50,8 @@ const SUBNET_PRESETS: Record<string, {
   '192.168.1': {
     active: {
       1: { host: 'Router Gateway LAN', mac: '2C:96:82:AF:E1:30', ping: 1, estado: 'OK', consumoDownload: 1.2, consumoUpload: 0.4, totalConsumido: 254.2 },
-      38: { host: 'Dispositivo LAN (DHCP .38)', mac: '50:3E:AA:C4:F3:11', ping: 85, estado: 'Advertencia', consumoDownload: 18.5, consumoUpload: 1.2, totalConsumido: 1245.8 },
-      40: { host: 'Dispositivo LAN (DHCP .40)', mac: 'FE:33:DE:82:31:0C', ping: 120, estado: 'Advertencia', consumoDownload: 42.8, consumoUpload: 3.5, totalConsumido: 5410.0 },
+      38: { host: 'Smartphone Samsung Galaxy S23 (Android)', mac: 'A0:0B:BA:C4:F3:11', ping: 18, estado: 'OK', consumoDownload: 18.5, consumoUpload: 1.2, totalConsumido: 1245.8 },
+      40: { host: 'iPhone 15 Pro (Apple iOS)', mac: '7C:B0:C2:82:31:0C', ping: 14, estado: 'OK', consumoDownload: 24.8, consumoUpload: 3.5, totalConsumido: 2410.0 },
       55: { host: 'Estación de Trabajo (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 3, estado: 'OK', consumoDownload: 5.6, consumoUpload: 0.9, totalConsumido: 843.5 },
       81: { host: 'Grabador NVR Principal - 32Ch (Hikvision CCTV)', mac: '00:40:3F:DE:AA:11', ping: 4, estado: 'OK', consumoDownload: 1.5, consumoUpload: 88.4, totalConsumido: 19485.4, sensorHttp: true },
       82: { host: 'Cámara PTZ Domo Exterior (Dahua)', mac: 'BC:32:AC:01:FE:33', ping: 7, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.8, totalConsumido: 1250.2 },
@@ -106,8 +106,8 @@ const SUBNET_PRESETS: Record<string, {
   '10.0.0': {
     active: {
       1: { host: 'Gateway Cautivo Invitados', mac: '50:3E:AA:C4:00:01', ping: 1, estado: 'OK', consumoDownload: 8.2, consumoUpload: 2.4, totalConsumido: 1450.5 },
-      12: { host: 'Smartphone Android (Invitado)', mac: '2C:F0:EE:D4:44:A2', ping: 45, estado: 'OK', consumoDownload: 1.4, consumoUpload: 0.2, totalConsumido: 184.5 },
-      13: { host: 'iPhone de Visita 1', mac: '88:C2:23:DF:FB:56', ping: 55, estado: 'OK', consumoDownload: 0.8, consumoUpload: 0.1, totalConsumido: 98.2 },
+      12: { host: 'Smartphone Xiaomi Redmi Note 12 (Android)', mac: '54:A7:2A:D4:44:A2', ping: 22, estado: 'OK', consumoDownload: 4.4, consumoUpload: 0.8, totalConsumido: 184.5 },
+      13: { host: 'iPhone 14 (Apple iOS)', mac: '90:72:40:DF:FB:56', ping: 25, estado: 'OK', consumoDownload: 3.8, consumoUpload: 0.5, totalConsumido: 198.2 },
       45: { host: 'MacBook Pro Freelancer', mac: 'F0:18:98:AA:BC:C1', ping: 15, estado: 'OK', consumoDownload: 12.4, consumoUpload: 4.1, totalConsumido: 1945.0 },
       55: { host: 'Laptop Invitada (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 5, estado: 'OK', consumoDownload: 6.2, consumoUpload: 1.2, totalConsumido: 541.2 },
     },

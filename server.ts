@@ -1551,11 +1551,22 @@ const resolveHostname = async (ip: string, mac?: string, vendor?: string): Promi
   if (vLower.includes('synology') || vLower.includes('nas')) return `Servidor-NAS-Synology (.${ipSuffix})`;
   if (vLower.includes('dell')) return `PC-Workstation-Dell (.${ipSuffix})`;
   if (vLower.includes('lenovo')) return `Laptop-ThinkPad-Lenovo (.${ipSuffix})`;
-  if (vLower.includes('apple')) return `MacBook-Pro-Apple (.${ipSuffix})`;
+  if (vLower.includes('apple')) return `iPhone-Apple-iOS (.${ipSuffix})`;
   if (vLower.includes('samsung')) {
     if (ipSuffix === '38') return `Samsung-SmartTV-Living (.${ipSuffix})`;
     return `Smartphone-Samsung-Galaxy (.${ipSuffix})`;
   }
+  if (vLower.includes('xiaomi') || vLower.includes('redmi') || vLower.includes('poco')) return `Smartphone-Xiaomi-Redmi (.${ipSuffix})`;
+  if (vLower.includes('motorola') || vLower.includes('moto')) return `Smartphone-Motorola-Moto (.${ipSuffix})`;
+  if (vLower.includes('google') || vLower.includes('pixel')) return `Smartphone-Google-Pixel (.${ipSuffix})`;
+  if (vLower.includes('huawei') || vLower.includes('honor')) return `Smartphone-Huawei-Mobile (.${ipSuffix})`;
+  if (vLower.includes('oppo') || vLower.includes('realme') || vLower.includes('vivo') || vLower.includes('oneplus')) return `Smartphone-OPPO-OnePlus (.${ipSuffix})`;
+
+  const cleanMac = (mac || "").replace(/[:-]/g, "").toUpperCase();
+  if (cleanMac.length >= 2 && /^[0-9A-F][26AE]/i.test(cleanMac)) {
+    return `Celular-Smartphone-WiFi-Privado (.${ipSuffix})`;
+  }
+
   if (ipSuffix === '1' || ipSuffix === '254') return `Gateway-Router-Principal (.${ipSuffix})`;
   if (ipSuffix === '55') return `Workstation-EstePC (.${ipSuffix})`;
 
