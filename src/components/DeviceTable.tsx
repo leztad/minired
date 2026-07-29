@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Device } from '../types';
-import { Search, ChevronLeft, ChevronRight, Sliders, Monitor, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Sliders, Monitor, AlertTriangle, CheckCircle2, XCircle, Globe, ExternalLink } from 'lucide-react';
 import { resolveVendorByMac, resolveDeviceNameByMac, isGenericVendor } from '../utils/macUtils';
+import { isWebConfigurableDevice, openDeviceWebInterface } from '../utils/webInterfaceUtils';
 
 interface DeviceTableProps {
   devices: Device[];
@@ -185,7 +186,23 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
                       {resolveDeviceNameByMac(d.mac, d.host, d.ip)}
                     </td>
                     <td className="py-2 px-3 font-mono font-medium text-cyan-400">
-                      {d.ip}
+                      <div className="flex items-center gap-1.5">
+                        <span>{d.ip}</span>
+                        {isWebConfigurableDevice(d) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDeviceWebInterface(d.ip);
+                            }}
+                            className="p-1 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            title={`Entrar a la interfaz web de configuración (http://${d.ip})`}
+                          >
+                            <Globe className="h-3 w-3" />
+                            <span className="text-[9px] font-bold hidden xl:inline">Web UI</span>
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="py-2 px-3 font-sans">
                       <span className={`${brandStyle} text-[11px]`}>

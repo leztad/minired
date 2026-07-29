@@ -28,6 +28,9 @@ import UserManagement, { AVAILABLE_FEATURES } from './components/UserManagement'
 import TauriInstallerGuide from './components/TauriInstallerGuide';
 import ConfigurationPanel from './components/ConfigurationPanel';
 import OfflineLocationsManager, { LocationProfile } from './components/OfflineLocationsManager';
+import PortScannerModal from './components/PortScannerModal';
+import RemoteDiagnosticTools from './components/RemoteDiagnosticTools';
+import { isWebConfigurableDevice, openDeviceWebInterface, getWebConfigUrl } from './utils/webInterfaceUtils';
 
 const extractSubnetFromIp = (ip: string): string => {
   const parts = ip.trim().split('.');
@@ -508,6 +511,14 @@ export default function App() {
   const [portScanProgress, setPortScanProgress] = useState<number>(0);
   const [portScanResults, setPortScanResults] = useState<{ port: number; service: string; status: 'open' | 'closed'; risk: 'low' | 'medium' | 'high'; desc: string }[]>([]);
   const [activeScanningPort, setActiveScanningPort] = useState<number | null>(null);
+
+  // Dedicated Modals for Network Audit & Diagnostics
+  const [showPortScannerModal, setShowPortScannerModal] = useState<boolean>(false);
+  const [portScannerTargetIp, setPortScannerTargetIp] = useState<string>('192.168.1.1');
+  const [portScannerDevice, setPortScannerDevice] = useState<Device | null>(null);
+
+  const [showRemoteToolsModal, setShowRemoteToolsModal] = useState<boolean>(false);
+  const [remoteToolsDevice, setRemoteToolsDevice] = useState<Device | null>(null);
 
   const addAlert = (
     msg: string, 
@@ -2966,6 +2977,34 @@ Generado por: RedMonitor Network Diagnostic Tool`;
               : isResolvingVendors 
                 ? 'Resolviendo Nombres...' 
                 : 'Verificar Internet y Nombres'}
+          </button>
+
+          {/* ESCANER DE PUERTOS BUTTON */}
+          <button 
+            onClick={() => {
+              setPortScannerTargetIp(subnetSegment.replace('/24', '.1').replace('/16', '.1'));
+              setPortScannerDevice(null);
+              setShowPortScannerModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border bg-slate-950 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/10 hover:border-cyan-400 active:scale-95 cursor-pointer shadow-sm"
+            title="Abre el Escáner de Puertos Abiertos TCP y Auditoría de Servicios de Ciberseguridad"
+          >
+            <ShieldAlert className="h-3.5 w-3.5 text-cyan-400" />
+            <span>Escáner de Puertos TCP</span>
+          </button>
+
+          {/* HERRAMIENTAS DE DIAGNOSTICO Y CONTROL REMOTO BUTTON */}
+          <button 
+            onClick={() => {
+              const localPcDevice = devices.find(d => d.host.toLowerCase().includes('este pc') || d.host.toLowerCase().includes('computador')) || devices[0];
+              setRemoteToolsDevice(localPcDevice || null);
+              setShowRemoteToolsModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border bg-slate-950 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/10 hover:border-emerald-400 active:scale-95 cursor-pointer shadow-sm"
+            title="Abre las Herramientas de Diagnóstico Continuo, Wake-on-LAN y Control Remoto SSH/HTTP"
+          >
+            <Radio className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Diagnóstico & Control Remoto</span>
           </button>
 
           {/* ESCANEAR AHORA BUTTON (Highlight Accent cyan) */}
@@ -5454,10 +5493,47 @@ Generado por: RedMonitor Network Diagnostic Tool`;
               </div>
 
               {/* Modal action Buttons footer */}
-              <div className="bg-slate-900 px-4 py-3 border-t border-slate-800/50 flex justify-end gap-2">
+              <div className="bg-slate-900 px-4 py-3 border-t border-slate-800/50 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Web Admin Button */}
+                  <button
+                    onClick={() => openDeviceWebInterface(activeDiagDevice.ip)}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs py-1.5 px-3 rounded-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Globe className="h-3.5 w-3.5" />
+                    <span>Entrar a Interfaz Web (http://{activeDiagDevice.ip})</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </button>
+
+                  {/* Port Scan Button */}
+                  <button
+                    onClick={() => {
+                      setPortScannerTargetIp(activeDiagDevice.ip);
+                      setPortScannerDevice(activeDiagDevice);
+                      setShowPortScannerModal(true);
+                    }}
+                    className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/40 text-xs font-bold py-1.5 px-3 rounded-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    <span>Escáner de Puertos</span>
+                  </button>
+
+                  {/* Remote Tools Button */}
+                  <button
+                    onClick={() => {
+                      setRemoteToolsDevice(activeDiagDevice);
+                      setShowRemoteToolsModal(true);
+                    }}
+                    className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-xs font-bold py-1.5 px-3 rounded-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Radio className="h-3.5 w-3.5" />
+                    <span>Diagnóstico & Control Remoto</span>
+                  </button>
+                </div>
+
                 <button 
                   onClick={() => setSelectedDevice(null)}
-                  className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 text-xs font-bold font-sans py-1.5 px-6 rounded-xs cursor-pointer transition-colors"
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold font-sans py-1.5 px-6 rounded-xs cursor-pointer transition-colors"
                 >
                   Cerrar
                 </button>
@@ -5466,6 +5542,33 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           </div>
         );
       })()}
+
+      {/* PORT SCANNER & SERVICE AUDIT MODAL */}
+      {showPortScannerModal && (
+        <PortScannerModal
+          device={portScannerDevice}
+          initialIp={portScannerTargetIp}
+          onClose={() => setShowPortScannerModal(false)}
+          onOpenWebUi={(ip) => {
+            openDeviceWebInterface(ip);
+          }}
+        />
+      )}
+
+      {/* REMOTE DIAGNOSTIC & CONTROL TOOLS MODAL */}
+      {showRemoteToolsModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <RemoteDiagnosticTools
+              device={remoteToolsDevice}
+              onClose={() => setShowRemoteToolsModal(false)}
+              onOpenWebUi={(ip) => {
+                openDeviceWebInterface(ip);
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE SOLICITUD DE UBICACIÓN INICIAL */}
       {showLocationModal && (
