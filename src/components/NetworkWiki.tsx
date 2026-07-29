@@ -39,6 +39,93 @@ export default function NetworkWiki() {
   const wikiItems: WikiItem[] = [
     // --- MANUAL / GUÍA ---
     {
+      id: 'guide-escaner-puertos',
+      category: 'guide',
+      title: 'Manual: Módulo Escáner de Puertos TCP y Auditoría de Ciberseguridad',
+      tags: ['Escáner Puertos', 'TCP', 'Ciberseguridad', 'Servicios', 'Vulnerabilidades', 'Banners'],
+      summary: 'Inspección activa de sockets TCP, auditoría de ciberseguridad para servicios expuestos y análisis de riesgo.',
+      content: `El módulo **Escáner de Puertos TCP** permite realizar una auditoría de seguridad en profundidad sobre cualquier dirección IP de la red local. Prueba la apertura de puertos TCP estándar para descubrir qué servicios o demonios de sistema se encuentran escuchando y respondiendo peticiones.
+
+      ### Servicios y Puertos Auditados:
+      * **Puerto 80 / 443 / 8080 / 8443 (HTTP/HTTPS Web Admin)**: Interfaces web de configuración de routers, switches, impresoras, cámaras IP y paneles de control.
+      * **Puerto 22 (SSH) / 23 (Telnet)**: Consolas de administración remota. Telnet se marca con **Riesgo Alto** por transmitir credenciales en texto plano sin cifrado.
+      * **Puerto 554 (RTSP Video Stream)**: Transmisión de video IP en tiempo real desde cámaras de seguridad NVR/DVR.
+      * **Puerto 3306 (MySQL) / 5432 (PostgreSQL)**: Bases de datos SQL expuestas en la LAN.
+      * **Puerto 3389 (RDP) / 5900 (VNC)**: Protocolos de control de escritorio remoto gráfico.
+      * **Puerto 631 (IPP) / 9100 (RAW Print)**: Servicios directos de impresión en red JetDirect.
+
+      ### Calificación de Riesgo de Seguridad:
+      El sistema clasifica automáticamente el estado del dispositivo en **Óptimo**, **Advertencia** o **Riesgo Alto (Telnet Abierto / DB Expuesta)**. Para cualquier puerto web detectado, ofrece un botón directo **"Abrir Web UI"** para navegar al panel administrativo.`,
+      steps: [
+        'Haga clic en el botón "Escáner de Puertos TCP" en la barra superior o en los detalles de un dispositivo.',
+        'Ingrese la dirección IP objetivo a auditar y presione "Escanear Puertos".',
+        'Filtre las respuestas entre "Todos", "Abiertos" o "Alertas / Riesgos".',
+        'Revise las recomendaciones de seguridad para cerrar protocolos inseguros como Telnet o habilitar contraseñas fuertes.'
+      ]
+    },
+    {
+      id: 'guide-diagnostico-remoto',
+      category: 'guide',
+      title: 'Manual: Módulo Herramientas de Diagnóstico Continuo, WoL y Control Remoto',
+      tags: ['Diagnóstico', 'Ping Continuo', 'WoL', 'Wake-on-LAN', 'SSH', 'Web Probe', 'Jitter'],
+      summary: 'Pruebas de latencia continua, diagnóstico HTTP, encendido remoto por paquete mágico Wake-on-LAN y acceso SSH.',
+      content: `El panel de **Diagnóstico & Control Remoto** reúne un conjunto de utilidades avanzadas de telemetría y gestión para ingenieros de sistemas.
+
+      ### Utilidades Incluidas:
+      1. **Ping Continuo y Gráfica de Latencia MTR**: Envía ráfagas periódicas de pings ICMP a intervalos de 1 segundo, construyendo una gráfica de barras en tiempo real y calculando latencias mínimas, medias, máximas y el **Jitter** (varianza del retardo).
+      2. **Acceso e Inspección HTTP/HTTPS (Web Probe)**: Sondea los puertos 80 y 443 del host objetivo para extraer el título de la página y el banner del servidor HTTP, ofreciendo un botón directo para acceder a la consola web.
+      3. **Wake-on-LAN (Encendido Remoto WoL)**: Envía un *Paquete Mágico* (Magic Packet UDP de 102 bytes) a la dirección MAC del host para encender equipos que soportan inicio por red en BIOS/Ethernet.
+      4. **Lanzador de Consola SSH**: Genera el comando de terminal listo (\`ssh admin@192.168.1.X\`) para copiar y pegar en PuTTY, OpenSSH o MobaXterm.`,
+      steps: [
+        'Presione "Diagnóstico & Control Remoto" en la cabecera principal o en la ventana flotante de un equipo.',
+        'Haga clic en "Iniciar Ping Continuo" para monitorear la estabilidad de la conexión y detectar fluctuaciones de jitter en vivo.',
+        'Si el equipo está apagado, verifique que la MAC esté correctamente ingresada y presione "Enviar Paquete Mágico Wake-on-LAN".',
+        'Para acceder por web o consola, utilice los botones directos de "Entrar a Interfaz Web" o el botón "Copiar" para el comando SSH.'
+      ]
+    },
+    {
+      id: 'qa-wake-on-lan',
+      category: 'qa',
+      title: '¿Cómo encender un equipo remoto mediante Wake-on-LAN (WoL)?',
+      tags: ['WoL', 'Wake-on-LAN', 'Magic Packet', 'BIOS', 'Ethernet'],
+      summary: 'Requisitos de hardware y configuración para encender computadores a distancia a través de la red local.',
+      content: `El protocolo **Wake-on-LAN (WoL)** permite despertar un computador o servidor que se encuentre en estado de reposo, suspensión o apagado parcial (S3/S4/S5) mediante un paquete especial Ethernet enviado a su tarjeta de red.
+
+      ### Requisitos de Hardware y Configuración:
+      1. **Habilitación en la BIOS / UEFI del Computador**: Debe ingresar a la BIOS del equipo objetivo (presionando F2/Del al arrancar) y activar opciones como \`Wake on LAN\`, \`Power on by PCI-E/LAN\` o \`Enable WoL\`.
+      2. **Configuración de la Tarjeta de Red (Windows / Linux)**: En el Administrador de Dispositivos de Windows, abra las propiedades del adaptador Ethernet -> *Administración de Energía* -> marque "Permitir que este dispositivo reactive el equipo" y "Permitir solo un paquete mágico para reactivar el equipo".
+      3. **Estructura del Paquete Mágico (Magic Packet)**: La aplicación genera una trama de difusión de 102 bytes constituida por 6 bytes de valor \`0xFF\` seguidos de 16 repeticiones seguidas de la dirección MAC del objetivo (48 bits). Se transmite mediante socket UDP por los puertos estándar **9 y 7**.
+
+      ### Ejecución desde el Sistema:
+      Abra la herramienta **Diagnóstico & Control Remoto**, confirme la dirección MAC objetivo y presione **"Enviar Paquete Mágico Wake-on-LAN"**. Si el equipo está conectado a la energía eléctrica y al cable UTP, su tarjeta de red capturará el paquete y encenderá la placa madre inmediatamente.`
+    },
+    {
+      id: 'how-to-acceso-webui',
+      category: 'how-to',
+      title: 'Cómo acceder a la Interfaz Web de Configuración (Web UI) de Routers, Cámaras y NAS',
+      tags: ['Web UI', 'HTTP', 'HTTPS', 'Router', 'Cámara IP', 'NAS', 'Configuración'],
+      summary: 'Paso a paso para detectar e ingresar a las plataformas web de administración de tus dispositivos de red.',
+      content: `Muchos dispositivos de infraestructura (routers gateway, switches administrables, cámaras IP CCTV, impresoras, servidores NAS Synology y microcontroladores ESP32) alojan un servidor web embebido en los puertos 80, 443 o 8080.
+
+      ### Detección Automática en el Panel:
+      El sistema detecta automáticamente los hosts que cuentan con interfaz web y muestra un botón distintivo **"Web UI"** o **"Entrar a Interfaz Web"** en:
+      * **Tabla de Dispositivos**: Junto a la dirección IP del host (ej: \`192.168.1.1\` o \`192.168.1.38\`).
+      * **Modal de Detalles del Dispositivo**: Botón verde resaltado con enlace a \`http://<IP>\`.
+      * **Modal de Escáner de Puertos**: Cuando se detecta abierto el puerto 80, 443, 8080 u 8443.
+
+      ### Pasos para Configurar un Dispositivo desde su Web UI:
+      1. Identifique el dispositivo objetivo en la tabla o mapa de red.
+      2. Haga clic en el botón **"Web UI"** o **"Entrar a Interfaz Web"**.
+      3. La aplicación abrirá la consola de configuración directamente en una pestaña de navegador o mediante enlace seguro.
+      4. Si el equipo requiere HTTPS y muestra una advertencia de certificado autofirmado, acepte la excepción de seguridad para ingresar al panel de inicio de sesión del fabricante.`,
+      steps: [
+        'Localice el equipo en la tabla de dispositivos o en la vista general de la topología.',
+        'Verifique que aparezca la insignia verde "Web UI" junto a su dirección IP.',
+        'Haga clic sobre el botón para abrir directamente la URL de administración HTTP/HTTPS.',
+        'Ingrese las credenciales del fabricante (asegúrese de cambiar las contraseñas predeterminadas de fábrica "admin/admin").'
+      ]
+    },
+    {
       id: 'guide-vista-general',
       category: 'guide',
       title: 'Manual: Módulo Vista General - Topología Dinámica e Integridad',
