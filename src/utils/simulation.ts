@@ -50,24 +50,46 @@ const SUBNET_PRESETS: Record<string, {
   '192.168.1': {
     active: {
       1: { host: 'Router Gateway LAN', mac: '2C:96:82:AF:E1:30', ping: 1, estado: 'OK', consumoDownload: 1.2, consumoUpload: 0.4, totalConsumido: 254.2 },
-      38: { host: 'Smartphone Samsung Galaxy S23 (Android)', mac: 'A0:0B:BA:C4:F3:11', ping: 18, estado: 'OK', consumoDownload: 18.5, consumoUpload: 1.2, totalConsumido: 1245.8 },
-      40: { host: 'iPhone 15 Pro (Apple iOS)', mac: '7C:B0:C2:82:31:0C', ping: 14, estado: 'OK', consumoDownload: 24.8, consumoUpload: 3.5, totalConsumido: 2410.0 },
-      55: { host: 'Estación de Trabajo (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 3, estado: 'OK', consumoDownload: 5.6, consumoUpload: 0.9, totalConsumido: 843.5 },
-      81: { host: 'Grabador NVR Principal - 32Ch (Hikvision CCTV)', mac: '00:40:3F:DE:AA:11', ping: 4, estado: 'OK', consumoDownload: 1.5, consumoUpload: 88.4, totalConsumido: 19485.4, sensorHttp: true },
-      82: { host: 'Cámara PTZ Domo Exterior (Dahua)', mac: 'BC:32:AC:01:FE:33', ping: 7, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.8, totalConsumido: 1250.2 },
-    },
-    virtual: {
       10: { host: 'Base de Datos (Docker DB)', mac: '02:42:AC:11:00:02', ping: 5, estado: 'OK', consumoDownload: 0.1, consumoUpload: 0.2, totalConsumido: 124.0, sensorHttp: true },
       11: { host: 'Servidor Web (Docker)', mac: '02:42:AC:11:00:03', ping: 12, estado: 'OK', consumoDownload: 2.1, consumoUpload: 3.4, totalConsumido: 984.7, sensorHttp: true },
       15: { host: 'Almacenamiento de Red (NAS)', mac: '00:11:32:8F:A1:AC', ping: 95, estado: 'Advertencia', consumoDownload: 0.8, consumoUpload: 45.3, totalConsumido: 11450.2 },
-      22: { host: 'Impresora de Red', mac: '3C:D9:2B:44:A8:12', ping: 45, estado: 'OK', consumoDownload: 0, consumoUpload: 0, totalConsumido: 4.8 },
+      22: { host: 'Impresora de Red LAN', mac: '3C:D9:2B:44:A8:12', ping: 45, estado: 'OK', consumoDownload: 0.05, consumoUpload: 0.01, totalConsumido: 15.0 },
+      38: { host: 'Smartphone Samsung Galaxy S23 (Android)', mac: 'A0:0B:BA:C4:F3:11', ping: 18, estado: 'OK', consumoDownload: 18.5, consumoUpload: 1.2, totalConsumido: 1245.8 },
+      40: { host: 'iPhone 15 Pro (Apple iOS)', mac: '7C:B0:C2:82:31:0C', ping: 14, estado: 'OK', consumoDownload: 24.8, consumoUpload: 3.5, totalConsumido: 2410.0 },
+      55: { host: 'Estación de Trabajo (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 3, estado: 'OK', consumoDownload: 5.6, consumoUpload: 0.9, totalConsumido: 843.5, sensorHttp: true },
       60: { host: 'Cámara IP Pasillo Acceso (Axis CCTV)', mac: 'AC:CC:8E:B1:01:CC', ping: 12, estado: 'OK', consumoDownload: 0.05, consumoUpload: 3.5, totalConsumido: 841.5 },
       61: { host: 'Cámara IP Domo Sala Reuniones (EZVIZ)', mac: 'D4:43:EB:A0:FC:92', ping: 14, estado: 'OK', consumoDownload: 0.05, consumoUpload: 2.2, totalConsumido: 512.4 },
-      66: { host: 'Raspberry Pi 4 - Servidor Linux Embebido (Home Assistant / Pi-hole)', mac: 'DC:A6:32:11:22:33', ping: 4, estado: 'OK', consumoDownload: 0.8, consumoUpload: 0.4, totalConsumido: 412.5, sensorHttp: true },
-      70: { host: 'Dispositivo IoT (DHCP .70)', mac: 'FC:A6:67:88:AC:3B', ping: 75, estado: 'OK', consumoDownload: 0.2, consumoUpload: 0.1, totalConsumido: 55.4 },
-      102: { host: 'Módulo IoT (DHCP .102)', mac: 'EC:FA:BC:11:22:33', ping: 140, estado: 'Advertencia', consumoDownload: 0.05, consumoUpload: 0.05, totalConsumido: 12.3 },
-      200: { host: 'Máquina Virtual (VM Ubuntu)', mac: '08:00:27:8C:1D:64', ping: 8, estado: 'OK', consumoDownload: 1.4, consumoUpload: 0.3, totalConsumido: 341.1 }
-    }
+      66: { host: 'Raspberry Pi 4 - Servidor Linux Embebido (Home Assistant)', mac: 'DC:A6:32:11:22:33', ping: 4, estado: 'OK', consumoDownload: 0.8, consumoUpload: 0.4, totalConsumido: 412.5, sensorHttp: true },
+      70: { host: 'Dispositivo IoT Control (DHCP .70)', mac: 'FC:A6:67:88:AC:3B', ping: 75, estado: 'OK', consumoDownload: 0.2, consumoUpload: 0.1, totalConsumido: 55.4 },
+      81: { host: 'Grabador NVR Principal - 32Ch (Hikvision CCTV)', mac: '00:40:3F:DE:AA:11', ping: 4, estado: 'OK', consumoDownload: 1.5, consumoUpload: 88.4, totalConsumido: 19485.4, sensorHttp: true },
+      82: { host: 'Cámara PTZ Domo Exterior (Dahua)', mac: 'BC:32:AC:01:FE:33', ping: 7, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.8, totalConsumido: 1250.2 },
+      102: { host: 'Módulo IoT Sensorica (DHCP .102)', mac: 'EC:FA:BC:11:22:33', ping: 140, estado: 'Advertencia', consumoDownload: 0.05, consumoUpload: 0.05, totalConsumido: 12.3 },
+      200: { host: 'Máquina Virtual (VM Ubuntu Host)', mac: '08:00:27:8C:1D:64', ping: 8, estado: 'OK', consumoDownload: 1.4, consumoUpload: 0.3, totalConsumido: 341.1 }
+    },
+    virtual: {}
+  },
+  // 192.168.254.0/24 - Hikvision / HiLook PoE Subnet Aislada
+  '192.168.254': {
+    active: {
+      1: { host: 'Interfaz Interna NVR Hikvision (Gateway PoE)', mac: '00:40:3F:E2:00:01', ping: 1, estado: 'OK', consumoDownload: 1.0, consumoUpload: 45.0, totalConsumido: 8500.0, sensorHttp: true },
+      10: { host: 'Cámara IP Hikvision Bullet Acceso Principal', mac: '00:40:3F:A1:10:0A', ping: 5, estado: 'OK', consumoDownload: 0.05, consumoUpload: 4.5, totalConsumido: 1420.0 },
+      11: { host: 'Cámara IP Hikvision Domo Estacionamiento', mac: '00:40:3F:A1:10:0B', ping: 6, estado: 'OK', consumoDownload: 0.05, consumoUpload: 4.8, totalConsumido: 1450.0 },
+      12: { host: 'Cámara IP Hikvision PTZ Exterior 4K', mac: '00:40:3F:A1:10:0C', ping: 8, estado: 'OK', consumoDownload: 0.1, consumoUpload: 8.2, totalConsumido: 2200.0 },
+      13: { host: 'Cámara IP HiLook Varifocal Bodega', mac: '00:40:3F:A1:10:0D', ping: 7, estado: 'OK', consumoDownload: 0.05, consumoUpload: 4.2, totalConsumido: 1380.0 },
+      64: { host: 'Servicio Web Virtual Host Hikvision (NVR Bridge)', mac: '00:40:3F:DE:AA:11', ping: 3, estado: 'OK', consumoDownload: 0.5, consumoUpload: 12.0, totalConsumido: 3400.0, sensorHttp: true }
+    },
+    virtual: {}
+  },
+  // 10.1.1.0/24 - Dahua / Lorex / Saxxon PoE Subnet Aislada
+  '10.1.1': {
+    active: {
+      1: { host: 'Interfaz NVR Dahua Master (Switch PoE)', mac: 'A4:12:3F:01:00:01', ping: 2, estado: 'OK', consumoDownload: 0.8, consumoUpload: 52.0, totalConsumido: 9800.0, sensorHttp: true },
+      108: { host: 'Grabador DVR Dahua Smart Pass-Through', mac: 'A4:12:3F:82:B1:01', ping: 4, estado: 'OK', consumoDownload: 1.2, consumoUpload: 48.0, totalConsumido: 12400.0, sensorHttp: true },
+      110: { host: 'Cámara IP Dahua WizSense Frontal', mac: 'A4:12:3F:11:22:01', ping: 5, estado: 'OK', consumoDownload: 0.05, consumoUpload: 4.6, totalConsumido: 1120.0 },
+      111: { host: 'Cámara IP Dahua Full-Color Perímetro', mac: 'A4:12:3F:11:22:02', ping: 6, estado: 'OK', consumoDownload: 0.05, consumoUpload: 4.8, totalConsumido: 1150.0 },
+      112: { host: 'Cámara IP Lorex HD Pasillo', mac: 'A4:12:3F:11:22:03', ping: 8, estado: 'OK', consumoDownload: 0.05, consumoUpload: 3.9, totalConsumido: 980.0 }
+    },
+    virtual: {}
   },
   // 192.168.20.0/24 - CCTV and IoT security VLAN
   '192.168.20': {
@@ -78,29 +100,27 @@ const SUBNET_PRESETS: Record<string, {
       22: { host: 'Cámara Varifocal Bodega Norte', mac: '00:0F:7C:1E:51:AB', ping: 9, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.5, totalConsumido: 1235.4 },
       23: { host: 'Cámara Exterior Acceso', mac: '00:0F:7C:1E:51:AC', ping: 11, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.5, totalConsumido: 1242.0 },
       55: { host: 'Estación LAN Bridge (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 2, estado: 'OK', consumoDownload: 4.1, consumoUpload: 1.1, totalConsumido: 624.0 },
-    },
-    virtual: {
       100: { host: 'Lector Biométrico Puertas', mac: '00:1A:2B:AC:45:90', ping: 24, estado: 'OK', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 2.4 },
       101: { host: 'Sensor Humedad IoT (Estante 1)', mac: '4E:1A:87:CC:01:A2', ping: 98, estado: 'Advertencia', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 4.1 },
       180: { host: 'VM Syslog Server (VLAN Stack)', mac: '08:00:27:8C:DD:22', ping: 5, estado: 'OK', consumoDownload: 0.3, consumoUpload: 0.8, totalConsumido: 184.2 }
-    }
+    },
+    virtual: {}
   },
   // 192.168.100.0/24 - Wi-Fi Principal
   '192.168.100': {
     active: {
       1: { host: 'AP Principal (UniFi AP-PRO)', mac: '44:D9:E7:F4:01:BC', ping: 1, estado: 'OK', consumoDownload: 42.1, consumoUpload: 10.4, totalConsumido: 8412.5 },
+      12: { host: 'Apple iPad Air (Tablet)', mac: '7C:B0:C2:DE:FA:01', ping: 18, estado: 'OK', consumoDownload: 1.1, consumoUpload: 0.1, totalConsumido: 98.4 },
       15: { host: 'Almacenamiento LAN (NAS Multimedia)', mac: '00:11:32:8F:A1:BC', ping: 65, estado: 'OK', consumoDownload: 1.2, consumoUpload: 18.2, totalConsumido: 5214.0 },
       38: { host: 'Smart TV 65" LivingRoom', mac: 'D4:E4:C4:F3:11:80', ping: 85, estado: 'Advertencia', consumoDownload: 18.5, consumoUpload: 1.2, totalConsumido: 1245.8 },
       40: { host: 'Consola PS5 (Gaming-Wifi)', mac: 'FE:33:DE:82:11:1C', ping: 120, estado: 'Advertencia', consumoDownload: 42.8, consumoUpload: 3.5, totalConsumido: 5410.0 },
       55: { host: 'Laptop de Trabajo (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 4, estado: 'OK', consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120.0 },
-    },
-    virtual: {
-      12: { host: 'Apple iPad Air (Tablet)', mac: '7C:B0:C2:DE:FA:01', ping: 18, estado: 'OK', consumoDownload: 1.1, consumoUpload: 0.1, totalConsumido: 98.4 },
       70: { host: 'Asistente Alexa Echo Dot', mac: 'FC:A6:67:88:AC:3B', ping: 25, estado: 'OK', consumoDownload: 0.05, consumoUpload: 0.01, totalConsumido: 22.4 },
       72: { host: 'Bombilla Inteligente Living', mac: 'C4:4F:33:8A:23:44', ping: 142, estado: 'Advertencia', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 1.2 },
       73: { host: 'Termostato Inteligente Nest', mac: '00:1E:C5:DD:12:F1', ping: 44, estado: 'OK', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 0.8 },
-      102: { host: 'Cerradura Inteligente Yale', mac: 'EC:FA:BC:11:22:33', ping: 95, estado: 'Advertencia', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 0.2 },
-    }
+      102: { host: 'Cerradura Inteligente Yale', mac: 'EC:FA:BC:11:22:33', ping: 95, estado: 'Advertencia', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 0.2 }
+    },
+    virtual: {}
   },
   // 10.0.0.0/24 - Wi-Fi Invitados
   '10.0.0': {
@@ -110,11 +130,10 @@ const SUBNET_PRESETS: Record<string, {
       13: { host: 'iPhone 14 (Apple iOS)', mac: '90:72:40:DF:FB:56', ping: 25, estado: 'OK', consumoDownload: 3.8, consumoUpload: 0.5, totalConsumido: 198.2 },
       45: { host: 'MacBook Pro Freelancer', mac: 'F0:18:98:AA:BC:C1', ping: 15, estado: 'OK', consumoDownload: 12.4, consumoUpload: 4.1, totalConsumido: 1945.0 },
       55: { host: 'Laptop Invitada (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 5, estado: 'OK', consumoDownload: 6.2, consumoUpload: 1.2, totalConsumido: 541.2 },
-    },
-    virtual: {
       100: { host: 'Smart TV Habitación Invitados', mac: 'EC:AA:23:FF:DE:89', ping: 72, estado: 'OK', consumoDownload: 4.5, consumoUpload: 0.4, totalConsumido: 345.0 },
       210: { host: 'Dispositivo Escaneado WiFi', mac: 'A4:C5:12:33:DE:FF', ping: 135, estado: 'Advertencia', consumoDownload: 0.1, consumoUpload: 0.05, totalConsumido: 15.0 }
-    }
+    },
+    virtual: {}
   },
   // 172.17.0.0/16 - Docker Bridge
   '172.17': {
@@ -123,27 +142,25 @@ const SUBNET_PRESETS: Record<string, {
       2: { host: 'Contenedor Backend (Node.js Express)', mac: '02:42:AC:11:00:02', ping: 2, estado: 'OK', consumoDownload: 12.5, consumoUpload: 8.4, totalConsumido: 5412.0, sensorHttp: true },
       3: { host: 'Contenedor Redis (Session Store)', mac: '02:42:AC:11:00:03', ping: 1, estado: 'OK', consumoDownload: 4.1, consumoUpload: 4.2, totalConsumido: 1120.5 },
       4: { host: 'Contenedor PostgreSQL (DB)', mac: '02:42:AC:11:00:04', ping: 3, estado: 'OK', consumoDownload: 1.8, consumoUpload: 14.5, totalConsumido: 8452.4, sensorHttp: true },
-      55: { host: 'Nodo Docker Host (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 1, estado: 'OK', consumoDownload: 18.5, consumoUpload: 27.2, totalConsumido: 15124.0 }
-    },
-    virtual: {
       10: { host: 'Contenedor InfluxDB (Métricas)', mac: '02:42:AC:11:00:0A', ping: 4, estado: 'OK', consumoDownload: 0.8, consumoUpload: 0.9, totalConsumido: 254.0 },
       11: { host: 'Contenedor Grafana Panel', mac: '02:42:AC:11:00:0B', ping: 5, estado: 'OK', consumoDownload: 1.4, consumoUpload: 0.2, totalConsumido: 185.0, sensorHttp: true },
-      12: { host: 'Contenedor RabbitMQ Eventos', mac: '02:42:AC:11:00:0C', ping: 8, estado: 'OK', consumoDownload: 0.2, consumoUpload: 0.2, totalConsumido: 112.5 }
-    }
+      12: { host: 'Contenedor RabbitMQ Eventos', mac: '02:42:AC:11:00:0C', ping: 8, estado: 'OK', consumoDownload: 0.2, consumoUpload: 0.2, totalConsumido: 112.5 },
+      55: { host: 'Nodo Docker Host (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 1, estado: 'OK', consumoDownload: 18.5, consumoUpload: 27.2, totalConsumido: 15124.0 }
+    },
+    virtual: {}
   },
   // 10.10.10.0/24 - SDN OpenFlow Sandbox
   '10.10.10': {
     active: {
       1: { host: 'Gatekeeper Controller SDN v4', mac: '0A:B1:C2:D3:E4:01', ping: 2, estado: 'OK', consumoDownload: 0.1, consumoUpload: 0.1, totalConsumido: 10.2 },
       10: { host: 'Controlador Ryu OpenFlow', mac: '0A:B1:C2:D3:E4:0A', ping: 3, estado: 'OK', consumoDownload: 0.2, consumoUpload: 0.2, totalConsumido: 45.3 },
-      55: { host: 'Workstation Mininet (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 1, estado: 'OK', consumoDownload: 5.6, consumoUpload: 0.9, totalConsumido: 843.5 },
-    },
-    virtual: {
       20: { host: 'Switch Virtual Open vSwitch s1', mac: '00:00:00:00:00:01', ping: 2, estado: 'OK', consumoDownload: 4.8, consumoUpload: 4.8, totalConsumido: 1890.4 },
       21: { host: 'Switch Virtual Open vSwitch s2', mac: '00:00:00:00:00:02', ping: 2, estado: 'OK', consumoDownload: 2.1, consumoUpload: 2.1, totalConsumido: 980.5 },
+      55: { host: 'Workstation Mininet (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 1, estado: 'OK', consumoDownload: 5.6, consumoUpload: 0.9, totalConsumido: 843.5 },
       101: { host: 'SDN Virtual Host h1', mac: '00:00:00:00:01:01', ping: 8, estado: 'OK', consumoDownload: 1.0, consumoUpload: 0.5, totalConsumido: 124.5 },
       102: { host: 'SDN Virtual Host h2', mac: '00:00:00:00:01:02', ping: 145, estado: 'Advertencia', consumoDownload: 0.05, consumoUpload: 0.05, totalConsumido: 12.3 }
-    }
+    },
+    virtual: {}
   }
 };
 
@@ -294,8 +311,7 @@ export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean 
   let virtualPresets: Record<number, PresetDefinition> = {};
 
   if (SUBNET_PRESETS[base]) {
-    activePresets = { ...SUBNET_PRESETS[base].active };
-    virtualPresets = { ...SUBNET_PRESETS[base].virtual };
+    activePresets = { ...SUBNET_PRESETS[base].active, ...SUBNET_PRESETS[base].virtual };
   } else {
     // Dynamic generator for custom/unlisted subnets (e.g. 192.168.254, 10.1.1, 192.168.5, etc.)
     activePresets = {
@@ -304,19 +320,19 @@ export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean 
       10: { host: `Grabador DVR/NVR Master (${base}.10)`, mac: generateRandomMAC(10), ping: 4, estado: 'OK', consumoDownload: 1.5, consumoUpload: 42.0, totalConsumido: 8400.0, sensorHttp: true },
       11: { host: `Cámara IP Exterior PTZ (${base}.11)`, mac: generateRandomMAC(11), ping: 6, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.5, totalConsumido: 980.0 },
       12: { host: `Cámara IP Domo Acceso (${base}.12)`, mac: generateRandomMAC(12), ping: 5, estado: 'OK', consumoDownload: 0.1, consumoUpload: 3.8, totalConsumido: 820.0 },
+      15: { host: `Servidor NAS Almacenamiento (${base}.15)`, mac: generateRandomMAC(15), ping: 8, estado: 'OK', consumoDownload: 0.5, consumoUpload: 18.4, totalConsumido: 4200.0, sensorHttp: true },
       22: { host: `Impresora de Red LAN (${base}.22)`, mac: generateRandomMAC(22), ping: 12, estado: 'OK', consumoDownload: 0.05, consumoUpload: 0.01, totalConsumido: 15.0 },
       38: { host: `Smartphone Android (${base}.38)`, mac: generateRandomMAC(38), ping: 22, estado: 'OK', consumoDownload: 14.2, consumoUpload: 1.1, totalConsumido: 1420.0 },
       40: { host: `Smart TV / Pantalla (${base}.40)`, mac: generateRandomMAC(40), ping: 18, estado: 'OK', consumoDownload: 22.0, consumoUpload: 0.5, totalConsumido: 3400.0 },
-      55: { host: `Estación de Trabajo / PC (${base}.55)`, mac: generateRandomMAC(55), ping: 2, estado: 'OK', consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120.0, sensorHttp: true }
-    };
-
-    virtualPresets = {
-      15: { host: `Servidor NAS Almacenamiento (${base}.15)`, mac: generateRandomMAC(15), ping: 8, estado: 'OK', consumoDownload: 0.5, consumoUpload: 18.4, totalConsumido: 4200.0, sensorHttp: true },
+      55: { host: `Estación de Trabajo / PC (${base}.55)`, mac: generateRandomMAC(55), ping: 2, estado: 'OK', consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120.0, sensorHttp: true },
       60: { host: `Cámara IP Pasillo (${base}.60)`, mac: generateRandomMAC(60), ping: 9, estado: 'OK', consumoDownload: 0.05, consumoUpload: 3.2, totalConsumido: 680.0 },
+      64: { host: `Cámara IP Hikvision Bullet (${base}.64)`, mac: generateRandomMAC(64), ping: 7, estado: 'OK', consumoDownload: 0.05, consumoUpload: 4.1, totalConsumido: 920.0 },
       66: { host: `Servidor Embebido Linux (${base}.66)`, mac: generateRandomMAC(66), ping: 3, estado: 'OK', consumoDownload: 0.4, consumoUpload: 0.2, totalConsumido: 310.0, sensorHttp: true },
       70: { host: `Módulo IoT Control (${base}.70)`, mac: generateRandomMAC(70), ping: 45, estado: 'OK', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 4.5 },
+      100: { host: `Grabadora NVR Secundaria (${base}.100)`, mac: generateRandomMAC(100), ping: 5, estado: 'OK', consumoDownload: 1.2, consumoUpload: 28.5, totalConsumido: 5100.0, sensorHttp: true },
       102: { host: `Sensor IoT Sensorica (${base}.102)`, mac: generateRandomMAC(102), ping: 88, estado: 'Advertencia', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 1.2 },
-      200: { host: `Máquina Virtual Host (${base}.200)`, mac: generateRandomMAC(200), ping: 4, estado: 'OK', consumoDownload: 2.1, consumoUpload: 0.8, totalConsumido: 512.0 }
+      108: { host: `Cámara IP Dahua Varifocal (${base}.108)`, mac: generateRandomMAC(108), ping: 8, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.8, totalConsumido: 1100.0 },
+      200: { host: `Host Virtual / Servidor Hyper-V (${base}.200)`, mac: generateRandomMAC(200), ping: 4, estado: 'OK', consumoDownload: 2.1, consumoUpload: 0.8, totalConsumido: 512.0 }
     };
   }
 

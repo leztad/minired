@@ -211,8 +211,31 @@ export const CctvDiagnosticModal: React.FC<CctvDiagnosticModalProps> = ({
           {/* TAB 2: ONE-CLICK ACTIONS IN REDMONITOR */}
           {activeTab === 'actions' && (
             <div className="space-y-5">
-              <div className="text-xs text-slate-300 leading-relaxed">
-                Selecciona la marca o estructura de tu grabador para inyectar su subred de cámaras aisladas o habilitar el escaneo multi-red en RedMonitor:
+              {/* PRIMARY 1-CLICK AUTO DISCOVERY BUTTON */}
+              <div className="p-4 bg-gradient-to-r from-cyan-950/80 to-blue-950/80 rounded-xl border border-cyan-500/50 space-y-3 shadow-lg">
+                <div className="flex items-center gap-2 text-cyan-300 font-bold text-sm">
+                  <Zap className="w-5 h-5 text-cyan-400 animate-pulse" />
+                  Auto-Descubrimiento Global de Red y Cámaras CCTV (Sin Ingresar IPs)
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  RedMonitor barrerá automáticamente <strong>todas las subredes de la red LAN y puertos PoE de DVRs</strong> (<code className="text-cyan-300 font-mono">192.168.1.x</code>, <code className="text-cyan-300 font-mono">192.168.254.x</code>, <code className="text-cyan-300 font-mono">10.1.1.x</code>, <code className="text-cyan-300 font-mono">172.16.254.x</code>) para detectar grabadores, cámaras IP y equipos automáticamente.
+                </p>
+                <button
+                  onClick={() => {
+                    onInjectCctvSubnet('192.168.254.0/24', 'Hikvision PoE');
+                    onInjectCctvSubnet('10.1.1.0/24', 'Dahua PoE');
+                    onEnableMultiScan();
+                    onClose();
+                  }}
+                  className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-cyan-500/20"
+                >
+                  <Search className="w-4 h-4 text-slate-950" />
+                  EJECUTAR AUTO-ESCÁNER GLOBAL Y DESCUBRIR CÁMARAS/DVRS AHORA
+                </button>
+              </div>
+
+              <div className="text-xs text-slate-300 leading-relaxed pt-2">
+                O selecciona una subred específica de grabador para inyectarla individualmente al auto-escáner:
               </div>
 
               {/* PRESET SUBNETS LIST */}
