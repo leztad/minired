@@ -529,13 +529,14 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
     onAddLog(`📋 Reporte de auditoría estructurado en Markdown copiado al portapapeles del sistema.`, 'info');
   };
 
-  // EXPORT 4: HIGHLY-STYLED EXCEL REPORT PRESERVING PDF FORMATTING
+  // EXPORT 4: HIGHLY-STYLED EXCEL REPORT PRESERVING PDF FORMATTING IDENTICALLY
   const exportAsExcel = () => {
-    onAddLog("📊 Generando informe de auditoría compatible con Excel con formato enriquecido...", "info");
+    onAddLog("📊 Generando informe de auditoría en Excel con diseño idéntico al PDF...", "info");
     try {
       const formattedDate = new Date().toISOString().split('T')[0];
       const timestamp = new Date().toLocaleString('es-ES');
-      
+      const displayLoc = (locationName || 'Sede Local / No Registrada').trim().toUpperCase();
+
       let html = `
         <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
         <head>
@@ -558,28 +559,39 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
             body {
               font-family: 'Segoe UI', Arial, sans-serif;
               color: #0f172a;
+              background-color: #ffffff;
             }
             table {
               border-collapse: collapse;
+              width: 100%;
             }
             td, th {
               font-family: 'Segoe UI', Arial, sans-serif;
               padding: 8px 10px;
               vertical-align: middle;
             }
+            .accent-top-bar {
+              background-color: #06b6d4;
+              height: 5px;
+              padding: 0;
+            }
             .header-top {
               color: #64748b;
               font-size: 8.5pt;
               font-weight: bold;
+              padding-top: 6px;
+              padding-bottom: 6px;
             }
             .main-title {
-              font-size: 16pt;
+              font-size: 18pt;
               font-weight: bold;
               color: #0b1120;
+              padding-top: 10px;
             }
             .main-subtitle {
               font-size: 10pt;
               color: #475569;
+              padding-bottom: 10px;
             }
             .panel-left-title {
               font-weight: bold;
@@ -640,6 +652,8 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
               font-size: 11pt;
               font-weight: bold;
               color: #0b1120;
+              padding-top: 10px;
+              padding-bottom: 4px;
             }
             .summary-header-cell {
               border-top: 1px solid #bae6fd;
@@ -651,7 +665,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
             .summary-value-cell {
               border-bottom: 1px solid #bae6fd;
               background-color: #f0f9ff;
-              font-size: 14pt;
+              font-size: 15pt;
               font-weight: bold;
               color: #0b1120;
               padding: 4px 12px 10px 12px;
@@ -660,6 +674,8 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
               font-size: 11pt;
               font-weight: bold;
               color: #0b1120;
+              padding-top: 12px;
+              padding-bottom: 4px;
             }
             .data-table th {
               background-color: #0b1120;
@@ -675,59 +691,13 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
               font-size: 8.5pt;
               padding: 6px 10px;
             }
-            .data-table tr.alt {
-              background-color: #f8fafc;
-            }
-            .ip-address {
-              color: #006699;
-              font-weight: bold;
-            }
-            .mac-address {
-              color: #334155;
-              font-weight: bold;
-            }
-            .vendor-text {
-              color: #475569;
-            }
-            .vendor-highlight-purple {
-              color: #a855f7;
-              font-weight: bold;
-            }
-            .vendor-highlight-cyan {
-              color: #0891b2;
-              font-weight: bold;
-            }
-            .latency-ok {
-              color: #10b981;
-              font-weight: bold;
-            }
-            .latency-warn {
-              color: #f59e0b;
-              font-weight: bold;
-            }
-            .badge-ok {
-              background-color: #d1fae5;
-              color: #059669;
-              font-weight: bold;
-              text-align: center;
-              border: 1px solid #a7f3d0;
-              padding: 2px 8px;
-            }
-            .badge-warn {
-              background-color: #fef3c7;
-              color: #d97706;
-              font-weight: bold;
-              text-align: center;
-              border: 1px solid #fde68a;
-              padding: 2px 8px;
-            }
             .declaration-title {
               border-top: 1px solid #cbd5e1;
               border-left: 1px solid #cbd5e1;
               border-right: 1px solid #cbd5e1;
               background-color: #f1f5f9;
               font-weight: bold;
-              font-size: 9pt;
+              font-size: 8.5pt;
               color: #0f172a;
               padding: 10px 12px;
             }
@@ -752,12 +722,14 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
               text-align: center;
               font-size: 8pt;
               color: #64748b;
+              padding-top: 14px;
             }
             .footer-author {
               text-align: center;
               font-size: 8pt;
               color: #334155;
               font-weight: bold;
+              padding-bottom: 10px;
             }
           </style>
         </head>
@@ -765,37 +737,45 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
           <table>
             <colgroup>
               <col style="width: 140px;" />
-              <col style="width: 150px;" />
-              <col style="width: 190px;" />
-              <col style="width: 190px;" />
-              <col style="width: 90px;" />
-              <col style="width: 90px;" />
+              <col style="width: 160px;" />
+              <col style="width: 200px;" />
+              <col style="width: 220px;" />
+              <col style="width: 100px;" />
+              <col style="width: 100px;" />
             </colgroup>
 
+            <!-- TOP CYAN ACCENT LINE (Identical to PDF header line) -->
+            <tr>
+              <td colspan="6" class="accent-top-bar" style="background-color: #06b6d4; height: 5px; padding: 0;"></td>
+            </tr>
+
+            <!-- HEADER BAR (Identical to PDF top banner) -->
             <tr>
               <td colspan="3" class="header-top" style="color: #64748b; font-size: 8.5pt; font-weight: bold; font-family: 'Segoe UI', Arial, sans-serif;">SISTEMA DE MONITOREO DE RED - REDMONITOR</td>
               <td colspan="3" class="header-top" style="text-align: right; color: #64748b; font-size: 8.5pt; font-weight: bold; font-family: 'Segoe UI', Arial, sans-serif;">AUDITORÍA DE INFRAESTRUCTURA LAN</td>
             </tr>
             <tr>
-              <td colspan="6" style="border-bottom: 1.5px solid #cbd5e1; height: 4px; padding: 0;"></td>
+              <td colspan="6" style="border-bottom: 1.5px solid #cbd5e1; height: 2px; padding: 0;"></td>
             </tr>
-            <tr><td colspan="6" style="height: 12px; padding: 0;"></td></tr>
+            <tr><td colspan="6" style="height: 10px; padding: 0;"></td></tr>
 
+            <!-- MAIN TITLE & SUBTITLE (Identical to PDF Title) -->
             <tr>
-              <td colspan="6" class="main-title" style="font-size: 16pt; font-weight: bold; color: #0b1120; font-family: 'Segoe UI', Arial, sans-serif;">INFORME DE AUDITORÍA DE RED FÍSICA</td>
+              <td colspan="6" class="main-title" style="font-size: 18pt; font-weight: bold; color: #0b1120; font-family: 'Segoe UI', Arial, sans-serif;">INFORME DE AUDITORÍA DE RED FÍSICA</td>
             </tr>
             <tr>
               <td colspan="6" class="main-subtitle" style="font-size: 10pt; color: #475569; font-family: 'Segoe UI', Arial, sans-serif;">Sondeo y Validación de Interfaces Físicas, Direcciones MAC y Latencia LAN</td>
             </tr>
             <tr><td colspan="6" style="height: 12px; padding: 0;"></td></tr>
 
+            <!-- DUAL PANEL METADATA SECTION (Identical to PDF Cards) -->
             <tr>
               <td colspan="3" class="panel-left-title" style="font-weight: bold; color: #475569; font-size: 8.5pt; border-top: 1px solid #cbd5e1; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; padding: 8px 12px; font-family: 'Segoe UI', Arial, sans-serif;">SISTEMA / DETALLES DE AUDITORÍA</td>
               <td colspan="3" class="panel-right-title" style="font-weight: bold; color: #087389; font-size: 9pt; border-top: 2px solid #06b6d4; border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4; background-color: #ecfefe; padding: 8px 12px; font-family: 'Segoe UI', Arial, sans-serif;">SITIO / UBICACIÓN REGISTRADA</td>
             </tr>
             <tr>
               <td colspan="3" class="panel-left-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px; font-family: 'Segoe UI', Arial, sans-serif;">Sonda: RedMonitor Sonda de Campo Local</td>
-              <td colspan="3" class="panel-right-body" style="border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4; background-color: #ecfefe; font-weight: bold; font-size: 11pt; color: #0f172a; padding: 6px 12px; font-family: 'Segoe UI', Arial, sans-serif;">${(locationName || 'Sede Local').trim().toUpperCase()}</td>
+              <td colspan="3" class="panel-right-body" style="border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4; background-color: #ecfefe; font-weight: bold; font-size: 11pt; color: #0f172a; padding: 6px 12px; font-family: 'Segoe UI', Arial, sans-serif;">${displayLoc}</td>
             </tr>
             <tr>
               <td colspan="3" class="panel-left-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px; font-family: 'Segoe UI', Arial, sans-serif;">ID Dispositivo: RED-MON-162BF909</td>
@@ -805,8 +785,9 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
               <td colspan="3" class="panel-left-bottom" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px 8px 12px; font-family: 'Segoe UI', Arial, sans-serif;">Fecha/Hora: ${timestamp}</td>
               <td colspan="3" style="height: 0; padding: 0; background-color: #ecfefe; border-bottom: 2px solid #06b6d4; border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4;"></td>
             </tr>
-            <tr><td colspan="6" style="height: 15px; padding: 0;"></td></tr>
+            <tr><td colspan="6" style="height: 14px; padding: 0;"></td></tr>
 
+            <!-- EXECUTIVE SUMMARY CARDS (Identical to PDF Resumen Panel) -->
             <tr>
               <td colspan="6" class="summary-title" style="font-size: 11pt; font-weight: bold; color: #0b1120; font-family: 'Segoe UI', Arial, sans-serif;">RESUMEN EJECUTIVO DE SEGURIDAD</td>
             </tr>
@@ -816,23 +797,25 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
               <td colspan="2" class="summary-header-cell" style="border-top: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 8.5pt; color: #475569; padding: 10px 12px 4px 12px; border-right: 1px solid #bae6fd; font-family: 'Segoe UI', Arial, sans-serif;">NIVEL DE SEGURIDAD GENERAL</td>
             </tr>
             <tr>
-              <td colspan="2" class="summary-value-cell" style="border-bottom: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 14pt; font-weight: bold; color: #0b1120; padding: 4px 12px 10px 12px; border-left: 1px solid #bae6fd; font-family: 'Segoe UI', Arial, sans-serif;">${totals.count} Dispositivos</td>
-              <td colspan="2" class="summary-value-cell" style="border-bottom: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 14pt; font-weight: bold; padding: 4px 12px 10px 12px; color: ${totals.avgLatency > 50 ? '#d97706' : '#059669'}; font-family: 'Segoe UI', Arial, sans-serif;">${totals.avgLatency} ms</td>
+              <td colspan="2" class="summary-value-cell" style="border-bottom: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 15pt; font-weight: bold; color: #0b1120; padding: 4px 12px 10px 12px; border-left: 1px solid #bae6fd; font-family: 'Segoe UI', Arial, sans-serif;">${totals.count} Dispositivos</td>
+              <td colspan="2" class="summary-value-cell" style="border-bottom: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 15pt; font-weight: bold; padding: 4px 12px 10px 12px; color: ${totals.avgLatency > 50 ? '#d97706' : '#059669'}; font-family: 'Segoe UI', Arial, sans-serif;">${totals.avgLatency} ms</td>
               <td colspan="2" class="summary-value-cell" style="border-bottom: 1px solid #bae6fd; background-color: #f0f9ff; font-size: 14pt; font-weight: bold; padding: 4px 12px 10px 12px; border-right: 1px solid #bae6fd; color: ${totals.score < 80 ? '#d97706' : '#059669'}; font-family: 'Segoe UI', Arial, sans-serif;">${totals.score}% - ${totals.rank.split('(')[0]}</td>
             </tr>
-            <tr><td colspan="6" style="height: 15px; padding: 0;"></td></tr>
+            <tr><td colspan="6" style="height: 14px; padding: 0;"></td></tr>
 
+            <!-- DATA TABLE SECTION TITLE -->
             <tr>
               <td colspan="6" class="table-header-title" style="font-size: 11pt; font-weight: bold; color: #0b1120; font-family: 'Segoe UI', Arial, sans-serif;">DIRECCIONES IP SONDEADAS CON DIRECCIÓN MAC ASOCIADA</td>
             </tr>
             <tr><td colspan="6" style="height: 4px; padding: 0;"></td></tr>
 
+            <!-- DATA TABLE HEADERS (Identical to PDF Header colors & typography) -->
             <tr class="data-table">
               <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">DIRECCIÓN IP</th>
               <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">DIRECCIÓN MAC</th>
               <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">FABRICANTE NIC</th>
               <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">ESTACIÓN / HOST</th>
-              <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">LATENCIA</th>
+              <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: right; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">LATENCIA</th>
               <th style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: center; border: 1px solid #1e293b; padding: 8px 10px; font-family: 'Segoe UI', Arial, sans-serif;">ESTADO</th>
             </tr>
       `;
@@ -856,15 +839,15 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         const latencyText = device.ping !== null ? `${device.ping} ms` : '—';
         
         const statusBadgeStyle = device.estado === 'OK' 
-          ? 'background-color: #d1fae5; color: #059669; font-weight: bold; border: 1px solid #a7f3d0; padding: 2px 8px;' 
-          : 'background-color: #fef3c7; color: #d97706; font-weight: bold; border: 1px solid #fde68a; padding: 2px 8px;';
+          ? 'display: inline-block; background-color: #d1fae5; color: #059669; font-weight: bold; border: 1px solid #a7f3d0; padding: 2px 10px; border-radius: 4px; font-size: 8pt; text-align: center;' 
+          : 'display: inline-block; background-color: #fef3c7; color: #d97706; font-weight: bold; border: 1px solid #fde68a; padding: 2px 10px; border-radius: 4px; font-size: 8pt; text-align: center;';
 
         const statusLabel = device.estado === 'OK' ? 'OK' : 'WARN';
 
         html += `
             <tr style="${bgStyle}">
-              <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; color: #006699; font-weight: bold;">${device.ip}</td>
-              <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; color: #334155; font-weight: bold;">${device.mac}</td>
+              <td style="mso-number-format:'\\@'; border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; color: #006699; font-weight: bold;">${device.ip}</td>
+              <td style="mso-number-format:'\\@'; border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; color: #334155; font-weight: bold;">${device.mac}</td>
               <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; color: ${manufacturerColor}; font-weight: ${manufacturerWeight};">${manufacturer}</td>
               <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; font-weight: 500; color: #0b1120;">${device.host}</td>
               <td style="border: 1px solid #cbd5e1; font-size: 8.5pt; padding: 6px 10px; font-family: 'Segoe UI', Arial, sans-serif; font-weight: bold; color: ${latencyColor};" align="right">${latencyText}</td>
@@ -878,8 +861,9 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       html += `
             <tr><td colspan="6" style="height: 15px; padding: 0;"></td></tr>
 
+            <!-- DECLARATION BOX (Identical to PDF Declaration Box) -->
             <tr>
-              <td colspan="6" class="declaration-title" style="font-weight: bold; font-size: 9pt; color: #0f172a; border-top: 1px solid #cbd5e1; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f1f5f9; padding: 10px 12px; font-family: 'Segoe UI', Arial, sans-serif;">DECLARACIÓN DE VALIDACIÓN Y CONTROL DE AUDITORÍA</td>
+              <td colspan="6" class="declaration-title" style="font-weight: bold; font-size: 8.5pt; color: #0f172a; border-top: 1px solid #cbd5e1; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f1f5f9; padding: 10px 12px; font-family: 'Segoe UI', Arial, sans-serif;">DECLARACIÓN DE VALIDACIÓN Y CONTROL DE AUDITORÍA</td>
             </tr>
             <tr>
               <td colspan="6" class="declaration-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f1f5f9; font-size: 8pt; color: #475569; padding: 4px 12px; font-family: 'Segoe UI', Arial, sans-serif;">El presente reporte describe el estado actual de los dispositivos activos en la red LAN local.</td>
@@ -887,8 +871,9 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
             <tr>
               <td colspan="6" class="declaration-bottom" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background-color: #f1f5f9; font-size: 8pt; color: #475569; padding: 4px 12px 10px 12px; font-family: 'Segoe UI', Arial, sans-serif;">Las asignaciones MAC-IP fueron recolectadas a través del protocolo ARP nativo de los adaptadores activos.</td>
             </tr>
-            <tr><td colspan="6" style="height: 20px; padding: 0;"></td></tr>
+            <tr><td colspan="6" style="height: 16px; padding: 0;"></td></tr>
 
+            <!-- FOOTER (Identical to PDF Footer) -->
             <tr>
               <td colspan="6" class="footer-text-center" style="text-align: center; font-size: 8pt; color: #64748b; font-family: 'Segoe UI', Arial, sans-serif;">RedMonitor — Reporte de Auditoría LAN  |  Generación: ${timestamp}</td>
             </tr>
@@ -900,8 +885,6 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         </html>
       `;
 
-      // We MUST prepend the UTF-8 Byte Order Mark (\ufeff) to prevent Excel from interpreting it incorrectly or raising unreadable files error.
-      // And we use 'application/vnd.ms-excel' to inform Excel that this is an HTML table it should open.
       const blob = new Blob(["\ufeff", html], { type: 'application/vnd.ms-excel;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
