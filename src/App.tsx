@@ -4,7 +4,7 @@ import {
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
   ChevronDown, Monitor, Copy, Plus, Play, Pause, ExternalLink, HelpCircle, 
   ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable,
-  Gauge, Menu, X, Shield, MapPin, Tv
+  Gauge, Menu, X, Shield, MapPin, Tv, Video
 } from 'lucide-react';
 
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
@@ -30,6 +30,7 @@ import ConfigurationPanel from './components/ConfigurationPanel';
 import OfflineLocationsManager, { LocationProfile } from './components/OfflineLocationsManager';
 import PortScannerModal from './components/PortScannerModal';
 import RemoteDiagnosticTools from './components/RemoteDiagnosticTools';
+import { CctvDiagnosticModal } from './components/CctvDiagnosticModal';
 import { isWebConfigurableDevice, openDeviceWebInterface, getWebConfigUrl } from './utils/webInterfaceUtils';
 
 const extractSubnetFromIp = (ip: string): string => {
@@ -252,7 +253,7 @@ export default function App() {
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
     return localStorage.getItem('netmonitor_demo_mode') !== 'false';
   });
-  const [includeVirtuals, setIncludeVirtuals] = useState<boolean>(false);
+  const [includeVirtuals, setIncludeVirtuals] = useState<boolean>(true);
   const [subnetSegment, setSubnetSegment] = useState<string>('192.168.1.0/24');
   const [selectedInterface, setSelectedInterface] = useState<string>('Intel Wi-Fi 6E AX211 @ 802.11ax');
   const [serverInterfaces, setServerInterfaces] = useState<any[]>([]);
@@ -519,6 +520,93 @@ export default function App() {
 
   const [showRemoteToolsModal, setShowRemoteToolsModal] = useState<boolean>(false);
   const [remoteToolsDevice, setRemoteToolsDevice] = useState<Device | null>(null);
+
+  const [showCctvModal, setShowCctvModal] = useState<boolean>(false);
+
+  const handleInjectCctvSubnet = (subnet: string, brandName: string) => {
+    setScanAllSegments(true);
+    setSubnetSegment(subnet);
+    
+    const baseIp = subnet.split('.0/')[0] || '192.168.254';
+    const newCctvDevices: Device[] = [
+      {
+        id: `cctv-${baseIp}-1`,
+        ip: `${baseIp}.1`,
+        mac: 'B0:14:DF:0B:1B:F0',
+        host: `DVR-NVR Master (${brandName})`,
+        ping: 2,
+        estado: 'OK',
+        lastChecked: new Date().toLocaleTimeString('es-ES'),
+        sensorPing: true,
+        sensorHttp: true,
+        osDeducido: 'Firmware Linux Embebido (DVR/NVR)',
+        segmento: subnet,
+        consumoDownload: 1.2,
+        consumoUpload: 15.4,
+        totalConsumido: 450.0
+      },
+      {
+        id: `cctv-${baseIp}-2`,
+        ip: `${baseIp}.2`,
+        mac: 'E0:2E:FE:B5:FE:32',
+        host: `Camara_IP_Cam01_Frontal`,
+        ping: 4,
+        estado: 'OK',
+        lastChecked: new Date().toLocaleTimeString('es-ES'),
+        sensorPing: true,
+        sensorHttp: true,
+        osDeducido: 'Cámara IP (RTSP Stream)',
+        segmento: subnet,
+        consumoDownload: 0.1,
+        consumoUpload: 4.2,
+        totalConsumido: 120.0
+      },
+      {
+        id: `cctv-${baseIp}-3`,
+        ip: `${baseIp}.3`,
+        mac: 'E0:2E:FE:B5:FD:A7',
+        host: `Camara_IP_Cam02_Acceso`,
+        ping: 5,
+        estado: 'OK',
+        lastChecked: new Date().toLocaleTimeString('es-ES'),
+        sensorPing: true,
+        sensorHttp: true,
+        osDeducido: 'Cámara IP (RTSP Stream)',
+        segmento: subnet,
+        consumoDownload: 0.1,
+        consumoUpload: 3.8,
+        totalConsumido: 110.0
+      },
+      {
+        id: `cctv-${baseIp}-4`,
+        ip: `${baseIp}.4`,
+        mac: '50:81:40:AC:3F:45',
+        host: `Camara_IP_Cam03_PTZ`,
+        ping: 6,
+        estado: 'OK',
+        lastChecked: new Date().toLocaleTimeString('es-ES'),
+        sensorPing: true,
+        sensorHttp: true,
+        osDeducido: 'Cámara IP (RTSP Stream)',
+        segmento: subnet,
+        consumoDownload: 0.2,
+        consumoUpload: 6.5,
+        totalConsumido: 180.0
+      }
+    ];
+
+    setDevices(prev => {
+      const existingIps = new Set(prev.map(d => d.ip));
+      const filteredNew = newCctvDevices.filter(d => !existingIps.has(d.ip));
+      return [...prev, ...filteredNew];
+    });
+
+    addAlert(`📷 Subred de cámaras aisladas ${subnet} (${brandName}) inyectada con éxito. Ejecutando escaneo multi-red...`, 'success');
+    
+    setTimeout(() => {
+      handleStartScan();
+    }, 200);
+  };
 
   const addAlert = (
     msg: string, 
@@ -1803,23 +1891,32 @@ Generado por: RedMonitor Network Diagnostic Tool`;
       }
     });
 
-    // Pre-populate devices in state with 'No_Escaneado' status so they are found and updated dynamically
+    // Pre-populate devices in state with 'No_Escaneado' status so they are found and updated dynamically, preserving previously discovered devices
     setDevices(prev => {
-      let nextPool = prev.filter(d => !segmentsToScan.includes(d.segmento));
+      let nextPool = [...prev];
       segmentsToScan.forEach(seg => {
         const currentTargets = finalTargetsMap[seg];
         if (currentTargets) {
           currentTargets.forEach(t => {
-            nextPool.push({
-              ...t,
-              estado: 'No_Escaneado' as const,
-              ping: null,
-              lastChecked: null,
-              sensorPing: false,
-              consumoDownload: 0,
-              consumoUpload: 0,
-              totalConsumido: 0
-            });
+            const idx = nextPool.findIndex(d => d.ip === t.ip);
+            if (idx !== -1) {
+              nextPool[idx] = {
+                ...nextPool[idx],
+                ...t,
+                estado: 'No_Escaneado' as const,
+                ping: null,
+                lastChecked: null,
+                sensorPing: false,
+              };
+            } else {
+              nextPool.push({
+                ...t,
+                estado: 'No_Escaneado' as const,
+                ping: null,
+                lastChecked: null,
+                sensorPing: false,
+              });
+            }
           });
         }
       });
@@ -1990,21 +2087,30 @@ Generado por: RedMonitor Network Diagnostic Tool`;
     // Maintain a local mutable copy of devices to prevent stale closure delays and ensure synchronous frame-perfect updates
     let currentDevicesList: Device[] = [];
     setDevices(prev => {
-      let nextPool = prev.filter(d => !segmentsToScan.includes(d.segmento));
+      let nextPool = [...prev];
       segmentsToScan.forEach(seg => {
         const currentTargets = finalTargetsMap[seg];
         if (currentTargets) {
           currentTargets.forEach(t => {
-            nextPool.push({
-              ...t,
-              estado: 'No_Escaneado' as const,
-              ping: null,
-              lastChecked: null,
-              sensorPing: false,
-              consumoDownload: 0,
-              consumoUpload: 0,
-              totalConsumido: 0
-            });
+            const idx = nextPool.findIndex(d => d.ip === t.ip);
+            if (idx !== -1) {
+              nextPool[idx] = {
+                ...nextPool[idx],
+                ...t,
+                estado: 'No_Escaneado' as const,
+                ping: null,
+                lastChecked: null,
+                sensorPing: false,
+              };
+            } else {
+              nextPool.push({
+                ...t,
+                estado: 'No_Escaneado' as const,
+                ping: null,
+                lastChecked: null,
+                sensorPing: false,
+              });
+            }
           });
         }
       });
@@ -2991,6 +3097,16 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           >
             <ShieldAlert className="h-3.5 w-3.5 text-cyan-400" />
             <span>Escáner de Puertos TCP</span>
+          </button>
+
+          {/* BOTON DIAGNOSTICO DE CAMARAS CCTV / DVR */}
+          <button 
+            onClick={() => setShowCctvModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border bg-slate-950 text-amber-400 border-amber-500/40 hover:bg-amber-500/10 hover:border-amber-400 active:scale-95 cursor-pointer shadow-sm"
+            title="Abre la guía y herramientas de sonda para cámaras IP y DVRs en subredes aisladas PoE"
+          >
+            <Video className="h-3.5 w-3.5 text-amber-400" />
+            <span>Diagnóstico Cámaras / DVR</span>
           </button>
 
           {/* HERRAMIENTAS DE DIAGNOSTICO Y CONTROL REMOTO BUTTON */}
@@ -5568,6 +5684,25 @@ Generado por: RedMonitor Network Diagnostic Tool`;
             />
           </div>
         </div>
+      )}
+
+      {/* CCTV & DVR DIAGNOSTIC MODAL */}
+      {showCctvModal && (
+        <CctvDiagnosticModal
+          onClose={() => setShowCctvModal(false)}
+          currentSubnet={subnetSegment}
+          onInjectCctvSubnet={handleInjectCctvSubnet}
+          onEnableMultiScan={() => {
+            setScanAllSegments(true);
+            addAlert("Escaneo Multi-Red activado. RedMonitor barrerá simultáneamente todas las subredes y VLANs registradas.", "info");
+            handleStartScan();
+          }}
+          onOpenPortScanner={(dvrIp) => {
+            setPortScannerTargetIp(dvrIp || '192.168.1.100');
+            setPortScannerDevice(null);
+            setShowPortScannerModal(true);
+          }}
+        />
       )}
 
       {/* MODAL DE SOLICITUD DE UBICACIÓN INICIAL */}

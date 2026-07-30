@@ -121,15 +121,10 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true, 
     
     // Find device helpers
     const findDevByLastOctet = (octet: string) => {
-      // In real scan mode, do NOT use hardcoded octets (except .1 gateway) to avoid misclassifications of unrelated devices
-      if (!isDemoMode && octet !== '1') {
-        return undefined;
-      }
       const ip = `${base}.${octet}`;
       const found = devices.find(d => d.ip === ip);
       if (!found) return undefined;
-      // If NOT in demo mode, only return if actually alive/scanned successfully
-      if (!isDemoMode && (found.estado === 'Caído' || found.estado === 'No_Escaneado')) {
+      if (found.estado === 'Caído' || found.estado === 'No_Escaneado') {
         return undefined;
       }
       return found;
@@ -137,7 +132,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true, 
 
     const findDevByCriteria = (criteriaFn: (d: any) => boolean) => {
       return devices.find(d => {
-        if (!isDemoMode && (d.estado === 'Caído' || d.estado === 'No_Escaneado')) {
+        if (d.estado === 'Caído' || d.estado === 'No_Escaneado') {
           return false;
         }
         return criteriaFn(d);
@@ -191,7 +186,7 @@ export default function MapSubred({ devices, onSelectDevice, isDemoMode = true, 
     // Filter real scanned devices not present in groups
     const otherScannedDevices = devices.filter(d => {
       if (mappedIds.has(d.id)) return false;
-      if (!isDemoMode && (d.estado === 'No_Escaneado' || d.estado === 'Caído')) {
+      if (d.estado === 'No_Escaneado' || d.estado === 'Caído') {
         return false;
       }
       return true;

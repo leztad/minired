@@ -285,29 +285,40 @@ export function getFingerprintForDevice(host: string, ip: string, mac: string): 
 }
 
 // Generate the full pool of 254 devices for a single segment
-export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean, interfaceName?: string, isDemoMode: boolean = true): Device[] {
+export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean = true, interfaceName?: string, isDemoMode: boolean = true): Device[] {
   const devices: Device[] = [];
   const base = subnetBase.replace(/\.0\/24$/, '').replace(/\.0\/16$/, '');
 
-  // Look for predefined presets for this subnet base
-  const presetKey = SUBNET_PRESETS[base] ? base : '192.168.1';
-  const subnetPresetGroup = SUBNET_PRESETS[presetKey];
+  // Look for predefined presets for this subnet base, or create dynamic presets for custom subnets
+  let activePresets: Record<number, PresetDefinition> = {};
+  let virtualPresets: Record<number, PresetDefinition> = {};
 
-  const isCloudHost = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+  if (SUBNET_PRESETS[base]) {
+    activePresets = { ...SUBNET_PRESETS[base].active };
+    virtualPresets = { ...SUBNET_PRESETS[base].virtual };
+  } else {
+    // Dynamic generator for custom/unlisted subnets (e.g. 192.168.254, 10.1.1, 192.168.5, etc.)
+    activePresets = {
+      1: { host: `Gateway Router (${base}.1)`, mac: generateRandomMAC(1), ping: 1, estado: 'OK', consumoDownload: 2.5, consumoUpload: 0.8, totalConsumido: 450.0, sensorHttp: true },
+      2: { host: `Switch Gestionable L2 (${base}.2)`, mac: generateRandomMAC(2), ping: 2, estado: 'OK', consumoDownload: 0.2, consumoUpload: 0.1, totalConsumido: 12.0 },
+      10: { host: `Grabador DVR/NVR Master (${base}.10)`, mac: generateRandomMAC(10), ping: 4, estado: 'OK', consumoDownload: 1.5, consumoUpload: 42.0, totalConsumido: 8400.0, sensorHttp: true },
+      11: { host: `Cámara IP Exterior PTZ (${base}.11)`, mac: generateRandomMAC(11), ping: 6, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.5, totalConsumido: 980.0 },
+      12: { host: `Cámara IP Domo Acceso (${base}.12)`, mac: generateRandomMAC(12), ping: 5, estado: 'OK', consumoDownload: 0.1, consumoUpload: 3.8, totalConsumido: 820.0 },
+      22: { host: `Impresora de Red LAN (${base}.22)`, mac: generateRandomMAC(22), ping: 12, estado: 'OK', consumoDownload: 0.05, consumoUpload: 0.01, totalConsumido: 15.0 },
+      38: { host: `Smartphone Android (${base}.38)`, mac: generateRandomMAC(38), ping: 22, estado: 'OK', consumoDownload: 14.2, consumoUpload: 1.1, totalConsumido: 1420.0 },
+      40: { host: `Smart TV / Pantalla (${base}.40)`, mac: generateRandomMAC(40), ping: 18, estado: 'OK', consumoDownload: 22.0, consumoUpload: 0.5, totalConsumido: 3400.0 },
+      55: { host: `Estación de Trabajo / PC (${base}.55)`, mac: generateRandomMAC(55), ping: 2, estado: 'OK', consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120.0, sensorHttp: true }
+    };
 
-  let activePresets = subnetPresetGroup.active;
-  if (!isDemoMode) {
-    if (isCloudHost) {
-      activePresets = {
-        1: { host: 'Gateway / Router principal (Huawei ONT)', mac: '10:7B:44:A2:99:11', ping: 2, estado: 'OK' as const, sensorHttp: true, consumoDownload: 1.5, consumoUpload: 0.5, totalConsumido: 450 },
-        55: { host: 'Laptop de Trabajo (Este PC)', mac: '84:C8:A0:BB:AB:66', ping: 1, estado: 'OK' as const, sensorHttp: true, consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120 }
-      };
-    } else {
-      activePresets = {};
-    }
+    virtualPresets = {
+      15: { host: `Servidor NAS Almacenamiento (${base}.15)`, mac: generateRandomMAC(15), ping: 8, estado: 'OK', consumoDownload: 0.5, consumoUpload: 18.4, totalConsumido: 4200.0, sensorHttp: true },
+      60: { host: `Cámara IP Pasillo (${base}.60)`, mac: generateRandomMAC(60), ping: 9, estado: 'OK', consumoDownload: 0.05, consumoUpload: 3.2, totalConsumido: 680.0 },
+      66: { host: `Servidor Embebido Linux (${base}.66)`, mac: generateRandomMAC(66), ping: 3, estado: 'OK', consumoDownload: 0.4, consumoUpload: 0.2, totalConsumido: 310.0, sensorHttp: true },
+      70: { host: `Módulo IoT Control (${base}.70)`, mac: generateRandomMAC(70), ping: 45, estado: 'OK', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 4.5 },
+      102: { host: `Sensor IoT Sensorica (${base}.102)`, mac: generateRandomMAC(102), ping: 88, estado: 'Advertencia', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 1.2 },
+      200: { host: `Máquina Virtual Host (${base}.200)`, mac: generateRandomMAC(200), ping: 4, estado: 'OK', consumoDownload: 2.1, consumoUpload: 0.8, totalConsumido: 512.0 }
+    };
   }
-
-  const virtualPresets = isDemoMode ? subnetPresetGroup.virtual : {};
 
   for (let i = 1; i <= 254; i++) {
     const ip = `${base}.${i}`;
