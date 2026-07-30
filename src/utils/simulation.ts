@@ -306,34 +306,36 @@ export function generateFullSubnet(subnetBase: string, includeVirtuals: boolean 
   const devices: Device[] = [];
   const base = subnetBase.replace(/\.0\/24$/, '').replace(/\.0\/16$/, '');
 
-  // Look for predefined presets for this subnet base, or create dynamic presets for custom subnets
+  // Look for predefined presets for this subnet base ONLY if in demo mode
   let activePresets: Record<number, PresetDefinition> = {};
   let virtualPresets: Record<number, PresetDefinition> = {};
 
-  if (SUBNET_PRESETS[base]) {
-    activePresets = { ...SUBNET_PRESETS[base].active, ...SUBNET_PRESETS[base].virtual };
-  } else {
-    // Dynamic generator for custom/unlisted subnets (e.g. 192.168.254, 10.1.1, 192.168.5, etc.)
-    activePresets = {
-      1: { host: `Gateway Router (${base}.1)`, mac: generateRandomMAC(1), ping: 1, estado: 'OK', consumoDownload: 2.5, consumoUpload: 0.8, totalConsumido: 450.0, sensorHttp: true },
-      2: { host: `Switch Gestionable L2 (${base}.2)`, mac: generateRandomMAC(2), ping: 2, estado: 'OK', consumoDownload: 0.2, consumoUpload: 0.1, totalConsumido: 12.0 },
-      10: { host: `Grabador DVR/NVR Master (${base}.10)`, mac: generateRandomMAC(10), ping: 4, estado: 'OK', consumoDownload: 1.5, consumoUpload: 42.0, totalConsumido: 8400.0, sensorHttp: true },
-      11: { host: `Cámara IP Exterior PTZ (${base}.11)`, mac: generateRandomMAC(11), ping: 6, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.5, totalConsumido: 980.0 },
-      12: { host: `Cámara IP Domo Acceso (${base}.12)`, mac: generateRandomMAC(12), ping: 5, estado: 'OK', consumoDownload: 0.1, consumoUpload: 3.8, totalConsumido: 820.0 },
-      15: { host: `Servidor NAS Almacenamiento (${base}.15)`, mac: generateRandomMAC(15), ping: 8, estado: 'OK', consumoDownload: 0.5, consumoUpload: 18.4, totalConsumido: 4200.0, sensorHttp: true },
-      22: { host: `Impresora de Red LAN (${base}.22)`, mac: generateRandomMAC(22), ping: 12, estado: 'OK', consumoDownload: 0.05, consumoUpload: 0.01, totalConsumido: 15.0 },
-      38: { host: `Smartphone Android (${base}.38)`, mac: generateRandomMAC(38), ping: 22, estado: 'OK', consumoDownload: 14.2, consumoUpload: 1.1, totalConsumido: 1420.0 },
-      40: { host: `Smart TV / Pantalla (${base}.40)`, mac: generateRandomMAC(40), ping: 18, estado: 'OK', consumoDownload: 22.0, consumoUpload: 0.5, totalConsumido: 3400.0 },
-      55: { host: `Estación de Trabajo / PC (${base}.55)`, mac: generateRandomMAC(55), ping: 2, estado: 'OK', consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120.0, sensorHttp: true },
-      60: { host: `Cámara IP Pasillo (${base}.60)`, mac: generateRandomMAC(60), ping: 9, estado: 'OK', consumoDownload: 0.05, consumoUpload: 3.2, totalConsumido: 680.0 },
-      64: { host: `Cámara IP Hikvision Bullet (${base}.64)`, mac: generateRandomMAC(64), ping: 7, estado: 'OK', consumoDownload: 0.05, consumoUpload: 4.1, totalConsumido: 920.0 },
-      66: { host: `Servidor Embebido Linux (${base}.66)`, mac: generateRandomMAC(66), ping: 3, estado: 'OK', consumoDownload: 0.4, consumoUpload: 0.2, totalConsumido: 310.0, sensorHttp: true },
-      70: { host: `Módulo IoT Control (${base}.70)`, mac: generateRandomMAC(70), ping: 45, estado: 'OK', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 4.5 },
-      100: { host: `Grabadora NVR Secundaria (${base}.100)`, mac: generateRandomMAC(100), ping: 5, estado: 'OK', consumoDownload: 1.2, consumoUpload: 28.5, totalConsumido: 5100.0, sensorHttp: true },
-      102: { host: `Sensor IoT Sensorica (${base}.102)`, mac: generateRandomMAC(102), ping: 88, estado: 'Advertencia', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 1.2 },
-      108: { host: `Cámara IP Dahua Varifocal (${base}.108)`, mac: generateRandomMAC(108), ping: 8, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.8, totalConsumido: 1100.0 },
-      200: { host: `Host Virtual / Servidor Hyper-V (${base}.200)`, mac: generateRandomMAC(200), ping: 4, estado: 'OK', consumoDownload: 2.1, consumoUpload: 0.8, totalConsumido: 512.0 }
-    };
+  if (isDemoMode) {
+    if (SUBNET_PRESETS[base]) {
+      activePresets = { ...SUBNET_PRESETS[base].active, ...SUBNET_PRESETS[base].virtual };
+    } else {
+      // Dynamic generator for custom/unlisted subnets in demo mode
+      activePresets = {
+        1: { host: `Gateway Router (${base}.1)`, mac: generateRandomMAC(1), ping: 1, estado: 'OK', consumoDownload: 2.5, consumoUpload: 0.8, totalConsumido: 450.0, sensorHttp: true },
+        2: { host: `Switch Gestionable L2 (${base}.2)`, mac: generateRandomMAC(2), ping: 2, estado: 'OK', consumoDownload: 0.2, consumoUpload: 0.1, totalConsumido: 12.0 },
+        10: { host: `Grabador DVR/NVR Master (${base}.10)`, mac: generateRandomMAC(10), ping: 4, estado: 'OK', consumoDownload: 1.5, consumoUpload: 42.0, totalConsumido: 8400.0, sensorHttp: true },
+        11: { host: `Cámara IP Exterior PTZ (${base}.11)`, mac: generateRandomMAC(11), ping: 6, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.5, totalConsumido: 980.0 },
+        12: { host: `Cámara IP Domo Acceso (${base}.12)`, mac: generateRandomMAC(12), ping: 5, estado: 'OK', consumoDownload: 0.1, consumoUpload: 3.8, totalConsumido: 820.0 },
+        15: { host: `Servidor NAS Almacenamiento (${base}.15)`, mac: generateRandomMAC(15), ping: 8, estado: 'OK', consumoDownload: 0.5, consumoUpload: 18.4, totalConsumido: 4200.0, sensorHttp: true },
+        22: { host: `Impresora de Red LAN (${base}.22)`, mac: generateRandomMAC(22), ping: 12, estado: 'OK', consumoDownload: 0.05, consumoUpload: 0.01, totalConsumido: 15.0 },
+        38: { host: `Smartphone Android (${base}.38)`, mac: generateRandomMAC(38), ping: 22, estado: 'OK', consumoDownload: 14.2, consumoUpload: 1.1, totalConsumido: 1420.0 },
+        40: { host: `Smart TV / Pantalla (${base}.40)`, mac: generateRandomMAC(40), ping: 18, estado: 'OK', consumoDownload: 22.0, consumoUpload: 0.5, totalConsumido: 3400.0 },
+        55: { host: `Estación de Trabajo / PC (${base}.55)`, mac: generateRandomMAC(55), ping: 2, estado: 'OK', consumoDownload: 8.5, consumoUpload: 2.1, totalConsumido: 1120.0, sensorHttp: true },
+        60: { host: `Cámara IP Pasillo (${base}.60)`, mac: generateRandomMAC(60), ping: 9, estado: 'OK', consumoDownload: 0.05, consumoUpload: 3.2, totalConsumido: 680.0 },
+        64: { host: `Cámara IP Hikvision Bullet (${base}.64)`, mac: generateRandomMAC(64), ping: 7, estado: 'OK', consumoDownload: 0.05, consumoUpload: 4.1, totalConsumido: 920.0 },
+        66: { host: `Servidor Embebido Linux (${base}.66)`, mac: generateRandomMAC(66), ping: 3, estado: 'OK', consumoDownload: 0.4, consumoUpload: 0.2, totalConsumido: 310.0, sensorHttp: true },
+        70: { host: `Módulo IoT Control (${base}.70)`, mac: generateRandomMAC(70), ping: 45, estado: 'OK', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 4.5 },
+        100: { host: `Grabadora NVR Secundaria (${base}.100)`, mac: generateRandomMAC(100), ping: 5, estado: 'OK', consumoDownload: 1.2, consumoUpload: 28.5, totalConsumido: 5100.0, sensorHttp: true },
+        102: { host: `Sensor IoT Sensorica (${base}.102)`, mac: generateRandomMAC(102), ping: 88, estado: 'Advertencia', consumoDownload: 0.01, consumoUpload: 0.01, totalConsumido: 1.2 },
+        108: { host: `Cámara IP Dahua Varifocal (${base}.108)`, mac: generateRandomMAC(108), ping: 8, estado: 'OK', consumoDownload: 0.1, consumoUpload: 4.8, totalConsumido: 1100.0 },
+        200: { host: `Host Virtual / Servidor Hyper-V (${base}.200)`, mac: generateRandomMAC(200), ping: 4, estado: 'OK', consumoDownload: 2.1, consumoUpload: 0.8, totalConsumido: 512.0 }
+      };
+    }
   }
 
   for (let i = 1; i <= 254; i++) {

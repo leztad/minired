@@ -2177,17 +2177,20 @@ app.get("/api/scan-real-arp", (req, res) => {
     }
   }
 
+  const demoParam = req.query.demo === "true" || req.query.isDemo === "true";
+  const forceRealParam = req.query.demo === "false" || req.query.isDemo === "false";
+
   // Detect if running in Google Cloud Run sandbox container environment or requested from cloud view
-  const isCloudEnv = process.env.K_SERVICE !== undefined || process.env.NODE_ENV === "production" || isCloudParam;
+  const isCloudEnv = process.env.K_SERVICE !== undefined || isCloudParam;
 
   if (globalUploadedDevices.length > 0) {
     // If we have uploaded devices from a local probe scan or CSV, prioritize these real devices!
     return res.json({ devices: globalUploadedDevices });
   }
 
-  if (isCloudEnv) {
-    // Return exactly 7 beautiful, active, realistic devices (matching the user's advanced IP scanner topology!)
-    // so the dashboard is complete and fully operational within the Cloud Sandbox preview where ARP sweeps are blocked.
+  // Only return mock devices if demo mode is active or explicitly requested and no real local network is attached
+  if (isCloudEnv && !forceRealParam && demoParam) {
+    // Return exactly 7 active devices for sandbox demo presentation
     const mockDevices = [
       {
         ip: `${base}.1`,

@@ -1925,7 +1925,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
 
     let realHosts: any[] = [];
     // Pass the active subnet segment to the backend so it knows exactly which /24 scope to actively ping
-    fetch(`/api/scan-real-arp?subnet=${encodeURIComponent(subnetSegment)}&isCloud=${isHostedInCloud}&speed=${scanSpeed}`)
+    fetch(`/api/scan-real-arp?subnet=${encodeURIComponent(subnetSegment)}&isCloud=${isHostedInCloud}&speed=${scanSpeed}&demo=${isDemoMode}`)
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data.devices)) {
@@ -2973,7 +2973,14 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                 const checked = e.target.checked;
                 setIsDemoMode(checked);
                 localStorage.setItem('netmonitor_demo_mode', String(checked));
-                addAlert(checked ? "Modo Simulación DEMO activado: El escáner generará datos demostrativos y alarmas ficticias." : "Modo ESCANEO REAL activado: El escáner ahora mostrará con precisión quirúrgica únicamente tus dispositivos reales físicamente conectados mediante ARP y barrido ICMP.", "warning");
+                if (!checked) {
+                  setDevices([]);
+                  setSensors([]);
+                  setLastScanDone(false);
+                  addAlert("Modo ESCANEO REAL ACTIVADO: Se han eliminado los dispositivos simulados. Presiona 'Escanear ahora' para detectar únicamente tus equipos físicos reales.", "success");
+                } else {
+                  addAlert("Modo Simulación DEMO activado: El escáner generará datos demostrativos para pruebas.", "info");
+                }
               }}
               className="rounded-xs border-slate-800/50 text-amber-500 focus:ring-amber-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-amber-500"
             />
