@@ -4,7 +4,7 @@ import {
   ShieldCheck, ShieldAlert, Download, FileJson, FileSpreadsheet, Copy, 
   Search, Sliders, Server, Wifi, Activity, Terminal, CheckCircle2, AlertTriangle, Info, Network,
   ChevronDown, ChevronUp, Cpu, HelpCircle, Check, Trash2, Eye, Save, Play, RefreshCw, Sparkles,
-  Target, History, FileText, Database, ArrowRight, CheckCircle, CheckSquare, X
+  Target, History, FileText, Database, ArrowRight, CheckCircle, CheckSquare, X, MapPin
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { resolveVendorByMac } from '../utils/macUtils';
@@ -440,6 +440,7 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
         id: d.id,
         ip: d.ip,
         host: d.host,
+        ubicacionFisica: d.ubicacion || locationName || 'Sede Local',
         mac: d.mac,
         fabricanteResolucion: resolveVendorByMac(d.mac, d.host, d.ip),
         pingMs: d.ping,
@@ -467,12 +468,13 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
   // EXPORT 2: CSV TABLE EXPORT
   const exportAsCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "IP_Address,HostName,MAC_Address,Manufacturer_Vendor,Ping_Latency_ms,Status,Physical_Segment,Interface\r\n";
+    csvContent += "IP_Address,HostName,Physical_Location_Ubicacion,MAC_Address,Manufacturer_Vendor,Ping_Latency_ms,Status,Physical_Segment,Interface\r\n";
 
     activeDevices.forEach(d => {
       const row = [
         d.ip,
         `"${d.host.replace(/"/g, '""')}"`,
+        `"${(d.ubicacion || locationName || 'Sede Local').replace(/"/g, '""')}"`,
         d.mac,
         `"${resolveVendorByMac(d.mac, d.host, d.ip).replace(/"/g, '""')}"`,
         d.ping !== null ? d.ping : "—",
@@ -510,14 +512,14 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
 
 ---
 
-## 🖥️ DETALLE DE HOSTS ACTIVOS ENCONTRADOS (CON DIRECCIÓN MAC)
+## 🖥️ DETALLE DE HOSTS ACTIVOS ENCONTRADOS (CON DIRECCIÓN MAC Y UBICACIÓN)
 
-| Dirección IP | Nombre de Host / Estación | Dirección MAC | Fabricante (Filtro ARP) | Latencia | Estado |
-| :--- | :--- | :--- | :--- | :--- | :--- |
+| Dirección IP | Nombre de Host / Estación | Ubicación Física | Dirección MAC | Fabricante (Filtro ARP) | Latencia | Estado |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 `;
 
     activeDevices.forEach(d => {
-      md += `| ${d.ip} | ${d.host} | \`${d.mac}\` | ${resolveVendorByMac(d.mac, d.host, d.ip)} | ${d.ping !== null ? `${d.ping} ms` : '—'} | ${d.estado} |\n`;
+      md += `| ${d.ip} | ${d.host} | ${d.ubicacion || locationName || 'Sede Local'} | \`${d.mac}\` | ${resolveVendorByMac(d.mac, d.host, d.ip)} | ${d.ping !== null ? `${d.ping} ms` : '—'} | ${d.estado} |\n`;
     });
 
     md += `\n*Nota: Reporte compilado en base a barrido de tramas ARP en Loopback de adaptadores de red de hardware disponibles.*`;
@@ -723,83 +725,85 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         <body>
           <table>
             <colgroup>
+              <col style="width: 120px;" />
               <col style="width: 140px;" />
-              <col style="width: 160px;" />
-              <col style="width: 200px;" />
-              <col style="width: 220px;" />
-              <col style="width: 110px;" />
-              <col style="width: 100px;" />
+              <col style="width: 150px;" />
+              <col style="width: 170px;" />
+              <col style="width: 170px;" />
+              <col style="width: 90px;" />
+              <col style="width: 80px;" />
             </colgroup>
 
             <!-- TOP CYAN ACCENT LINE (Identical to PDF header line) -->
             <tr>
-              <td colspan="6" class="accent-top-bar" bgcolor="#06b6d4" style="background-color: #06b6d4; height: 5px; padding: 0;"></td>
+              <td colspan="7" class="accent-top-bar" bgcolor="#06b6d4" style="background-color: #06b6d4; height: 5px; padding: 0;"></td>
             </tr>
 
             <!-- HEADER BAR (Identical to PDF top banner) -->
             <tr>
-              <td colspan="3" class="header-top" style="color: #64748b; font-size: 8pt; font-weight: bold; font-family: Helvetica, Arial, sans-serif;">SISTEMA DE MONITOREO DE RED - REDMONITOR</td>
+              <td colspan="4" class="header-top" style="color: #64748b; font-size: 8pt; font-weight: bold; font-family: Helvetica, Arial, sans-serif;">SISTEMA DE MONITOREO DE RED - REDMONITOR</td>
               <td colspan="3" class="header-top" align="right" style="text-align: right; color: #64748b; font-size: 8pt; font-weight: bold; font-family: Helvetica, Arial, sans-serif;">AUDITORÍA DE INFRAESTRUCTURA LAN</td>
             </tr>
             <tr>
-              <td colspan="6" style="border-bottom: 1.5px solid #cbd5e1; height: 2px; padding: 0;"></td>
+              <td colspan="7" style="border-bottom: 1.5px solid #cbd5e1; height: 2px; padding: 0;"></td>
             </tr>
-            <tr><td colspan="6" style="height: 10px; padding: 0;"></td></tr>
+            <tr><td colspan="7" style="height: 10px; padding: 0;"></td></tr>
 
             <!-- MAIN TITLE & SUBTITLE (Identical to PDF Title) -->
             <tr>
-              <td colspan="6" class="main-title" style="font-size: 18pt; font-weight: bold; color: #0b1120; font-family: Helvetica, Arial, sans-serif;">INFORME DE AUDITORÍA DE RED FÍSICA</td>
+              <td colspan="7" class="main-title" style="font-size: 18pt; font-weight: bold; color: #0b1120; font-family: Helvetica, Arial, sans-serif;">INFORME DE AUDITORÍA DE RED FÍSICA</td>
             </tr>
             <tr>
-              <td colspan="6" class="main-subtitle" style="font-size: 10pt; color: #475569; font-family: Helvetica, Arial, sans-serif;">Sondeo y Validación de Interfaces Físicas, Direcciones MAC y Latencia LAN</td>
+              <td colspan="7" class="main-subtitle" style="font-size: 10pt; color: #475569; font-family: Helvetica, Arial, sans-serif;">Sondeo y Validación de Interfaces Físicas, Direcciones MAC, Ubicación y Latencia LAN</td>
             </tr>
-            <tr><td colspan="6" style="height: 12px; padding: 0;"></td></tr>
+            <tr><td colspan="7" style="height: 12px; padding: 0;"></td></tr>
 
             <!-- DUAL PANEL METADATA SECTION (Identical to PDF Cards) -->
             <tr>
-              <td colspan="3" class="panel-left-title" style="font-weight: bold; color: #475569; font-size: 8.5pt; border-top: 1px solid #cbd5e1; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; padding: 8px 12px; font-family: Helvetica, Arial, sans-serif;">SISTEMA / DETALLES DE AUDITORÍA</td>
+              <td colspan="4" class="panel-left-title" style="font-weight: bold; color: #475569; font-size: 8.5pt; border-top: 1px solid #cbd5e1; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; padding: 8px 12px; font-family: Helvetica, Arial, sans-serif;">SISTEMA / DETALLES DE AUDITORÍA</td>
               <td colspan="3" class="panel-right-title" style="font-weight: bold; color: #087389; font-size: 9pt; border-top: 2px solid #06b6d4; border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4; background-color: #ecfefe; padding: 8px 12px; font-family: Helvetica, Arial, sans-serif;">SITIO / UBICACIÓN REGISTRADA</td>
             </tr>
             <tr>
-              <td colspan="3" class="panel-left-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px; font-family: Helvetica, Arial, sans-serif;">Sonda: RedMonitor Sonda de Campo Local</td>
+              <td colspan="4" class="panel-left-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px; font-family: Helvetica, Arial, sans-serif;">Sonda: RedMonitor Sonda de Campo Local</td>
               <td colspan="3" class="panel-right-body" style="border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4; background-color: #ecfefe; font-weight: bold; font-size: 11pt; color: #0f172a; padding: 6px 12px; font-family: Helvetica, Arial, sans-serif;">${displayLoc}</td>
             </tr>
             <tr>
-              <td colspan="3" class="panel-left-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px; font-family: Helvetica, Arial, sans-serif;">ID Dispositivo: RED-MON-162BF909</td>
+              <td colspan="4" class="panel-left-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px; font-family: Helvetica, Arial, sans-serif;">ID Dispositivo: RED-MON-162BF909</td>
               <td colspan="3" class="panel-right-bottom" style="border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4; border-bottom: 2px solid #06b6d4; background-color: #ecfefe; font-size: 8pt; color: #475569; padding: 4px 12px 8px 12px; font-family: Helvetica, Arial, sans-serif;">Verificación en campo físico activo</td>
             </tr>
             <tr>
-              <td colspan="3" class="panel-left-bottom" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px 8px 12px; font-family: Helvetica, Arial, sans-serif;">Fecha/Hora: ${timestamp}</td>
+              <td colspan="4" class="panel-left-bottom" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background-color: #f8fafc; font-size: 8pt; color: #0f172a; padding: 4px 12px 8px 12px; font-family: Helvetica, Arial, sans-serif;">Fecha/Hora: ${timestamp}</td>
               <td colspan="3" style="height: 0; padding: 0; background-color: #ecfefe; border-bottom: 2px solid #06b6d4; border-left: 6px solid #06b6d4; border-right: 2px solid #06b6d4;"></td>
             </tr>
-            <tr><td colspan="6" style="height: 14px; padding: 0;"></td></tr>
+            <tr><td colspan="7" style="height: 14px; padding: 0;"></td></tr>
 
             <!-- EXECUTIVE SUMMARY CARDS (Identical to PDF Resumen Panel) -->
             <tr>
-              <td colspan="6" class="summary-title" style="font-size: 11pt; font-weight: bold; color: #0b1120; font-family: Helvetica, Arial, sans-serif;">RESUMEN EJECUTIVO DE SEGURIDAD</td>
+              <td colspan="7" class="summary-title" style="font-size: 11pt; font-weight: bold; color: #0b1120; font-family: Helvetica, Arial, sans-serif;">RESUMEN EJECUTIVO DE SEGURIDAD</td>
             </tr>
             <tr>
               <td colspan="2" align="center" style="border-top: 1px solid #bae6fd; border-left: 1px solid #bae6fd; background-color: #ffffff; font-size: 8pt; color: #64748b; padding: 10px 12px 4px 12px; font-family: Helvetica, Arial, sans-serif; text-align: center;">TOTAL HOSTS ACTIVOS</td>
               <td colspan="2" align="center" style="border-top: 1px solid #bae6fd; background-color: #ffffff; font-size: 8pt; color: #64748b; padding: 10px 12px 4px 12px; font-family: Helvetica, Arial, sans-serif; text-align: center;">LATENCIA MEDIA LAN</td>
-              <td colspan="2" align="center" style="border-top: 1px solid #bae6fd; border-right: 1px solid #bae6fd; background-color: #ffffff; font-size: 8pt; color: #64748b; padding: 10px 12px 4px 12px; font-family: Helvetica, Arial, sans-serif; text-align: center;">NIVEL DE SEGURIDAD GENERAL</td>
+              <td colspan="3" align="center" style="border-top: 1px solid #bae6fd; border-right: 1px solid #bae6fd; background-color: #ffffff; font-size: 8pt; color: #64748b; padding: 10px 12px 4px 12px; font-family: Helvetica, Arial, sans-serif; text-align: center;">NIVEL DE SEGURIDAD GENERAL</td>
             </tr>
             <tr>
               <td colspan="2" align="center" style="border-bottom: 1px solid #bae6fd; border-left: 1px solid #bae6fd; background-color: #ffffff; font-size: 15pt; font-weight: bold; color: #0b1120; padding: 4px 12px 10px 12px; font-family: Helvetica, Arial, sans-serif; text-align: center;">${totals.count} Dispositivos</td>
               <td colspan="2" align="center" style="border-bottom: 1px solid #bae6fd; background-color: #ffffff; font-size: 15pt; font-weight: bold; padding: 4px 12px 10px 12px; color: ${totals.avgLatency > 50 ? '#d97706' : '#059669'}; font-family: Helvetica, Arial, sans-serif; text-align: center;">${totals.avgLatency} ms</td>
-              <td colspan="2" align="center" style="border-bottom: 1px solid #bae6fd; border-right: 1px solid #bae6fd; background-color: #ffffff; font-size: 14pt; font-weight: bold; padding: 4px 12px 10px 12px; color: ${totals.score < 80 ? '#d97706' : '#059669'}; font-family: Helvetica, Arial, sans-serif; text-align: center;">${totals.score}% - ${totals.rank.split('(')[0]}</td>
+              <td colspan="3" align="center" style="border-bottom: 1px solid #bae6fd; border-right: 1px solid #bae6fd; background-color: #ffffff; font-size: 14pt; font-weight: bold; padding: 4px 12px 10px 12px; color: ${totals.score < 80 ? '#d97706' : '#059669'}; font-family: Helvetica, Arial, sans-serif; text-align: center;">${totals.score}% - ${totals.rank.split('(')[0]}</td>
             </tr>
-            <tr><td colspan="6" style="height: 14px; padding: 0;"></td></tr>
+            <tr><td colspan="7" style="height: 14px; padding: 0;"></td></tr>
 
             <!-- DATA TABLE SECTION TITLE -->
             <tr>
-              <td colspan="6" class="table-header-title" style="font-size: 11pt; font-weight: bold; color: #0b1120; font-family: Helvetica, Arial, sans-serif;">DIRECCIONES IP SONDEADAS CON DIRECCIÓN MAC ASOCIADA</td>
+              <td colspan="7" class="table-header-title" style="font-size: 11pt; font-weight: bold; color: #0b1120; font-family: Helvetica, Arial, sans-serif;">DIRECCIONES IP SONDEADAS CON DIRECCIÓN MAC Y UBICACIÓN ASOCIADA</td>
             </tr>
-            <tr><td colspan="6" style="height: 4px; padding: 0;"></td></tr>
+            <tr><td colspan="7" style="height: 4px; padding: 0;"></td></tr>
 
             <!-- DATA TABLE HEADERS (Identical to PDF Header colors & typography) -->
             <tr>
               <th align="left" bgcolor="#0b1120" style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: Helvetica, Arial, sans-serif;">DIRECCIÓN IP</th>
               <th align="left" bgcolor="#0b1120" style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: Helvetica, Arial, sans-serif;">DIRECCIÓN MAC</th>
+              <th align="left" bgcolor="#0b1120" style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: Helvetica, Arial, sans-serif;">UBICACIÓN FÍSICA</th>
               <th align="left" bgcolor="#0b1120" style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: Helvetica, Arial, sans-serif;">FABRICANTE NIC</th>
               <th align="left" bgcolor="#0b1120" style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8pt; text-align: left; border: 1px solid #1e293b; padding: 8px 10px; font-family: Helvetica, Arial, sans-serif;">ESTACIÓN / HOST</th>
               <th align="center" bgcolor="#0b1120" style="background-color: #0b1120; color: #ffffff; font-weight: bold; font-size: 8pt; text-align: center; border: 1px solid #1e293b; padding: 8px 10px; font-family: Helvetica, Arial, sans-serif;">LATENCIA</th>
@@ -835,6 +839,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
             <tr style="${bgStyle}">
               <td bgcolor="${rowBgHex}" style="mso-number-format:'\\@'; border: 1px solid #cbd5e1; font-size: 8pt; padding: 6px 10px; font-family: Helvetica, Arial, sans-serif; color: #006699; font-weight: bold;">${device.ip}</td>
               <td bgcolor="${rowBgHex}" style="mso-number-format:'\\@'; border: 1px solid #cbd5e1; font-size: 8pt; padding: 6px 10px; font-family: Helvetica, Arial, sans-serif; color: #334155; font-weight: bold;">${device.mac}</td>
+              <td bgcolor="${rowBgHex}" style="mso-number-format:'\\@'; border: 1px solid #cbd5e1; font-size: 8pt; padding: 6px 10px; font-family: Helvetica, Arial, sans-serif; color: #d97706; font-weight: bold;">${device.ubicacion || locationName || 'Sede Local'}</td>
               <td bgcolor="${rowBgHex}" style="border: 1px solid #cbd5e1; font-size: 7.5pt; padding: 6px 10px; font-family: Helvetica, Arial, sans-serif; color: ${manufacturerColor}; font-weight: ${manufacturerWeight};">${manufacturer}</td>
               <td bgcolor="${rowBgHex}" style="border: 1px solid #cbd5e1; font-size: 7.5pt; padding: 6px 10px; font-family: Helvetica, Arial, sans-serif; font-weight: bold; color: #0b1120;">${device.host}</td>
               <td bgcolor="${rowBgHex}" align="center" style="border: 1px solid #cbd5e1; font-size: 8pt; padding: 6px 10px; font-family: Helvetica, Arial, sans-serif; font-weight: bold; color: ${latencyColor}; text-align: center;">${latencyText}</td>
@@ -844,26 +849,26 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       });
 
       html += `
-            <tr><td colspan="6" style="height: 15px; padding: 0;"></td></tr>
+            <tr><td colspan="7" style="height: 15px; padding: 0;"></td></tr>
 
             <!-- DECLARATION BOX (Identical to PDF Declaration Box) -->
             <tr>
-              <td colspan="6" class="declaration-title" style="font-weight: bold; font-size: 8.5pt; color: #0f172a; border-top: 1px solid #cbd5e1; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f1f5f9; padding: 10px 12px; font-family: Helvetica, Arial, sans-serif;">DECLARACIÓN DE VALIDACIÓN Y CONTROL DE AUDITORÍA</td>
+              <td colspan="7" class="declaration-title" style="font-weight: bold; font-size: 8.5pt; color: #0f172a; border-top: 1px solid #cbd5e1; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f1f5f9; padding: 10px 12px; font-family: Helvetica, Arial, sans-serif;">DECLARACIÓN DE VALIDACIÓN Y CONTROL DE AUDITORÍA</td>
             </tr>
             <tr>
-              <td colspan="6" class="declaration-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f1f5f9; font-size: 8pt; color: #475569; padding: 4px 12px; font-family: Helvetica, Arial, sans-serif;">El presente reporte describe el estado actual de los dispositivos activos en la red LAN local.</td>
+              <td colspan="7" class="declaration-body" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; background-color: #f1f5f9; font-size: 8pt; color: #475569; padding: 4px 12px; font-family: Helvetica, Arial, sans-serif;">El presente reporte describe el estado actual de los dispositivos activos en la red LAN local y sus ubicaciones físicas registradas.</td>
             </tr>
             <tr>
-              <td colspan="6" class="declaration-bottom" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background-color: #f1f5f9; font-size: 8pt; color: #475569; padding: 4px 12px 10px 12px; font-family: Helvetica, Arial, sans-serif;">Las asignaciones MAC-IP fueron recolectadas a través del protocolo ARP nativo de los adaptadores activos.</td>
+              <td colspan="7" class="declaration-bottom" style="border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; background-color: #f1f5f9; font-size: 8pt; color: #475569; padding: 4px 12px 10px 12px; font-family: Helvetica, Arial, sans-serif;">Las asignaciones MAC-IP fueron recolectadas a través del protocolo ARP nativo de los adaptadores activos.</td>
             </tr>
-            <tr><td colspan="6" style="height: 16px; padding: 0;"></td></tr>
+            <tr><td colspan="7" style="height: 16px; padding: 0;"></td></tr>
 
             <!-- FOOTER (Identical to PDF Footer) -->
             <tr>
-              <td colspan="6" class="footer-text-center" align="center" style="text-align: center; font-size: 8pt; color: #64748b; font-family: Helvetica, Arial, sans-serif;">RedMonitor — Reporte de Auditoría LAN  |  Generación: ${timestamp}</td>
+              <td colspan="7" class="footer-text-center" align="center" style="text-align: center; font-size: 8pt; color: #64748b; font-family: Helvetica, Arial, sans-serif;">RedMonitor — Reporte de Auditoría LAN  |  Generación: ${timestamp}</td>
             </tr>
             <tr>
-              <td colspan="6" class="footer-author" align="center" style="text-align: center; font-size: 8pt; color: #334155; font-weight: bold; font-family: Helvetica, Arial, sans-serif;">Diseñado y programado por ASNEIDER ZAPATA</td>
+              <td colspan="7" class="footer-author" align="center" style="text-align: center; font-size: 8pt; color: #334155; font-weight: bold; font-family: Helvetica, Arial, sans-serif;">Diseñado y programado por ASNEIDER ZAPATA</td>
             </tr>
           </table>
         </body>
@@ -1053,11 +1058,12 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
       doc.setFontSize(8);
       doc.setTextColor(255, 255, 255);
       doc.text("DIRECCIÓN IP", 12, 101.5);
-      doc.text("DIRECCIÓN MAC", 35, 101.5);
-      doc.text("FABRICANTE NIC", 75, 101.5);
-      doc.text("ESTACIÓN / HOST", 118, 101.5);
-      doc.text("LATENCIA", 165, 101.5);
-      doc.text("ESTADO", 182, 101.5);
+      doc.text("DIRECCIÓN MAC", 33, 101.5);
+      doc.text("UBICACIÓN FÍSICA", 68, 101.5);
+      doc.text("FABRICANTE NIC", 105, 101.5);
+      doc.text("ESTACIÓN / HOST", 142, 101.5);
+      doc.text("LATENCIA", 168, 101.5);
+      doc.text("ESTADO", 184, 101.5);
 
       let y = 104;
       activeDevices.forEach((device, index) => {
@@ -1083,39 +1089,46 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         doc.setTextColor(51, 65, 85); 
         doc.text(device.mac, 35, y + 4.8);
 
+        const rawLoc = device.ubicacion || locationName || 'Sede Local';
+        let deviceLoc = rawLoc.length > 20 ? rawLoc.substring(0, 18) + '...' : rawLoc;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(217, 119, 6);
+        doc.text(deviceLoc, 68, y + 4.8);
+
         const manufacturerRaw = resolveVendorByMac(device.mac, device.host, device.ip);
-        let manufacturer = manufacturerRaw.length > 25 ? manufacturerRaw.substring(0, 23) + '...' : manufacturerRaw;
+        let manufacturer = manufacturerRaw.length > 20 ? manufacturerRaw.substring(0, 18) + '...' : manufacturerRaw;
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(7.5);
         doc.setTextColor(textColorSecondary[0], textColorSecondary[1], textColorSecondary[2]);
-        doc.text(manufacturer, 75, y + 4.8);
+        doc.text(manufacturer, 105, y + 4.8);
 
-        let friendlyHostName = device.host.length > 25 ? device.host.substring(0, 23) + '...' : device.host;
+        let friendlyHostName = device.host.length > 18 ? device.host.substring(0, 16) + '...' : device.host;
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(7.5);
         doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-        doc.text(friendlyHostName, 118, y + 4.8);
+        doc.text(friendlyHostName, 142, y + 4.8);
 
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(device.ping && device.ping > 100 ? warningColor[0] : successColor[0], device.ping && device.ping > 100 ? warningColor[1] : successColor[1], device.ping && device.ping > 100 ? warningColor[2] : successColor[2]);
         const pingLabel = device.ping !== null ? `${device.ping} ms` : '—';
-        doc.text(pingLabel, 165, y + 4.8);
+        doc.text(pingLabel, 168, y + 4.8);
 
         if (device.estado === 'OK') {
           doc.setFillColor(209, 250, 229); 
-          doc.rect(180, y + 1.5, 12, 4.5, 'F');
+          doc.rect(182, y + 1.5, 12, 4.5, 'F');
           doc.setFont('Helvetica', 'bold');
           doc.setFontSize(7);
           doc.setTextColor(5, 150, 105); 
-          doc.text("OK", 186, y + 4.7, { align: 'center' });
+          doc.text("OK", 188, y + 4.7, { align: 'center' });
         } else {
           doc.setFillColor(254, 243, 199); 
-          doc.rect(180, y + 1.5, 12, 4.5, 'F');
+          doc.rect(182, y + 1.5, 12, 4.5, 'F');
           doc.setFont('Helvetica', 'bold');
           doc.setFontSize(7);
           doc.setTextColor(217, 119, 6); 
-          doc.text("WARN", 186, y + 4.7, { align: 'center' });
+          doc.text("WARN", 188, y + 4.7, { align: 'center' });
         }
 
         y += 7.5;
@@ -1134,10 +1147,11 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
           doc.setTextColor(255, 255, 255);
           doc.text("DIRECCIÓN IP", 12, 23.5);
           doc.text("DIRECCIÓN MAC", 35, 23.5);
-          doc.text("FABRICANTE NIC", 75, 23.5);
-          doc.text("ESTACIÓN / HOST", 118, 23.5);
-          doc.text("LATENCIA", 165, 23.5);
-          doc.text("ESTADO", 182, 23.5);
+          doc.text("UBICACIÓN FÍSICA", 68, 23.5);
+          doc.text("FABRICANTE NIC", 105, 23.5);
+          doc.text("ESTACIÓN / HOST", 142, 23.5);
+          doc.text("LATENCIA", 168, 23.5);
+          doc.text("ESTADO", 184, 23.5);
 
           y = 26; 
         }
@@ -1735,6 +1749,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                 <th className="p-3">Estado</th>
                 <th className="p-3">Dirección IP</th>
                 <th className="p-3">Dirección MAC</th>
+                <th className="p-3">Ubicación Física</th>
                 <th className="p-3">Fabricante Resolución (ARP)</th>
                 <th className="p-3">Host / Estación</th>
                 <th className="p-3">Ping Latencia</th>
@@ -1745,7 +1760,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
             <tbody className="divide-y divide-slate-800/30 font-sans text-xs text-slate-300">
               {filteredDevices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-10 text-center text-slate-500 italic max-w-sm">
+                  <td colSpan={9} className="p-10 text-center text-slate-500 italic max-w-sm">
                     No se encontraron dispositivos activos que coincidan con la búsqueda. Intente realizar un escáner de red para poblar la tabla.
                   </td>
                 </tr>
@@ -1779,6 +1794,14 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                       {/* MAC ADDRESS CLIENT HIGHLIGHTED */}
                       <td className="p-3 font-mono font-semibold tracking-wide text-slate-200 select-all border-l border-slate-800/50 bg-slate-950/20">
                         {d.mac}
+                      </td>
+
+                      {/* PHYSICAL LOCATION */}
+                      <td className="p-3 font-sans">
+                        <span className="bg-slate-950/80 px-2 py-0.5 rounded text-[11px] text-amber-300 border border-slate-800 flex items-center gap-1.5 w-fit font-mono">
+                          <MapPin className="h-3 w-3 text-amber-400 shrink-0" />
+                          <span className="truncate max-w-[130px]" title={d.ubicacion || locationName || 'Sede Local'}>{d.ubicacion || locationName || 'Sede Local'}</span>
+                        </span>
                       </td>
 
 

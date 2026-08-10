@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Device } from '../types';
-import { Search, ChevronLeft, ChevronRight, Sliders, Monitor, AlertTriangle, CheckCircle2, XCircle, Globe, ExternalLink } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Sliders, Monitor, AlertTriangle, CheckCircle2, XCircle, Globe, ExternalLink, MapPin } from 'lucide-react';
 import { resolveVendorByMac, resolveDeviceNameByMac, isGenericVendor } from '../utils/macUtils';
 import { isWebConfigurableDevice, openDeviceWebInterface } from '../utils/webInterfaceUtils';
 
@@ -118,6 +118,7 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
               <th className="py-2.5 px-4 w-12"></th>
               <th className="py-2.5 px-3">Host</th>
               <th className="py-2.5 px-3">IP</th>
+              <th className="py-2.5 px-3">Ubicación</th>
               <th className="py-2.5 px-3">Fabricante</th>
               <th className="py-2.5 px-3">MAC</th>
               <th className="py-2.5 px-3">Ping</th>
@@ -127,7 +128,7 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
           <tbody className="divide-y divide-slate-800/50 text-xs">
             {paginatedDevices.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-slate-500 font-sans">
+                <td colSpan={8} className="py-8 text-center text-slate-500 font-sans">
                   Sin dispositivos que coincidan con la búsqueda.
                 </td>
               </tr>
@@ -203,6 +204,12 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
                           </button>
                         )}
                       </div>
+                    </td>
+                    <td className="py-2 px-3 font-sans">
+                      <span className="text-[11px] text-amber-300/90 bg-slate-950/60 px-1.5 py-0.5 rounded border border-slate-800/60 inline-flex items-center gap-1 font-mono">
+                        <MapPin className="h-3 w-3 text-amber-400 shrink-0" />
+                        <span className="truncate max-w-[130px]" title={d.ubicacion || 'Sede Local'}>{d.ubicacion || 'Sede Local'}</span>
+                      </span>
                     </td>
                     <td className="py-2 px-3 font-sans">
                       <span className={`${brandStyle} text-[11px]`}>

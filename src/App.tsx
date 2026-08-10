@@ -683,6 +683,15 @@ export default function App() {
     }
   });
 
+  const [customLocations, setCustomLocations] = useState<Record<string, string>>(() => {
+    try {
+      const cached = localStorage.getItem('netmonitor_custom_locations');
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
+
   // External API Mac Resolution States
   const [isResolvingVendors, setIsResolvingVendors] = useState<boolean>(false);
   const [apiResolutionsCount, setApiResolutionsCount] = useState<number>(0);
@@ -914,11 +923,13 @@ export default function App() {
   };
 
   const handleClearCustomizations = () => {
-    if (confirm("¿Estás seguro de que deseas eliminar TODOS los nombres y marcas personalizadas? Esta acción no se puede deshacer.")) {
+    if (confirm("¿Estás seguro de que deseas eliminar TODOS los nombres, marcas y ubicaciones personalizadas? Esta acción no se puede deshacer.")) {
       setCustomNames({});
       setCustomVendors({});
+      setCustomLocations({});
       localStorage.removeItem('netmonitor_custom_names');
       localStorage.removeItem('netmonitor_custom_vendors');
+      localStorage.removeItem('netmonitor_custom_locations');
       addAlert("🗑️ Todas las personalizaciones de red se han restablecido de fábrica.", "success");
     }
   };
@@ -934,6 +945,11 @@ export default function App() {
       const customVendor = (d.mac && d.mac !== '—' && customVendors[d.mac]) !== undefined
         ? customVendors[d.mac]
         : customVendors[d.ip];
+
+      // Look up custom physical location: try MAC first, then IP
+      const customLocation = (d.mac && d.mac !== '—' && customLocations[d.mac]) !== undefined
+        ? customLocations[d.mac]
+        : customLocations[d.ip];
       
       const resolvedVendor = isGenericVendor(d.vendor)
         ? resolveVendorByMac(d.mac, d.host, d.ip)
@@ -942,10 +958,11 @@ export default function App() {
       return {
         ...d,
         host: customName !== undefined ? customName : d.host,
-        vendor: customVendor !== undefined ? customVendor : resolvedVendor
+        vendor: customVendor !== undefined ? customVendor : resolvedVendor,
+        ubicacion: customLocation !== undefined ? customLocation : (d.ubicacion || locationName || 'Sede Local')
       };
     });
-  }, [devices, customNames, customVendors, apiResolutionsCount]);
+  }, [devices, customNames, customVendors, customLocations, locationName, apiResolutionsCount]);
   
   // History point database (preload with realistic past records)
   const [historyData, setHistoryData] = useState<HistoryPoint[]>([
@@ -972,6 +989,8 @@ export default function App() {
   const [tempName, setTempName] = useState<string>('');
   const [isEditingVendor, setIsEditingVendor] = useState<boolean>(false);
   const [tempVendor, setTempVendor] = useState<string>('');
+  const [isEditingLocation, setIsEditingLocation] = useState<boolean>(false);
+  const [tempLocation, setTempLocation] = useState<string>('');
   const [modalTab, setModalTab] = useState<'info' | 'ports' | 'fingerprint'>('info');
   const [activeAnomaly, setActiveAnomaly] = useState<'none' | 'latency' | 'gateway' | 'loss'>('none');
 
@@ -1033,6 +1052,8 @@ Generado por: RedMonitor Network Diagnostic Tool`;
       setTempName('');
       setIsEditingVendor(false);
       setTempVendor('');
+      setIsEditingLocation(false);
+      setTempLocation('');
       setModalTab('info');
       setPortScanStatus('idle');
       setPortScanProgress(0);
@@ -1050,6 +1071,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           ? resolveVendorByMac(activeDevice.mac, activeDevice.host, activeDevice.ip)
           : activeDevice.vendor!;
         setTempVendor(currentBrand === 'Sonda de Red Genérica' ? '' : currentBrand);
+        setTempLocation(activeDevice.ubicacion || locationName || 'Sede Local');
       }
     }
   }, [selectedDevice, processedDevices]);
@@ -1164,6 +1186,24 @@ Generado por: RedMonitor Network Diagnostic Tool`;
         return next;
       });
       addAlert(`Fabricante de dispositivo con IP ${ip} cambiado a "${finalVendor || 'Autodetectado'}".`, 'info');
+    }
+  };
+
+  const handleUpdateDeviceLocation = (id: string, newLocation: string) => {
+    const finalLocation = newLocation.trim();
+    const targetDevice = devices.find(d => d.id === id);
+    if (targetDevice) {
+      const ip = targetDevice.ip;
+      const mac = targetDevice.mac;
+      setCustomLocations(prev => {
+        const next = { ...prev, [ip]: finalLocation || '—' };
+        if (mac && mac !== '—') {
+          next[mac] = finalLocation || '—';
+        }
+        localStorage.setItem('netmonitor_custom_locations', JSON.stringify(next));
+        return next;
+      });
+      addAlert(`Ubicación física del dispositivo ${ip} asignada a: "${finalLocation || locationName || 'Sede Local'}".`, 'info');
     }
   };
 
@@ -5246,6 +5286,77 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                                   className="text-slate-500 hover:text-cyan-400 text-[10px] font-sans underline transition-colors cursor-pointer"
                                 >
                                   Editar Marca
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="col-span-2 border-t border-slate-800/30 pt-2 mt-1">
+                          <span className="text-slate-500 block text-[9px] text-left mb-1">UBICACIÓN FÍSICA DEL DISPOSITIVO</span>
+                          {isEditingLocation ? (
+                            <div className="flex flex-col gap-1.5 w-full">
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  placeholder="Ej. Rack A - Piso 2, Oficina 101, CCTV Entrada..."
+                                  value={tempLocation}
+                                  onChange={(e) => setTempLocation(e.target.value)}
+                                  className="bg-slate-900 border border-slate-800 text-slate-200 text-[11px] px-2 py-1 rounded focus:outline-hidden focus:border-cyan-500 w-full font-sans animate-none"
+                                  maxLength={48}
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleUpdateDeviceLocation(activeDiagDevice.id, tempLocation);
+                                      setIsEditingLocation(false);
+                                    } else if (e.key === 'Escape') {
+                                      setIsEditingLocation(false);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  onClick={() => {
+                                    handleUpdateDeviceLocation(activeDiagDevice.id, tempLocation);
+                                    setIsEditingLocation(false);
+                                  }}
+                                  className="bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold px-2 py-1 text-[10px] rounded transition-colors cursor-pointer shrink-0 font-sans"
+                                >
+                                  Guardar
+                                </button>
+                                <button
+                                  onClick={() => setIsEditingLocation(false)}
+                                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-2 py-1 text-[10px] rounded transition-colors cursor-pointer shrink-0 font-sans"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {['Rack Principal', 'Sala de Servidores', 'Oficina 101', 'Recepción', 'Piso 1', 'Piso 2', 'CCTV / Exterior', 'Bodega'].map(loc => (
+                                  <button
+                                    key={loc}
+                                    type="button"
+                                    onClick={() => setTempLocation(loc)}
+                                    className="text-[9px] bg-slate-900 hover:bg-slate-800 hover:text-cyan-400 text-slate-400 border border-slate-800 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                                  >
+                                    {loc}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between mt-0.5">
+                              <span className="text-amber-400 font-semibold block text-left font-sans text-[11px]">
+                                {activeDiagDevice.ubicacion || locationName || 'Sede Local'}
+                              </span>
+                              {activeDiagDevice.estado !== 'No_Escaneado' && (
+                                <button
+                                  onClick={() => {
+                                    setTempLocation(activeDiagDevice.ubicacion || locationName || 'Sede Local');
+                                    setIsEditingLocation(true);
+                                  }}
+                                  className="text-slate-500 hover:text-cyan-400 text-[10px] font-sans underline transition-colors cursor-pointer"
+                                >
+                                  Editar Ubicación
                                 </button>
                               )}
                             </div>
