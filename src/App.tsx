@@ -4,7 +4,7 @@ import {
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
   ChevronDown, Monitor, Copy, Plus, Play, Pause, ExternalLink, HelpCircle, 
   ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable,
-  Gauge, Menu, X, Shield, MapPin, Tv, Video
+  Gauge, Menu, X, Shield, MapPin, Tv, Video, Bell
 } from 'lucide-react';
 
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
@@ -34,6 +34,8 @@ const ConfigurationPanel = React.lazy(() => import('./components/ConfigurationPa
 const OfflineLocationsManager = React.lazy(() => import('./components/OfflineLocationsManager'));
 const PortScannerModal = React.lazy(() => import('./components/PortScannerModal'));
 const RemoteDiagnosticTools = React.lazy(() => import('./components/RemoteDiagnosticTools'));
+const SnmpTelemetry = React.lazy(() => import('./components/SnmpTelemetry'));
+const NotificationChannels = React.lazy(() => import('./components/NotificationChannels'));
 
 const LazyLoadingFallback = () => (
   <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3 font-mono">
@@ -458,7 +460,8 @@ export default function App() {
   const [calcCidr, setCalcCidr] = useState<number>(24);
   
   // Navigation
-  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red' | 'wiki_soporte' | 'event_logger' | 'diseno_red' | 'instalador_desktop' | 'configuracion'>('vista_general');
+  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'snmp_telemetry' | 'notificaciones' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red' | 'wiki_soporte' | 'event_logger' | 'diseno_red' | 'instalador_desktop' | 'configuracion'>('vista_general');
+  const [snmpTargetIp, setSnmpTargetIp] = useState<string>('192.168.1.1');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('netmonitor_theme') as 'dark' | 'light') || 'dark';
   });
@@ -3702,6 +3705,40 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                   </button>
                 </li>
               )}
+              {enabledFeatures.snmp_telemetry !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('snmp_telemetry'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'snmp_telemetry' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                    id="nav-snmp-telemetry-btn"
+                  >
+                    <Radio className="h-3.5 w-3.5 text-cyan-400" />
+                    <span>Telemetría SNMP</span>
+                    <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">MIB</span>
+                  </button>
+                </li>
+              )}
+              {enabledFeatures.notificaciones !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('notificaciones'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'notificaciones' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                    id="nav-notificaciones-btn"
+                  >
+                    <Bell className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>Notificaciones</span>
+                    <span className="ml-auto bg-emerald-500/15 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20">ALERTAS</span>
+                  </button>
+                </li>
+              )}
               {enabledFeatures.ancho_banda !== false && (
                 <li>
                   <button 
@@ -5034,6 +5071,25 @@ Generado por: RedMonitor Network Diagnostic Tool`;
             />
           )}
 
+          {activeView === 'snmp_telemetry' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <SnmpTelemetry 
+                devices={processedDevices}
+                selectedDeviceIp={snmpTargetIp}
+                onSelectDevice={(d) => setSnmpTargetIp(d.ip)}
+                onAddLog={addAlert}
+              />
+            </React.Suspense>
+          )}
+
+          {activeView === 'notificaciones' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <NotificationChannels 
+                onAddLog={addAlert}
+              />
+            </React.Suspense>
+          )}
+
           {activeView === 'diseno_red' && (
             <React.Suspense fallback={<LazyLoadingFallback />}>
               <NetworkEnterpriseTools />
@@ -5785,6 +5841,19 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                   >
                     <Radio className="h-3.5 w-3.5" />
                     <span>Diagnóstico & Control Remoto</span>
+                  </button>
+
+                  {/* SNMP Telemetry Button */}
+                  <button
+                    onClick={() => {
+                      setSnmpTargetIp(activeDiagDevice.ip);
+                      setActiveView('snmp_telemetry');
+                      setSelectedDevice(null);
+                    }}
+                    className="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold py-1.5 px-3 rounded-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Cpu className="h-3.5 w-3.5" />
+                    <span>Telemetría SNMP</span>
                   </button>
                 </div>
 

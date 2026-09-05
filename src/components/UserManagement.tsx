@@ -3,7 +3,7 @@ import {
   UserPlus, Trash2, Key, Shield, User, Clock, AlertTriangle, 
   CheckCircle2, ShieldAlert, RefreshCw, Lock, Unlock, Settings, Eye, EyeOff,
   Cpu, Server, Activity, Terminal, Brain, Gauge, ShieldCheck, Layers, HelpCircle,
-  Copy, Check
+  Copy, Check, Radio, Bell
 } from 'lucide-react';
 
 interface DBUser {
@@ -27,6 +27,8 @@ interface UserManagementProps {
 export const AVAILABLE_FEATURES = [
   { key: 'sensores', label: 'Monitoreo de Sondas y Sensores', icon: Cpu, category: 'Hardware & IoT', desc: 'Monitoreo en tiempo real de sondas de temperatura, ping ICMP, puertos y servicios HTTP.' },
   { key: 'dispositivos', label: 'Gestión de Dispositivos e IPs', icon: Server, category: 'Hosts & Equipos', desc: 'Inventario interactivo de hosts, direcciones IP/MAC, marcas OUI y auditoría de red.' },
+  { key: 'snmp_telemetry', label: 'Telemetría Profunda SNMP & Hardware', icon: Radio, category: 'Hardware & SNMP', desc: 'Monitoreo de CPU, memoria RAM, temperatura, interfaces IF-MIB, uptime y MIBs en conmutadores y servidores.' },
+  { key: 'notificaciones', label: 'Canales de Alerta y Notificaciones', icon: Bell, category: 'Alertas & Notificaciones', desc: 'Despacho automatizado y desatendido de alertas hacia Telegram, Discord, Slack, Teams y Webhooks REST.' },
   { key: 'ancho_banda', label: 'Gráficos de Ancho de Banda', icon: Activity, category: 'Tráfico en Vivo', desc: 'Graficador dinámico del consumo instantáneo en megabits (Mbps) por cada equipo.' },
   { key: 'testeo', label: 'Consola de Pruebas y Diagnóstico', icon: Terminal, category: 'Herramientas de Red', desc: 'Herramientas interactivas para trazas Ping, Traceroute y escaneo de puertos TCP abiertos.' },
   { key: 'ai_diagnostic', label: 'Copiloto de Inteligencia Artificial', icon: Brain, category: 'IA & Automatización', desc: 'Sugerencias de optimización y diagnósticos inteligentes de red utilizando el modelo Gemini.' },

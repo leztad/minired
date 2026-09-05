@@ -12,6 +12,17 @@ import AdmZip from "adm-zip";
 import { exec, execSync } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import { queryRealSnmpDevice, generateSynthesizedTelemetry, STANDARD_OIDS } from "./server/snmpService";
+import { 
+  getNotificationChannels, 
+  saveNotificationChannels, 
+  sendToChannel, 
+  dispatchAlertToAllChannels, 
+  getDeliveryHistory, 
+  clearDeliveryHistory,
+  type NotificationChannel,
+  type AlertPayload
+} from "./server/notificationService";
 
 dotenv.config();
 
@@ -503,6 +514,169 @@ app.post("/api/system/trigger-update", (req, res) => {
 
 app.get("/api/system/update-status", (req, res) => {
   res.json(activeUpdateTask);
+});
+
+// ==========================================
+// SNMP HARDWARE TELEMETRY API ENDPOINTS
+// ==========================================
+app.post("/api/snmp/telemetry", async (req, res) => {
+  try {
+    const { ip, community = "public", version = "2c", port = 161, hostHint = "", vendorHint = "", forceSimulate = false } = req.body;
+    
+    if (!ip) {
+      return res.status(400).json({ error: "Dirección IP requerida para consulta SNMP." });
+    }
+
+    if (forceSimulate) {
+      const simulated = generateSynthesizedTelemetry(ip, hostHint, vendorHint);
+      return res.json(simulated);
+    }
+
+    const telemetry = await queryRealSnmpDevice(
+      ip, 
+      String(community || "public"), 
+      String(version || "2c"), 
+      Number(port) || 161, 
+      2000, 
+      hostHint, 
+      vendorHint
+    );
+
+    res.json(telemetry);
+  } catch (err: any) {
+    console.error("Error in /api/snmp/telemetry:", err);
+    res.status(500).json({ error: err.message || "Error al procesar la telemetría SNMP." });
+  }
+});
+
+app.post("/api/snmp/query-oid", async (req, res) => {
+  try {
+    const { ip, community = "public", version = "2c", port = 161, oids = [] } = req.body;
+    if (!ip || !Array.isArray(oids) || oids.length === 0) {
+      return res.status(400).json({ error: "Parámetros inválidos. Se requiere IP y una lista de OIDs." });
+    }
+
+    // Try live SNMP query using net-snmp
+    const snmpLib = await import("net-snmp");
+    const v = version === "1" ? snmpLib.default.Version1 : snmpLib.default.Version2c;
+    
+    const session = snmpLib.default.createSession(ip, community || "public", {
+      port: Number(port) || 161,
+      version: v,
+      timeout: 1800,
+      retries: 1
+    });
+
+    session.get(oids, (err: any, varbinds: any[]) => {
+      session.close();
+      if (err) {
+        // Return structured error fallback with descriptions
+        const results = oids.map(oid => {
+          let desc = "OID desconocido";
+          let val = "No responde en UDP:161";
+          if (oid.startsWith("1.3.6.1.2.1.1.1")) { desc = "sysDescr (Descripción del SO / Hardware)"; val = "Cisco IOS / Linux Network Node"; }
+          else if (oid.startsWith("1.3.6.1.2.1.1.3")) { desc = "sysUpTime (Tiempo de encendido)"; val = "5849200 (16h 14m 52s)"; }
+          else if (oid.startsWith("1.3.6.1.2.1.1.5")) { desc = "sysName (Hostname)"; val = `HOST-${ip.replace(/\./g, '-')}`; }
+          else if (oid.startsWith("1.3.6.1.2.1.25.2.2")) { desc = "hrMemorySize (Memoria RAM Total en KB)"; val = "2097152 KB"; }
+          else if (oid.startsWith("1.3.6.1.2.1.25.3.3.1.2")) { desc = "hrProcessorLoad (Carga de CPU %)"; val = "24 %"; }
+          return { oid, type: "Emulated/Fallback", value: val, description: desc, isLive: false };
+        });
+        return res.json({ success: true, isLive: false, results, message: err.message || "Timeout en agente SNMP." });
+      }
+
+      const results = (varbinds || []).map(vb => {
+        const isErr = snmpLib.default.isVarbindError(vb);
+        return {
+          oid: vb.oid,
+          type: snmpLib.default.ObjectType[vb.type] || String(vb.type),
+          value: isErr ? `Error SNMP: ${snmpLib.default.varbindError(vb)}` : (vb.value ? vb.value.toString() : ""),
+          isLive: !isErr
+        };
+      });
+
+      res.json({ success: true, isLive: true, results });
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Error al consultar OIDs." });
+  }
+});
+
+// ==========================================
+// EXTERNAL NOTIFICATION CHANNELS API
+// ==========================================
+app.get("/api/notifications/channels", (req, res) => {
+  try {
+    const channels = getNotificationChannels();
+    res.json(channels);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "Error al obtener canales." });
+  }
+});
+
+app.post("/api/notifications/channels", (req, res) => {
+  try {
+    const { channels } = req.body;
+    if (!Array.isArray(channels)) {
+      return res.status(400).json({ error: "Se esperaba un array de canales de notificación." });
+    }
+    saveNotificationChannels(channels);
+    res.json({ success: true, channels });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "Error al guardar canales." });
+  }
+});
+
+app.post("/api/notifications/test", async (req, res) => {
+  try {
+    const { channelId, customTitle, customMessage } = req.body;
+    const channels = getNotificationChannels();
+    const channel = channels.find(c => c.id === channelId);
+
+    if (!channel) {
+      return res.status(404).json({ error: "Canal de notificación no encontrado." });
+    }
+
+    const testAlert: AlertPayload = {
+      title: customTitle || "Prueba de Canal de Alerta",
+      message: customMessage || "Este es un mensaje de verificación transmitido desde RedMonitor PRO para confirmar la conectividad y entrega de alertas en tiempo real.",
+      severity: "info",
+      eventType: "test",
+      deviceIp: "192.168.1.1",
+      deviceHost: "ROUTER-PRINCIPAL",
+      metric: "Latencia ICMP",
+      value: "1.4 ms",
+      location: "Centro de Cómputo Principal",
+      timestamp: new Date().toLocaleTimeString("es-ES")
+    };
+
+    const deliveryLog = await sendToChannel(channel, testAlert);
+    res.json(deliveryLog);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "Error al enviar notificación de prueba." });
+  }
+});
+
+app.post("/api/notifications/dispatch", async (req, res) => {
+  try {
+    const { alert } = req.body;
+    if (!alert || !alert.title || !alert.message) {
+      return res.status(400).json({ error: "Faltan datos de la alerta (título y mensaje requeridos)." });
+    }
+
+    const results = await dispatchAlertToAllChannels(alert);
+    res.json({ success: true, deliveredCount: results.length, results });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "Error al despachar alertas." });
+  }
+});
+
+app.get("/api/notifications/history", (req, res) => {
+  res.json(getDeliveryHistory());
+});
+
+app.delete("/api/notifications/history", (req, res) => {
+  clearDeliveryHistory();
+  res.json({ success: true, message: "Historial de entregas limpiado." });
 });
 
 // Authentication & User Management API Endpoints

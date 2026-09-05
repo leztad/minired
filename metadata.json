@@ -1,6 +1,6 @@
 {
   "name": "RedMonitor",
-  "description": "Sistema de monitoreo de red LAN interactivo inspirado en PRTG, que permite escanear segmentos IP, ver sensores y listar dispositivos.",
+  "description": "Sistema de monitoreo de red LAN profesional con telemetría profunda SNMP de hardware, escaneo de subredes, sensores y despacho desatendido de alertas hacia Telegram, Discord, Slack y Webhooks.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
