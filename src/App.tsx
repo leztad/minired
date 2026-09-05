@@ -36,6 +36,7 @@ const PortScannerModal = React.lazy(() => import('./components/PortScannerModal'
 const RemoteDiagnosticTools = React.lazy(() => import('./components/RemoteDiagnosticTools'));
 const SnmpTelemetry = React.lazy(() => import('./components/SnmpTelemetry'));
 const NotificationChannels = React.lazy(() => import('./components/NotificationChannels'));
+const SwitchTopologyMap = React.lazy(() => import('./components/SwitchTopologyMap'));
 
 const LazyLoadingFallback = () => (
   <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3 font-mono">
@@ -460,7 +461,7 @@ export default function App() {
   const [calcCidr, setCalcCidr] = useState<number>(24);
   
   // Navigation
-  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'snmp_telemetry' | 'notificaciones' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red' | 'wiki_soporte' | 'event_logger' | 'diseno_red' | 'instalador_desktop' | 'configuracion'>('vista_general');
+  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'snmp_telemetry' | 'topologia_switches' | 'notificaciones' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red' | 'wiki_soporte' | 'event_logger' | 'diseno_red' | 'instalador_desktop' | 'configuracion'>('vista_general');
   const [snmpTargetIp, setSnmpTargetIp] = useState<string>('192.168.1.1');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('netmonitor_theme') as 'dark' | 'light') || 'dark';
@@ -3722,6 +3723,23 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                   </button>
                 </li>
               )}
+              {enabledFeatures.topologia_switches !== false && (
+                <li>
+                  <button 
+                    onClick={() => { setActiveView('topologia_switches'); setIsMobileMenuOpen(false); }}
+                    className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                      activeView === 'topologia_switches' 
+                        ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                        : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                    }`}
+                    id="nav-topology-switches-btn"
+                  >
+                    <Network className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Topología L2 Switches</span>
+                    <span className="ml-auto bg-indigo-500/15 text-indigo-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-indigo-500/20">LLDP/CDP</span>
+                  </button>
+                </li>
+              )}
               {enabledFeatures.notificaciones !== false && (
                 <li>
                   <button 
@@ -5077,6 +5095,23 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                 devices={processedDevices}
                 selectedDeviceIp={snmpTargetIp}
                 onSelectDevice={(d) => setSnmpTargetIp(d.ip)}
+                onAddLog={addAlert}
+              />
+            </React.Suspense>
+          )}
+
+          {activeView === 'topologia_switches' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <SwitchTopologyMap 
+                devices={processedDevices}
+                selectedDeviceIp={snmpTargetIp}
+                onSelectDevice={(d) => {
+                  setSelectedDevice(d);
+                }}
+                onNavigateToSnmp={(ip) => {
+                  setSnmpTargetIp(ip);
+                  setActiveView('snmp_telemetry');
+                }}
                 onAddLog={addAlert}
               />
             </React.Suspense>

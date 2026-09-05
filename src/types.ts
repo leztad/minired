@@ -20,6 +20,7 @@ export interface Device {
   httpServer?: string;      // Simulated HTTP Response Server header
   userAgent?: string;       // Simulated intercepted HTTP User-Agent
   osDeducido?: string;      // Fully consolidated operating system / device type
+  tipo?: string;            // Categorized device type (e.g. switch, router, ap, pc, etc.)
   ubicacion?: string;       // Physical location of the device (e.g. "Rack A", "Piso 2", "Oficina 101", etc.)
 }
 

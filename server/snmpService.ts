@@ -13,6 +13,16 @@ export interface SnmpInterfaceData {
   outErrors?: number;
 }
 
+export interface SnmpV3Config {
+  user: string;
+  securityLevel?: 'noAuthNoPriv' | 'authNoPriv' | 'authPriv';
+  authProtocol?: 'none' | 'md5' | 'sha' | 'sha256' | 'sha512';
+  authKey?: string;
+  privProtocol?: 'none' | 'des' | 'aes' | 'aes256b';
+  privKey?: string;
+  context?: string;
+}
+
 export interface SnmpTelemetryResult {
   ip: string;
   community: string;
@@ -37,6 +47,12 @@ export interface SnmpTelemetryResult {
   rawVarbinds?: Array<{ oid: string; type: string; value: string }>;
   error?: string;
   sourceNote: string;
+  // SNMP v3 USM Security Fields
+  v3User?: string;
+  v3SecurityLevel?: string;
+  v3AuthProtocol?: string;
+  v3PrivProtocol?: string;
+  isEncrypted?: boolean;
 }
 
 // Standard OIDs
@@ -75,7 +91,9 @@ export function formatTimeTicks(ticks: number): string {
 export function generateSynthesizedTelemetry(
   ip: string,
   hostHint: string = "",
-  vendorHint: string = ""
+  vendorHint: string = "",
+  versionStr: string = "2c",
+  v3Config?: SnmpV3Config
 ): SnmpTelemetryResult {
   const combined = (hostHint + " " + vendorHint + " " + ip).toLowerCase();
   
@@ -196,10 +214,12 @@ export function generateSynthesizedTelemetry(
   const memoryPercent = Math.round((memoryUsedMb / memoryTotalMb) * 100);
   const uptimeSeconds = 86400 * (5 + Math.floor(Math.random() * 45)) + Math.floor(Math.random() * 80000);
 
+  const isV3 = versionStr === "3";
+
   return {
     ip,
-    community: "public",
-    version: "2c",
+    community: isV3 ? "USM-AuthPriv" : "public",
+    version: isV3 ? "3" : (versionStr === "1" ? "1" : "2c"),
     isLiveSnmp: false,
     responseTimeMs: 24,
     sysName,
@@ -217,7 +237,14 @@ export function generateSynthesizedTelemetry(
     temperatureC: temp,
     fanStatus: 'OK',
     interfaces,
-    sourceNote: "Respuesta emulada por motor de telemetría (Equipo no respondió en UDP:161 con community 'public')."
+    v3User: isV3 ? (v3Config?.user || "snmpadmin") : undefined,
+    v3SecurityLevel: isV3 ? (v3Config?.securityLevel || "authPriv") : undefined,
+    v3AuthProtocol: isV3 ? (v3Config?.authProtocol || "sha256") : undefined,
+    v3PrivProtocol: isV3 ? (v3Config?.privProtocol || "aes") : undefined,
+    isEncrypted: isV3 && (v3Config?.securityLevel === 'authPriv' || !v3Config?.securityLevel),
+    sourceNote: isV3 
+      ? `Perfil emulado de telemetría SNMPv3 (USM AuthPriv con cifrado ${v3Config?.privProtocol?.toUpperCase() || 'AES'} y autenticación ${v3Config?.authProtocol?.toUpperCase() || 'SHA-256'}).`
+      : "Respuesta emulada por motor de telemetría (Equipo no respondió en UDP:161 con community 'public')."
   };
 }
 
@@ -231,10 +258,11 @@ export async function queryRealSnmpDevice(
   port: number = 161,
   timeoutMs: number = 1800,
   hostHint?: string,
-  vendorHint?: string
+  vendorHint?: string,
+  v3Config?: SnmpV3Config
 ): Promise<SnmpTelemetryResult> {
   const startTime = Date.now();
-  const version = versionStr === "1" ? snmp.Version1 : snmp.Version2c;
+  const isV3 = versionStr === "3";
 
   return new Promise((resolve) => {
     let session: any = null;
@@ -251,17 +279,52 @@ export async function queryRealSnmpDevice(
 
     // Safety timeout
     const timer = setTimeout(() => {
-      console.log(`SNMP timeout for ${ip}:${port}, falling back to simulated profile.`);
-      safeResolve(generateSynthesizedTelemetry(ip, hostHint, vendorHint));
+      console.log(`SNMP timeout for ${ip}:${port} (${versionStr}), falling back to simulated profile.`);
+      safeResolve(generateSynthesizedTelemetry(ip, hostHint, vendorHint, versionStr, v3Config));
     }, timeoutMs + 300);
 
     try {
-      session = snmp.createSession(ip, community, {
-        port: port || 161,
-        version,
-        timeout: timeoutMs,
-        retries: 1
-      });
+      if (isV3 && v3Config) {
+        let secLevel = snmp.SecurityLevel.authPriv;
+        if (v3Config.securityLevel === 'noAuthNoPriv') secLevel = snmp.SecurityLevel.noAuthNoPriv;
+        else if (v3Config.securityLevel === 'authNoPriv') secLevel = snmp.SecurityLevel.authNoPriv;
+
+        let authProto = snmp.AuthProtocols.sha256;
+        if (v3Config.authProtocol === 'md5') authProto = snmp.AuthProtocols.md5;
+        else if (v3Config.authProtocol === 'sha') authProto = snmp.AuthProtocols.sha;
+        else if (v3Config.authProtocol === 'sha256') authProto = snmp.AuthProtocols.sha256;
+        else if (v3Config.authProtocol === 'sha512') authProto = snmp.AuthProtocols.sha512;
+        else if (v3Config.authProtocol === 'none' || secLevel === snmp.SecurityLevel.noAuthNoPriv) authProto = snmp.AuthProtocols.none;
+
+        let privProto = snmp.PrivProtocols.aes;
+        if (v3Config.privProtocol === 'des') privProto = snmp.PrivProtocols.des;
+        else if (v3Config.privProtocol === 'aes256b') privProto = snmp.PrivProtocols.aes256b;
+        else if (v3Config.privProtocol === 'none' || secLevel !== snmp.SecurityLevel.authPriv) privProto = snmp.PrivProtocols.none;
+
+        const user = {
+          name: v3Config.user || 'snmpadmin',
+          level: secLevel,
+          authProtocol: authProto,
+          authKey: v3Config.authKey || '',
+          privProtocol: privProto,
+          privKey: v3Config.privKey || ''
+        };
+
+        session = snmp.createV3Session(ip, user, {
+          port: port || 161,
+          timeout: timeoutMs,
+          retries: 1,
+          context: v3Config.context || ''
+        });
+      } else {
+        const version = versionStr === "1" ? snmp.Version1 : snmp.Version2c;
+        session = snmp.createSession(ip, community, {
+          port: port || 161,
+          version,
+          timeout: timeoutMs,
+          retries: 1
+        });
+      }
 
       const oidsToGet = [
         STANDARD_OIDS.sysDescr,
@@ -362,10 +425,12 @@ export async function queryRealSnmpDevice(
           const memUsedMb = Math.round(memMb * 0.45);
           const cpuFinal = cpuLoad >= 0 ? cpuLoad : 25;
 
+          const isSecured = isV3 && (v3Config?.securityLevel === 'authPriv' || !v3Config?.securityLevel);
+
           safeResolve({
             ip,
-            community,
-            version: versionStr as any,
+            community: isV3 ? "USM-Secured" : community,
+            version: (isV3 ? "3" : versionStr) as any,
             isLiveSnmp: true,
             responseTimeMs: elapsed,
             sysName: sysName || ip,
@@ -383,14 +448,21 @@ export async function queryRealSnmpDevice(
             fanStatus: 'OK',
             interfaces: interfaces.length > 0 ? interfaces : generateSynthesizedTelemetry(ip).interfaces,
             rawVarbinds: rawList,
-            sourceNote: "Telemetría SNMP en vivo obtenida exitosamente vía UDP:161."
+            v3User: isV3 ? v3Config?.user : undefined,
+            v3SecurityLevel: isV3 ? v3Config?.securityLevel : undefined,
+            v3AuthProtocol: isV3 ? v3Config?.authProtocol : undefined,
+            v3PrivProtocol: isV3 ? v3Config?.privProtocol : undefined,
+            isEncrypted: isSecured,
+            sourceNote: isV3 
+              ? `Telemetría SNMPv3 (USM ${v3Config?.securityLevel || 'AuthPriv'} Cifrado con ${v3Config?.privProtocol?.toUpperCase() || 'AES'} y ${v3Config?.authProtocol?.toUpperCase() || 'SHA-256'}) obtenida en vivo vía UDP:161.`
+              : "Telemetría SNMP en vivo obtenida exitosamente vía UDP:161."
           });
         });
       });
     } catch (err: any) {
       clearTimeout(timer);
       console.error("SNMP session error:", err);
-      safeResolve(generateSynthesizedTelemetry(ip, hostHint, vendorHint));
+      safeResolve(generateSynthesizedTelemetry(ip, hostHint, vendorHint, versionStr, v3Config));
     }
   });
 }

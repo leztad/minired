@@ -3,7 +3,7 @@ import {
   Radio, Cpu, HardDrive, Thermometer, Activity, RefreshCw, 
   CheckCircle2, AlertTriangle, XCircle, Search, Database, 
   Layers, Clock, Shield, Sliders, Play, Pause, ExternalLink,
-  ChevronDown, ChevronRight, Copy, Check
+  ChevronDown, ChevronRight, Copy, Check, Lock
 } from 'lucide-react';
 import { Device } from '../types';
 
@@ -42,6 +42,11 @@ export interface SnmpTelemetryResult {
   fanStatus?: 'OK' | 'Warning' | 'Error' | 'N/A';
   interfaces: SnmpInterfaceData[];
   sourceNote: string;
+  v3User?: string;
+  v3SecurityLevel?: string;
+  v3AuthProtocol?: string;
+  v3PrivProtocol?: string;
+  isEncrypted?: boolean;
 }
 
 interface SnmpTelemetryProps {
@@ -64,8 +69,18 @@ const COMMON_OIDS = [
 export default function SnmpTelemetry({ devices, selectedDeviceIp, onSelectDevice, onAddLog }: SnmpTelemetryProps) {
   const [targetIp, setTargetIp] = useState<string>(selectedDeviceIp || (devices[0]?.ip || '192.168.1.1'));
   const [community, setCommunity] = useState<string>('public');
-  const [version, setVersion] = useState<'1' | '2c'>('2c');
+  const [version, setVersion] = useState<'1' | '2c' | '3'>('2c');
   const [port, setPort] = useState<number>(161);
+
+  // SNMPv3 configuration state
+  const [v3User, setV3User] = useState<string>('snmpadmin');
+  const [v3SecurityLevel, setV3SecurityLevel] = useState<'authPriv' | 'authNoPriv' | 'noAuthNoPriv'>('authPriv');
+  const [v3AuthProtocol, setV3AuthProtocol] = useState<'sha256' | 'sha' | 'md5'>('sha256');
+  const [v3AuthKey, setV3AuthKey] = useState<string>('AuthSecretKey123!');
+  const [v3PrivProtocol, setV3PrivProtocol] = useState<'aes' | 'aes256b' | 'des'>('aes');
+  const [v3PrivKey, setV3PrivKey] = useState<string>('PrivSecretPass123!');
+  const [showV3Config, setShowV3Config] = useState<boolean>(false);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isAutoPolling, setIsAutoPolling] = useState<boolean>(false);
   const [telemetry, setTelemetry] = useState<SnmpTelemetryResult | null>(null);
@@ -93,17 +108,30 @@ export default function SnmpTelemetry({ devices, selectedDeviceIp, onSelectDevic
     const vendorHint = matchedDev?.vendor || '';
 
     try {
+      const payload: any = {
+        ip: ipToQuery,
+        community,
+        version,
+        port,
+        hostHint,
+        vendorHint
+      };
+
+      if (version === '3') {
+        payload.v3Config = {
+          user: v3User,
+          securityLevel: v3SecurityLevel,
+          authProtocol: v3AuthProtocol,
+          authKey: v3AuthKey,
+          privProtocol: v3PrivProtocol,
+          privKey: v3PrivKey
+        };
+      }
+
       const res = await fetch('/api/snmp/telemetry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ip: ipToQuery,
-          community,
-          version,
-          port,
-          hostHint,
-          vendorHint
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
@@ -244,32 +272,49 @@ export default function SnmpTelemetry({ devices, selectedDeviceIp, onSelectDevic
             </div>
           </div>
 
-          {/* Community String */}
-          <div className="space-y-1">
-            <div className="flex justify-between items-center">
-              <label className="text-[10px] font-mono uppercase text-slate-400 font-semibold">Comunidad (Community)</label>
-              <div className="flex gap-1">
-                {['public', 'private'].map(c => (
-                  <button
-                    key={c}
-                    onClick={() => setCommunity(c)}
-                    className={`text-[9px] font-mono px-1 rounded transition-colors ${
-                      community === c ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    {c}
-                  </button>
-                ))}
+          {/* Community String / SNMPv3 Mode */}
+          {version !== '3' ? (
+            <div className="space-y-1">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-mono uppercase text-slate-400 font-semibold">Comunidad (Community)</label>
+                <div className="flex gap-1">
+                  {['public', 'private'].map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setCommunity(c)}
+                      className={`text-[9px] font-mono px-1 rounded transition-colors ${
+                        community === c ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
               </div>
+              <input
+                type="text"
+                value={community}
+                onChange={(e) => setCommunity(e.target.value)}
+                placeholder="public"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none"
+              />
             </div>
-            <input
-              type="text"
-              value={community}
-              onChange={(e) => setCommunity(e.target.value)}
-              placeholder="public"
-              className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none"
-            />
-          </div>
+          ) : (
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono uppercase text-slate-400 font-semibold">Seguridad SNMPv3</label>
+              <button
+                type="button"
+                onClick={() => setShowV3Config(!showV3Config)}
+                className="w-full bg-indigo-950/40 hover:bg-indigo-900/40 border border-indigo-500/40 text-indigo-300 rounded-lg px-3 py-1.5 text-xs font-mono flex items-center justify-between cursor-pointer"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Lock className="h-3 w-3 text-indigo-400" />
+                  <span>{v3SecurityLevel} ({v3User})</span>
+                </span>
+                <span className="text-[10px] underline">Configurar Cifrado</span>
+              </button>
+            </div>
+          )}
 
           {/* SNMP Version & Port */}
           <div className="grid grid-cols-2 gap-2">
@@ -277,10 +322,15 @@ export default function SnmpTelemetry({ devices, selectedDeviceIp, onSelectDevic
               <label className="text-[10px] font-mono uppercase text-slate-400 font-semibold">Versión</label>
               <select
                 value={version}
-                onChange={(e) => setVersion(e.target.value as any)}
+                onChange={(e) => {
+                  const v = e.target.value as any;
+                  setVersion(v);
+                  if (v === '3') setShowV3Config(true);
+                }}
                 className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none"
               >
                 <option value="2c">SNMP v2c</option>
+                <option value="3">SNMP v3 (USM Cifrado)</option>
                 <option value="1">SNMP v1</option>
               </select>
             </div>
@@ -316,10 +366,99 @@ export default function SnmpTelemetry({ devices, selectedDeviceIp, onSelectDevic
           </div>
         </div>
 
+        {/* SNMPv3 CONFIGURATION DRAWER (Shown when v3 is active) */}
+        {version === '3' && showV3Config && (
+          <div className="mt-3 p-3 bg-indigo-950/20 border border-indigo-500/30 rounded-lg text-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-indigo-300 font-semibold">
+                <Shield className="h-4 w-4 text-indigo-400" />
+                <span>Credenciales Criptográficas SNMPv3 (User-based Security Model - USM)</span>
+              </div>
+              <button 
+                onClick={() => setShowV3Config(false)}
+                className="text-slate-400 hover:text-slate-200 text-xs cursor-pointer"
+              >
+                Ocultar
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase text-slate-400 font-semibold">Usuario (SecurityName)</label>
+                <input
+                  type="text"
+                  value={v3User}
+                  onChange={(e) => setV3User(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded px-2 py-1 text-xs font-mono text-slate-200"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase text-slate-400 font-semibold">Nivel de Seguridad</label>
+                <select
+                  value={v3SecurityLevel}
+                  onChange={(e) => setV3SecurityLevel(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded px-2 py-1 text-xs font-mono text-slate-200"
+                >
+                  <option value="authPriv">authPriv (Autenticación + Cifrado)</option>
+                  <option value="authNoPriv">authNoPriv (Solo Autenticación)</option>
+                  <option value="noAuthNoPriv">noAuthNoPriv (Sin Auth ni Cifrado)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase text-slate-400 font-semibold">Protocolo Auth</label>
+                <select
+                  value={v3AuthProtocol}
+                  onChange={(e) => setV3AuthProtocol(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded px-2 py-1 text-xs font-mono text-slate-200"
+                >
+                  <option value="sha256">SHA-256 (Recomendado)</option>
+                  <option value="sha">SHA-1</option>
+                  <option value="md5">MD5</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase text-slate-400 font-semibold">Clave Auth</label>
+                <input
+                  type="password"
+                  value={v3AuthKey}
+                  onChange={(e) => setV3AuthKey(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded px-2 py-1 text-xs font-mono text-slate-200"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase text-slate-400 font-semibold">Protocolo Privacy (Cifrado)</label>
+                <select
+                  value={v3PrivProtocol}
+                  onChange={(e) => setV3PrivProtocol(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded px-2 py-1 text-xs font-mono text-slate-200"
+                >
+                  <option value="aes">AES-128 (Estándar)</option>
+                  <option value="aes256b">AES-256 (Blumenthal)</option>
+                  <option value="des">DES (Legacy)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase text-slate-400 font-semibold">Clave Cifrado</label>
+                <input
+                  type="password"
+                  value={v3PrivKey}
+                  onChange={(e) => setV3PrivKey(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded px-2 py-1 text-xs font-mono text-slate-200"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Source mode badge */}
         {telemetry && (
           <div className="mt-3 pt-3 border-t border-slate-800/50 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold ${
                 telemetry.isLiveSnmp 
                   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
@@ -328,6 +467,14 @@ export default function SnmpTelemetry({ devices, selectedDeviceIp, onSelectDevic
                 <span className={`w-1.5 h-1.5 rounded-full ${telemetry.isLiveSnmp ? 'bg-emerald-500 animate-ping' : 'bg-cyan-500'}`} />
                 {telemetry.isLiveSnmp ? 'AGENTE SNMP EN VIVO (UDP 161)' : 'PERFIL DE TELEMETRÍA ASISTIDO'}
               </span>
+
+              {telemetry.version === '3' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                  <Lock className="h-3 w-3" />
+                  <span>SNMPv3 USM {telemetry.v3SecurityLevel || 'authPriv'} {telemetry.isEncrypted ? '• Cifrado AES' : ''}</span>
+                </span>
+              )}
+
               <span className="text-slate-400 text-[11px] font-mono">
                 Latencia de respuesta: <strong className="text-slate-200">{telemetry.responseTimeMs} ms</strong>
               </span>

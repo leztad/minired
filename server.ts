@@ -13,6 +13,7 @@ import { exec, execSync } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { queryRealSnmpDevice, generateSynthesizedTelemetry, STANDARD_OIDS } from "./server/snmpService";
+import { discoverLiveSwitchTopology, generateSynthesizedSwitchTopology } from "./server/topologyService";
 import { 
   getNotificationChannels, 
   saveNotificationChannels, 
@@ -89,6 +90,11 @@ const PORT = 3000;
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Health check endpoint for container / load balancer probes
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 // Middleware de CORS para habilitar la comunicación segura con la aplicación de escritorio de Tauri
 app.use((req, res, next) => {
@@ -517,18 +523,27 @@ app.get("/api/system/update-status", (req, res) => {
 });
 
 // ==========================================
-// SNMP HARDWARE TELEMETRY API ENDPOINTS
+// SNMP HARDWARE TELEMETRY API ENDPOINTS (v1, v2c & v3 Cifrado)
 // ==========================================
 app.post("/api/snmp/telemetry", async (req, res) => {
   try {
-    const { ip, community = "public", version = "2c", port = 161, hostHint = "", vendorHint = "", forceSimulate = false } = req.body;
+    const { 
+      ip, 
+      community = "public", 
+      version = "2c", 
+      port = 161, 
+      hostHint = "", 
+      vendorHint = "", 
+      forceSimulate = false,
+      v3Config
+    } = req.body;
     
     if (!ip) {
       return res.status(400).json({ error: "Dirección IP requerida para consulta SNMP." });
     }
 
     if (forceSimulate) {
-      const simulated = generateSynthesizedTelemetry(ip, hostHint, vendorHint);
+      const simulated = generateSynthesizedTelemetry(ip, hostHint, vendorHint, String(version || "2c"), v3Config);
       return res.json(simulated);
     }
 
@@ -539,13 +554,87 @@ app.post("/api/snmp/telemetry", async (req, res) => {
       Number(port) || 161, 
       2000, 
       hostHint, 
-      vendorHint
+      vendorHint,
+      v3Config
     );
 
     res.json(telemetry);
   } catch (err: any) {
     console.error("Error in /api/snmp/telemetry:", err);
     res.status(500).json({ error: err.message || "Error al procesar la telemetría SNMP." });
+  }
+});
+
+// ==========================================
+// LAYER-2 SWITCH TOPOLOGY & LLDP/CDP ENDPOINTS
+// ==========================================
+app.post("/api/topology/discover", async (req, res) => {
+  try {
+    const { 
+      switchIp, 
+      community = "public", 
+      version = "2c", 
+      port = 161, 
+      v3Config, 
+      hostHint = "", 
+      vendorHint = "", 
+      existingDevices = [] 
+    } = req.body;
+
+    if (!switchIp) {
+      return res.status(400).json({ error: "Dirección IP del switch requerida." });
+    }
+
+    const topology = await discoverLiveSwitchTopology(
+      switchIp,
+      String(community || "public"),
+      String(version || "2c"),
+      v3Config,
+      Number(port) || 161,
+      2200,
+      hostHint,
+      vendorHint,
+      existingDevices
+    );
+
+    res.json(topology);
+  } catch (err: any) {
+    console.error("Error in /api/topology/discover:", err);
+    res.status(500).json({ error: err.message || "Error al descubrir adyacencias LLDP/CDP." });
+  }
+});
+
+app.post("/api/topology/full-map", async (req, res) => {
+  try {
+    const { switches = [], existingDevices = [] } = req.body;
+    
+    // Process each switch or generate topology nodes
+    const results = [];
+    for (const sw of switches) {
+      const top = await discoverLiveSwitchTopology(
+        sw.ip,
+        sw.community || "public",
+        sw.version || "2c",
+        sw.v3Config,
+        sw.port || 161,
+        1500,
+        sw.host,
+        sw.vendor,
+        existingDevices
+      );
+      results.push(top);
+    }
+
+    // If no switches were provided, use default primary switch
+    if (results.length === 0) {
+      const defaultSw = generateSynthesizedSwitchTopology("192.168.1.2", "SW-CORE-PRINCIPAL", "Cisco Catalyst 2960X", existingDevices);
+      results.push(defaultSw);
+    }
+
+    res.json({ success: true, switches: results });
+  } catch (err: any) {
+    console.error("Error in /api/topology/full-map:", err);
+    res.status(500).json({ error: err.message || "Error al generar mapa de switches." });
   }
 });
 
@@ -2836,4 +2925,7 @@ async function start() {
   });
 }
 
-start();
+start().catch((err) => {
+  console.error("Fatal error starting server:", err);
+  process.exit(1);
+});
