@@ -948,88 +948,101 @@ app.post("/api/auth/admin/change-password", authenticate, (req: any, res) => {
   res.json({ success: true, message: `Contraseña para el usuario "${user.username}" actualizada por el administrador.` });
 });
 
-// In-memory cache for MAC address OUI vendor mappings
-const vendorCache: Record<string, string> = {};
+// Fast in-memory O(1) cache for MAC address OUI vendor mappings
+const vendorCache = new Map<string, string>();
 
-// Comprehensive map of common MAC OUIs and manufacturers
-const OUI_MAP: Record<string, string> = {
-  "001132": "Synology Inc.",
-  "0011D9": "TiVo Device",
-  "001788": "Philips Hue Bridge",
-  "001A22": "Ubiquiti Networks",
-  "2C9682": "Cisco Systems",
-  "44D9E7": "Ubiquiti Networks",
-  "080027": "Oracle (VirtualBox)",
-  "0242AC": "Docker Virtual Bridge",
-  "FC51A4": "Samsung Electronics",
-  "E4E4C4": "Sony Interactive (PlayStation)",
-  "D4E4C4": "Sony Electronics",
-  "F01898": "Apple Inc.",
-  "9C287B": "Apple Inc.",
-  "A4123F": "Dahua Technology",
-  "84C8A0": "Ubiquiti Networks",
-  "18E829": "Ubiquiti Networks",
-  "788A20": "Ubiquiti Networks",
-  "FCECDA": "Ubiquiti Networks",
-  "FC2A9C": "Ubiquiti Networks",
-  "ECFABC": "Espressif Systems",
-  "240A64": "Espressif Systems",
-  "30AEA4": "Espressif Systems",
-  "7CB0C2": "Apple Inc.",
-  "907240": "Apple Inc.",
-  "88C223": "Apple Inc.",
-  "D84503": "Apple Inc.",
-  "B0C554": "Apple Inc.",
-  "FE33DE": "Sony Interactive (PlayStation)",
-  "001D0D": "Sony Corp.",
-  "001FA7": "Sony Corp.",
-  "BC32AC": "Dahua Technology",
-  "6C11FB": "Dahua Technology",
-  "00403F": "Hikvision Digital Tech",
-  "A040A0": "Hikvision Digital Tech",
-  "E0521D": "Hikvision Digital Tech",
-  "BC1485": "Hikvision Digital Tech",
-  "142FFD": "Hikvision Digital Tech",
-  "48EA63": "Hikvision Digital Tech",
-  "D443EB": "EZVIZ / Hikvision",
-  "E0E2E6": "EZVIZ / Hikvision",
-  "00408C": "Axis Communications",
-  "ACCC8E": "Axis Communications",
-  "60E327": "Reolink Digital",
-  "90E2BA": "Reolink Digital",
-  "00166C": "Hanwha Techwin (Wisenet)",
-  "00508D": "Hanwha Techwin (Wisenet)",
-  "0002D1": "Vivotek Inc.",
-  "001FCA": "Uniview Technologies",
-  "FCA667": "Amazon Technologies",
-  "C44F33": "Amazon Technologies",
-  "A0D05B": "Amazon Technologies",
-  "001EC5": "Google Nest",
-  "20DFB9": "Google Nest",
-  "F4F5D8": "Google LLC",
-  "48D6D5": "Google LLC",
-  "ECAA23": "Samsung Electronics",
-  "949F3E": "Samsung Electronics",
-  "A00BBA": "Samsung Electronics",
-  "107B44": "Huawei Technologies",
-  "503EAA": "Hewlett-Packard (HP)",
-  "3CD92B": "Hewlett-Packard (HP)",
-  "54A72A": "Xiaomi Communications",
-  "6490C1": "Xiaomi Communications",
-  "A4C512": "Intel Corporation",
-  "001F3B": "Intel Corporation",
-  "D0034B": "TP-Link Technologies",
-  "C025E9": "TP-Link Technologies",
-  "E8DE27": "TP-Link Technologies",
-  "B04E26": "TP-Link Technologies",
-  "74DA38": "TP-Link Technologies",
-};
+// Comprehensive O(1) hash map of common MAC OUIs and manufacturers
+const OUI_MAP = new Map<string, string>([
+  ["001132", "Synology Inc."],
+  ["0011D9", "TiVo Device"],
+  ["001788", "Philips Hue Bridge"],
+  ["001A22", "Ubiquiti Networks"],
+  ["2C9682", "Cisco Systems"],
+  ["44D9E7", "Ubiquiti Networks"],
+  ["080027", "Oracle (VirtualBox)"],
+  ["0242AC", "Docker Virtual Bridge"],
+  ["FC51A4", "Samsung Electronics"],
+  ["E4E4C4", "Sony Interactive (PlayStation)"],
+  ["D4E4C4", "Sony Electronics"],
+  ["F01898", "Apple Inc."],
+  ["9C287B", "Apple Inc."],
+  ["A4123F", "Dahua Technology"],
+  ["84C8A0", "Ubiquiti Networks"],
+  ["18E829", "Ubiquiti Networks"],
+  ["788A20", "Ubiquiti Networks"],
+  ["FCECDA", "Ubiquiti Networks"],
+  ["FC2A9C", "Ubiquiti Networks"],
+  ["ECFABC", "Espressif Systems"],
+  ["240A64", "Espressif Systems"],
+  ["30AEA4", "Espressif Systems"],
+  ["7CB0C2", "Apple Inc."],
+  ["907240", "Apple Inc."],
+  ["88C223", "Apple Inc."],
+  ["D84503", "Apple Inc."],
+  ["B0C554", "Apple Inc."],
+  ["FE33DE", "Sony Interactive (PlayStation)"],
+  ["001D0D", "Sony Corp."],
+  ["001FA7", "Sony Corp."],
+  ["BC32AC", "Dahua Technology"],
+  ["6C11FB", "Dahua Technology"],
+  ["00403F", "Hikvision Digital Tech"],
+  ["A040A0", "Hikvision Digital Tech"],
+  ["E0521D", "Hikvision Digital Tech"],
+  ["BC1485", "Hikvision Digital Tech"],
+  ["142FFD", "Hikvision Digital Tech"],
+  ["48EA63", "Hikvision Digital Tech"],
+  ["D443EB", "EZVIZ / Hikvision"],
+  ["E0E2E6", "EZVIZ / Hikvision"],
+  ["00408C", "Axis Communications"],
+  ["ACCC8E", "Axis Communications"],
+  ["60E327", "Reolink Digital"],
+  ["90E2BA", "Reolink Digital"],
+  ["00166C", "Hanwha Techwin (Wisenet)"],
+  ["00508D", "Hanwha Techwin (Wisenet)"],
+  ["0002D1", "Vivotek Inc."],
+  ["001FCA", "Uniview Technologies"],
+  ["FCA667", "Amazon Technologies"],
+  ["C44F33", "Amazon Technologies"],
+  ["A0D05B", "Amazon Technologies"],
+  ["001EC5", "Google Nest"],
+  ["20DFB9", "Google Nest"],
+  ["F4F5D8", "Google LLC"],
+  ["48D6D5", "Google LLC"],
+  ["ECAA23", "Samsung Electronics"],
+  ["949F3E", "Samsung Electronics"],
+  ["A00BBA", "Samsung Electronics"],
+  ["107B44", "Huawei Technologies"],
+  ["503EAA", "Hewlett-Packard (HP)"],
+  ["3CD92B", "Hewlett-Packard (HP)"],
+  ["54A72A", "Xiaomi Communications"],
+  ["6490C1", "Xiaomi Communications"],
+  ["A4C512", "Intel Corporation"],
+  ["001F3B", "Intel Corporation"],
+  ["D0034B", "TP-Link Technologies"],
+  ["C025E9", "TP-Link Technologies"],
+  ["E8DE27", "TP-Link Technologies"],
+  ["B04E26", "TP-Link Technologies"],
+  ["74DA38", "TP-Link Technologies"],
+  ["B827EB", "Raspberry Pi Foundation"],
+  ["DCA632", "Raspberry Pi Foundation"],
+  ["E45F01", "Raspberry Pi Foundation"],
+  ["28CD45", "Raspberry Pi Foundation"],
+  ["488F5A", "MikroTik"],
+  ["64D154", "MikroTik"],
+  ["CC2DE0", "MikroTik"],
+  ["000C29", "VMware, Inc."],
+  ["005056", "VMware, Inc."],
+  ["00155D", "Microsoft Hyper-V"],
+  ["00090F", "Fortinet Technologies"],
+  ["704CA5", "Fortinet Technologies"],
+  ["906C7E", "Aruba Networks / HPE"]
+]);
 
-// Simple Helper to map MAC OUI to common network device vendors to make it beautiful
+// Fast O(1) Helper to map MAC OUI to common network device vendors
 const getVendorByMac = (mac: string): string => {
   const cleanMac = mac.replace(/[:-]/g, "").toUpperCase();
   const oui = cleanMac.slice(0, 6);
-  return OUI_MAP[oui] || "Dispositivo de Red Activo";
+  return OUI_MAP.get(oui) || "Dispositivo de Red Activo";
 };
 
 // Asynchronously looks up MAC vendors online using free APIs with comfortable fallback limits and in-memory cache
@@ -1041,15 +1054,17 @@ const fetchOnlineVendor = async (mac: string): Promise<string> => {
   const cleanMac = mac.replace(/[:-]/g, "").toUpperCase().trim();
   const oui = cleanMac.slice(0, 6);
 
-  // 1. Check in-memory cache first
-  if (vendorCache[oui]) {
-    return vendorCache[oui];
+  // 1. Check in-memory Map cache first (O(1))
+  const cached = vendorCache.get(oui);
+  if (cached) {
+    return cached;
   }
 
-  // 2. Check local comprehensive list
-  if (OUI_MAP[oui]) {
-    vendorCache[oui] = OUI_MAP[oui];
-    return OUI_MAP[oui];
+  // 2. Check local comprehensive Map list (O(1))
+  const localMatch = OUI_MAP.get(oui);
+  if (localMatch) {
+    vendorCache.set(oui, localMatch);
+    return localMatch;
   }
 
   // 3. Online fallback checking free APIs (with short timeout to keep scans snappy and active)
@@ -1064,7 +1079,7 @@ const fetchOnlineVendor = async (mac: string): Promise<string> => {
       const data: any = await res.json();
       if (data && data.result && data.result.company) {
         const company = data.result.company.trim();
-        vendorCache[oui] = company;
+        vendorCache.set(oui, company);
         return company;
       }
     }
@@ -1080,7 +1095,7 @@ const fetchOnlineVendor = async (mac: string): Promise<string> => {
         const text = await res.text();
         if (text && text.trim() && !text.includes("error")) {
           const company = text.trim();
-          vendorCache[oui] = company;
+          vendorCache.set(oui, company);
           return company;
         }
       }
@@ -2284,12 +2299,13 @@ app.get("/api/scan-real-arp", (req, res) => {
     execTimeout = 4000;
   }
 
-  // Choose the robust multi-verification ping sweep command to ensure ARP cache is thoroughly populated
+  // Choose the robust multi-verification ping sweep command with concurrency pooling
   let sweepCmd = "";
   if (isWindows) {
     sweepCmd = `powershell -NoProfile -Command "1..254 | ForEach-Object { try { [System.Net.NetworkInformation.Ping]::new().SendAsync('${base}.' + $_, ${pingTimeout}) } catch {} }; Start-Sleep -Milliseconds ${winSleep}"`;
   } else {
-    sweepCmd = `for i in {1..254}; do ping -c 1 -W ${linuxTimeout} ${base}.$i >/dev/null 2>&1 & done; wait; sleep 0.05`;
+    // High-performance concurrency pool: batches of 32 concurrent asynchronous pings
+    sweepCmd = `for i in {1..254}; do ping -c 1 -W ${linuxTimeout} ${base}.$i >/dev/null 2>&1 & if [ $((i % 32)) -eq 0 ]; then wait; fi; done; wait; sleep 0.05`;
   }
 
   // First perform an active ping sweep to populate the OS ARP cache table (using optimized timeout for the quick round)

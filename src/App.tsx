@@ -15,23 +15,32 @@ import MapSubred from './components/MapSubred';
 import HistorialHosts from './components/HistorialHosts';
 import DeviceTable from './components/DeviceTable';
 import SensorTable from './components/SensorTable';
-import TestingCenter from './components/TestingCenter';
 import BandwidthMonitor from './components/BandwidthMonitor';
 import NetworkAICopilot from './components/NetworkAICopilot';
-import SpeedTest from './components/SpeedTest';
-import NetworkAudit from './components/NetworkAudit';
-import NetworkWiki from './components/NetworkWiki';
 import EventLogger from './components/EventLogger';
-import NetworkEnterpriseTools from './components/NetworkEnterpriseTools';
 import NetworkAuthGate from './components/NetworkAuthGate';
-import UserManagement, { AVAILABLE_FEATURES } from './components/UserManagement';
-import TauriInstallerGuide from './components/TauriInstallerGuide';
-import ConfigurationPanel from './components/ConfigurationPanel';
-import OfflineLocationsManager, { LocationProfile } from './components/OfflineLocationsManager';
-import PortScannerModal from './components/PortScannerModal';
-import RemoteDiagnosticTools from './components/RemoteDiagnosticTools';
+import { AVAILABLE_FEATURES } from './components/UserManagement';
+import type { LocationProfile } from './components/OfflineLocationsManager';
 import { CctvDiagnosticModal } from './components/CctvDiagnosticModal';
 import { isWebConfigurableDevice, openDeviceWebInterface, getWebConfigUrl } from './utils/webInterfaceUtils';
+
+// Optimized code-splitting with React.lazy for heavy secondary views
+const TestingCenter = React.lazy(() => import('./components/TestingCenter'));
+const SpeedTest = React.lazy(() => import('./components/SpeedTest'));
+const NetworkAudit = React.lazy(() => import('./components/NetworkAudit'));
+const NetworkWiki = React.lazy(() => import('./components/NetworkWiki'));
+const NetworkEnterpriseTools = React.lazy(() => import('./components/NetworkEnterpriseTools'));
+const ConfigurationPanel = React.lazy(() => import('./components/ConfigurationPanel'));
+const OfflineLocationsManager = React.lazy(() => import('./components/OfflineLocationsManager'));
+const PortScannerModal = React.lazy(() => import('./components/PortScannerModal'));
+const RemoteDiagnosticTools = React.lazy(() => import('./components/RemoteDiagnosticTools'));
+
+const LazyLoadingFallback = () => (
+  <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3 font-mono">
+    <RefreshCw className="h-6 w-6 animate-spin text-cyan-400" />
+    <span className="text-xs">Cargando módulo de red...</span>
+  </div>
+);
 
 const extractSubnetFromIp = (ip: string): string => {
   const parts = ip.trim().split('.');
@@ -4940,17 +4949,19 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           )}
 
           {activeView === 'testeo' && (
-            <TestingCenter 
-              devices={processedDevices} 
-              sensors={sensors}
-              setDevices={setDevices}
-              setSensors={setSensors}
-              setHistoryData={setHistoryData}
-              subnetSegment={subnetSegment}
-              includeVirtuals={includeVirtuals}
-              activeAnomaly={activeAnomaly}
-              setActiveAnomaly={setActiveAnomaly}
-            />
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <TestingCenter 
+                devices={processedDevices} 
+                sensors={sensors}
+                setDevices={setDevices}
+                setSensors={setSensors}
+                setHistoryData={setHistoryData}
+                subnetSegment={subnetSegment}
+                includeVirtuals={includeVirtuals}
+                activeAnomaly={activeAnomaly}
+                setActiveAnomaly={setActiveAnomaly}
+              />
+            </React.Suspense>
           )}
 
           {activeView === 'ai_diagnostic' && (
@@ -4963,46 +4974,56 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           )}
 
           {activeView === 'speed_test' && (
-            <SpeedTest onAddLog={addAlert} />
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <SpeedTest onAddLog={addAlert} />
+            </React.Suspense>
           )}
 
           {activeView === 'auditorias_red' && (
-            <NetworkAudit 
-              devices={processedDevices} 
-              onAddLog={addAlert} 
-              locationName={locationName}
-            />
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <NetworkAudit 
+                devices={processedDevices} 
+                onAddLog={addAlert} 
+                locationName={locationName}
+              />
+            </React.Suspense>
           )}
 
           {activeView === 'wiki_soporte' && (
-            <NetworkWiki />
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <NetworkWiki />
+            </React.Suspense>
           )}
 
           {activeView === 'configuracion' && currentUser && (
-            <ConfigurationPanel 
-              theme={theme}
-              setTheme={handleSetTheme}
-              authToken={authToken!}
-              currentUser={currentUser}
-              onAddLog={addAlert}
-              enabledFeatures={enabledFeatures}
-              onUpdateFeatures={handleUpdateFeatures}
-              onVersionUpdate={(v) => setSystemVersion(v)}
-            />
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <ConfigurationPanel 
+                theme={theme}
+                setTheme={handleSetTheme}
+                authToken={authToken!}
+                currentUser={currentUser}
+                onAddLog={addAlert}
+                enabledFeatures={enabledFeatures}
+                onUpdateFeatures={handleUpdateFeatures}
+                onVersionUpdate={(v) => setSystemVersion(v)}
+              />
+            </React.Suspense>
           )}
 
           {activeView === ('ubicaciones_offline' as any) && (
-            <OfflineLocationsManager
-              currentLocationName={locationName}
-              currentSubnet={subnetSegment}
-              currentInterface={selectedInterface}
-              activeDevices={devices.filter(d => d.estado !== 'No_Escaneado')}
-              onLoadProfile={handleLoadOfflineProfile}
-              onAddLog={addAlert}
-              onAddAlert={addAlert}
-              activeProfileId={loadedProfileId}
-              onUnloadProfile={handleUnloadOfflineProfile}
-            />
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <OfflineLocationsManager
+                currentLocationName={locationName}
+                currentSubnet={subnetSegment}
+                currentInterface={selectedInterface}
+                activeDevices={devices.filter(d => d.estado !== 'No_Escaneado')}
+                onLoadProfile={handleLoadOfflineProfile}
+                onAddLog={addAlert}
+                onAddAlert={addAlert}
+                activeProfileId={loadedProfileId}
+                onUnloadProfile={handleUnloadOfflineProfile}
+              />
+            </React.Suspense>
           )}
 
           {activeView === 'event_logger' && (
@@ -5014,7 +5035,9 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           )}
 
           {activeView === 'diseno_red' && (
-            <NetworkEnterpriseTools />
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <NetworkEnterpriseTools />
+            </React.Suspense>
           )}
 
 
@@ -5779,27 +5802,31 @@ Generado por: RedMonitor Network Diagnostic Tool`;
 
       {/* PORT SCANNER & SERVICE AUDIT MODAL */}
       {showPortScannerModal && (
-        <PortScannerModal
-          device={portScannerDevice}
-          initialIp={portScannerTargetIp}
-          onClose={() => setShowPortScannerModal(false)}
-          onOpenWebUi={(ip) => {
-            openDeviceWebInterface(ip);
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <PortScannerModal
+            device={portScannerDevice}
+            initialIp={portScannerTargetIp}
+            onClose={() => setShowPortScannerModal(false)}
+            onOpenWebUi={(ip) => {
+              openDeviceWebInterface(ip);
+            }}
+          />
+        </React.Suspense>
       )}
 
       {/* REMOTE DIAGNOSTIC & CONTROL TOOLS MODAL */}
       {showRemoteToolsModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <RemoteDiagnosticTools
-              device={remoteToolsDevice}
-              onClose={() => setShowRemoteToolsModal(false)}
-              onOpenWebUi={(ip) => {
-                openDeviceWebInterface(ip);
-              }}
-            />
+            <React.Suspense fallback={null}>
+              <RemoteDiagnosticTools
+                device={remoteToolsDevice}
+                onClose={() => setShowRemoteToolsModal(false)}
+                onOpenWebUi={(ip) => {
+                  openDeviceWebInterface(ip);
+                }}
+              />
+            </React.Suspense>
           </div>
         </div>
       )}

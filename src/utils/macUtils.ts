@@ -427,24 +427,38 @@ export const getStableFallbackVendor = (seed: string): string => {
   return STABLE_FALLBACK_VENDORS[index];
 };
 
+// Fast in-memory resolution caches for O(1) instantaneous lookups across all re-renders
+const vendorResolutionMemoryCache = new Map<string, string>();
+const deviceNameResolutionMemoryCache = new Map<string, string>();
+
 /**
  * Resolves the manufacturer/vendor of a device based on its MAC address.
  * Optionally incorporates hostname and IP clues as intelligent fallbacks if the MAC is unassigned or generic.
  */
 export const resolveVendorByMac = (mac?: string, hostname?: string, ip?: string): string => {
+  const cacheKey = `${mac || ''}|${hostname || ''}|${ip || ''}`;
+  const cachedResult = vendorResolutionMemoryCache.get(cacheKey);
+  if (cachedResult !== undefined) {
+    return cachedResult;
+  }
+
   // Normalize MAC to always be clean and normalized
   const cleanMac = (mac || '').replace(/[:-]/g, '').toUpperCase().trim();
 
   // 0. Check persistent API cache first! (if we resolved it from the web previously, use it)
   if (cleanMac && apiVendorCache[cleanMac] && apiVendorCache[cleanMac] !== 'UNKNOWN') {
-    return apiVendorCache[cleanMac];
+    const val = apiVendorCache[cleanMac];
+    vendorResolutionMemoryCache.set(cacheKey, val);
+    return val;
   }
 
   // 1. Try MAC OUI Database lookup first (using normalized 3-octet format: XX:XX:XX)
   if (cleanMac.length >= 6) {
     const prefix6 = `${cleanMac.slice(0, 2)}:${cleanMac.slice(2, 4)}:${cleanMac.slice(4, 6)}`;
     if (OUI_DATABASE[prefix6]) {
-      return OUI_DATABASE[prefix6];
+      const val = OUI_DATABASE[prefix6];
+      vendorResolutionMemoryCache.set(cacheKey, val);
+      return val;
     }
   }
 
@@ -496,11 +510,13 @@ export const resolveVendorByMac = (mac?: string, hostname?: string, ip?: string)
   // 3. Fallback based on typical IP structure (Gateway addresses)
   if (ip) {
     if (ip.endsWith('.1') || ip.endsWith('.254')) {
+      vendorResolutionMemoryCache.set(cacheKey, 'Gateway / Router Principal');
       return 'Gateway / Router Principal';
     }
   }
 
   // 4. Genuine fallback: return "Dispositivo Genérico" instead of guessing popular brands incorrectly
+  vendorResolutionMemoryCache.set(cacheKey, 'Dispositivo Genérico');
   return 'Dispositivo Genérico';
 };
 
@@ -508,6 +524,12 @@ export const resolveVendorByMac = (mac?: string, hostname?: string, ip?: string)
  * Resolves a highly descriptive name for the device based on its MAC address, vendor, and existing host/IP.
  */
 export const resolveDeviceNameByMac = (mac?: string, hostname?: string, ip?: string): string => {
+  const cacheKey = `${mac || ''}|${hostname || ''}|${ip || ''}`;
+  const cached = deviceNameResolutionMemoryCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+
   let cleanHostname = (hostname || "").trim();
   let prefix = "";
 
@@ -730,8 +752,7 @@ export const resolveDeviceNameByMac = (mac?: string, hostname?: string, ip?: str
     }
   }
 
-  if (prefix) {
-    return `${prefix} (${resolvedCore})`;
-  }
-  return resolvedCore;
+  const finalResult = prefix ? `${prefix} (${resolvedCore})` : resolvedCore;
+  deviceNameResolutionMemoryCache.set(cacheKey, finalResult);
+  return finalResult;
 };

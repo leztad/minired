@@ -14,32 +14,49 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
   const [selectedFilter, setSelectedFilter] = useState<'Todos' | 'OK' | 'Advertencia' | 'Caído'>('Todos');
   const [hideUnused, setHideUnused] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 15;
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  // Filter logic
+  // High-performance filter logic with pre-computed lowercase query
+  // Count of inactive/down devices
+  const inactiveCount = useMemo(() => {
+    return devices.filter(d => d.estado === 'Caído' || (d.estado === 'No_Escaneado' && d.host !== '—')).length;
+  }, [devices]);
+
   const filteredDevices = useMemo(() => {
+    const query = searchTerm.toLowerCase().trim();
+    const hasQuery = query.length > 0;
+
     return devices.filter(d => {
       // If hiding unoccupied / unused IP spaces
-      if (hideUnused && d.estado === 'Caído' && (d.host === '—' || d.host === '')) {
+      if (hideUnused && (d.estado === 'Caído' || d.estado === 'No_Escaneado') && (d.host === '—' || d.host === '')) {
         return false;
       }
+
+      if (selectedFilter === 'Caído') {
+        if (d.estado !== 'Caído' && (d.estado !== 'No_Escaneado' || d.host === '—')) {
+          return false;
+        }
+      } else if (selectedFilter !== 'Todos' && d.estado !== selectedFilter) {
+        return false;
+      }
+
+      if (!hasQuery) return true;
 
       // Metric match
       const brandName = isGenericVendor(d.vendor)
         ? resolveVendorByMac(d.mac, d.host, d.ip)
-        : d.vendor!;
+        : (d.vendor || '');
       const deviceName = resolveDeviceNameByMac(d.mac, d.host, d.ip);
-      const matchesSearch = 
-        d.ip.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.host.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        deviceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        brandName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.mac.toLowerCase().includes(searchTerm.toLowerCase());
+      const loc = d.ubicacion || '';
 
-      if (!matchesSearch) return false;
-
-      if (selectedFilter === 'Todos') return true;
-      return d.estado === selectedFilter;
+      return (
+        d.ip.toLowerCase().includes(query) ||
+        d.host.toLowerCase().includes(query) ||
+        deviceName.toLowerCase().includes(query) ||
+        brandName.toLowerCase().includes(query) ||
+        d.mac.toLowerCase().includes(query) ||
+        loc.toLowerCase().includes(query)
+      );
     });
   }, [devices, searchTerm, selectedFilter, hideUnused]);
 
@@ -81,19 +98,32 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
 
           {/* Tabs resembling mockup buttons */}
           <div className="flex rounded-xs border border-slate-800 p-0.5 bg-slate-950 text-xs text-slate-400">
-            {(['Todos', 'OK', 'Advertencia', 'Caído'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setSelectedFilter(f)}
-                className={`px-2 py-0.5 rounded-sm font-medium transition-all cursor-pointer ${
-                  selectedFilter === f
-                    ? 'bg-cyan-500 text-slate-950 font-semibold'
-                    : 'hover:text-slate-200 hover:bg-slate-800/50'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+            {(['Todos', 'OK', 'Advertencia', 'Caído'] as const).map(f => {
+              const label = f === 'Caído' ? 'Inactivos' : f;
+              const isInactiveTab = f === 'Caído';
+              return (
+                <button
+                  key={f}
+                  onClick={() => setSelectedFilter(f)}
+                  className={`px-2 py-0.5 rounded-sm font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                    selectedFilter === f
+                      ? isInactiveTab
+                        ? 'bg-rose-500 text-white font-semibold'
+                        : 'bg-cyan-500 text-slate-950 font-semibold'
+                      : 'hover:text-slate-200 hover:bg-slate-800/50'
+                  }`}
+                >
+                  <span>{label}</span>
+                  {isInactiveTab && inactiveCount > 0 && (
+                    <span className={`text-[10px] px-1 py-0.2 rounded-full font-mono font-bold ${
+                      selectedFilter === f ? 'bg-white text-rose-600' : 'bg-rose-500/20 text-rose-400'
+                    }`}>
+                      {inactiveCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Search Box */}
@@ -236,35 +266,61 @@ export default function DeviceTable({ devices, onSelectDevice }: DeviceTableProp
       </div>
 
       {/* Pagination Controls Footer */}
-      {totalPages > 1 && (
-        <div className="p-3 bg-[#0B1120] border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-500">
-          <div>
-            Mostrando <span className="font-semibold text-slate-400">{(currentPage - 1) * itemsPerPage + 1}</span> -{' '}
-            <span className="font-semibold text-slate-400">
-              {Math.min(currentPage * itemsPerPage, filteredDevices.length)}
-            </span>{' '}
-            de <span className="font-semibold text-slate-400">{filteredDevices.length}</span> dispositivos
+      {filteredDevices.length > 0 && (
+        <div className="p-3 bg-[#0B1120] border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-slate-500">
+          <div className="flex items-center gap-3">
+            <div>
+              Mostrando <span className="font-semibold text-slate-400">{(currentPage - 1) * itemsPerPage + 1}</span> -{' '}
+              <span className="font-semibold text-slate-400">
+                {Math.min(currentPage * itemsPerPage, filteredDevices.length)}
+              </span>{' '}
+              de <span className="font-semibold text-slate-400">{filteredDevices.length}</span> dispositivos
+            </div>
+
+            <div className="flex items-center gap-1.5 pl-3 border-l border-slate-800 text-[11px]">
+              <span className="text-slate-500">Filas:</span>
+              {[15, 30, 50, 100].map(size => (
+                <button
+                  key={size}
+                  onClick={() => {
+                    setItemsPerPage(size);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                    itemsPerPage === size
+                      ? 'bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/40'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="p-1 border border-slate-800 rounded bg-slate-900 text-slate-400 hover:bg-slate-850 disabled:opacity-30 disabled:hover:bg-slate-900 cursor-pointer"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="px-2">
-              Página {currentPage} de {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="p-1 border border-slate-800 rounded bg-slate-900 text-slate-400 hover:bg-slate-850 disabled:opacity-30 disabled:hover:bg-slate-900 cursor-pointer"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-1 border border-slate-800 rounded bg-slate-900 text-slate-400 hover:bg-slate-850 disabled:opacity-30 disabled:hover:bg-slate-900 cursor-pointer"
+                title="Página anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="px-2">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1 border border-slate-800 rounded bg-slate-900 text-slate-400 hover:bg-slate-850 disabled:opacity-30 disabled:hover:bg-slate-900 cursor-pointer"
+                title="Página siguiente"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

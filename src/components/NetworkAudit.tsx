@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { resolveVendorByMac } from '../utils/macUtils';
+import { asyncGetItem, asyncSetItem } from '../utils/storageUtils';
 
 interface NetworkAuditProps {
   devices: Device[];
@@ -58,6 +59,7 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
   // --- AUTOMATED AUDIT ENGINE ---
   const [isContinuousAudit, setIsContinuousAudit] = useState(false);
   const [continuousCount, setContinuousCount] = useState(0);
+  const [isExporting, setIsExporting] = useState<'pdf' | 'excel' | null>(null);
 
   // Consider only active devices or warning devices
   const activeDevices = useMemo(() => {
@@ -73,25 +75,62 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
     return Array.from(list);
   }, [devices]);
 
-  // Filters
+  // Pagination for audit table to avoid DOM lag on large subnets
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditPageSize, setAuditPageSize] = useState(25);
+
+  // Optimized Search and Segment Filters
   const filteredDevices = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
     return activeDevices.filter(d => {
-      const matchSearch = d.host.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          d.ip.includes(searchTerm) || 
-                          d.mac.toLowerCase().includes(searchTerm.toLowerCase());
       const matchSegment = filterSegment === 'all' || d.segmento === filterSegment;
-      return matchSearch && matchSegment;
+      if (!matchSegment) return false;
+      if (!term) return true;
+
+      return (
+        d.host.toLowerCase().includes(term) || 
+        d.ip.includes(term) || 
+        d.mac.toLowerCase().includes(term) ||
+        (d.ubicacion || '').toLowerCase().includes(term)
+      );
     });
   }, [activeDevices, searchTerm, filterSegment]);
 
-  // Calculations for Audit Report Card
+  // Keep pagination bounded
+  const totalAuditPages = Math.max(1, Math.ceil(filteredDevices.length / auditPageSize));
+  const paginatedAuditDevices = useMemo(() => {
+    if (auditPageSize === 0) return filteredDevices; // All
+    const start = (auditPage - 1) * auditPageSize;
+    return filteredDevices.slice(start, start + auditPageSize);
+  }, [filteredDevices, auditPage, auditPageSize]);
+
+  useEffect(() => {
+    setAuditPage(1);
+  }, [searchTerm, filterSegment, auditPageSize]);
+
+  // Calculations for Audit Report Card (Single O(N) pass for optimal performance)
   const totals = useMemo(() => {
     const count = activeDevices.length;
-    const warnings = activeDevices.filter(d => d.estado === 'Advertencia').length;
-    const latencyList = activeDevices.map(d => d.ping || 0).filter(p => p > 0);
-    const avgLatency = latencyList.length > 0 
-      ? Math.round(latencyList.reduce((acc, current) => acc + current, 0) / latencyList.length) 
-      : 0;
+    let warnings = 0;
+    let totalLatency = 0;
+    let latencySamples = 0;
+    let hasUnrecognizedMac = false;
+    let highLatencyCount = 0;
+
+    for (let i = 0; i < count; i++) {
+      const d = activeDevices[i];
+      if (d.estado === 'Advertencia') warnings++;
+      if (d.ping && d.ping > 0) {
+        totalLatency += d.ping;
+        latencySamples++;
+        if (d.ping > 100) highLatencyCount++;
+      }
+      if (!hasUnrecognizedMac && (d.mac === '—' || d.mac === '00:00:00:00:00:00')) {
+        hasUnrecognizedMac = true;
+      }
+    }
+
+    const avgLatency = latencySamples > 0 ? Math.round(totalLatency / latencySamples) : 0;
 
     let safetyScore = 100;
     let rank = 'CONFIABLE (EXCELENTE)';
@@ -99,11 +138,8 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
 
     // Deduce safety points
     safetyScore -= warnings * 10;
-    const hasUnrecognizedMac = activeDevices.some(d => d.mac === '—' || d.mac === '00:00:00:00:00:00');
     if (hasUnrecognizedMac) safetyScore -= 15;
-
-    const highlatencyCount = activeDevices.filter(d => (d.ping || 0) > 100).length;
-    safetyScore -= highlatencyCount * 5;
+    safetyScore -= highLatencyCount * 5;
 
     if (safetyScore < 60) {
       rank = 'RIESGO CRÍTICO DETECTADO / ACCIONES PENDIENTES';
@@ -123,20 +159,19 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
     };
   }, [activeDevices]);
 
-  // Load history from LocalStorage
+  // Load history asynchronously from IndexedDB (with localStorage fallback)
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('redmonitor_audit_history');
-      if (stored) {
-        setAuditHistory(JSON.parse(stored));
+    asyncGetItem<HistoricalAudit[]>('redmonitor_audit_history', []).then(stored => {
+      if (stored && Array.isArray(stored) && stored.length > 0) {
+        setAuditHistory(stored);
       }
-    } catch (e) {
-      console.error("Error reading redmonitor_audit_history from localStorage:", e);
-    }
+    }).catch(e => {
+      console.error("Error reading redmonitor_audit_history:", e);
+    });
   }, []);
 
   // --- SAVE CURRENT AUDIT TO HISTORY ---
-  const saveCurrentAudit = (customLabel?: string) => {
+  const saveCurrentAudit = async (customLabel?: string) => {
     try {
       const label = (customLabel || `Auditoría ${locationName}`).trim();
       const newAudit: HistoricalAudit = {
@@ -152,7 +187,7 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
 
       const updated = [newAudit, ...auditHistory];
       setAuditHistory(updated);
-      localStorage.setItem('redmonitor_audit_history', JSON.stringify(updated));
+      await asyncSetItem('redmonitor_audit_history', updated);
       onAddLog(`💾 Auditoría "${label}" guardada exitosamente en el historial persistente.`, 'success');
       setSavingAuditCustomName('');
       setShowSaveDialog(false);
@@ -163,11 +198,11 @@ export default function NetworkAudit({ devices, onAddLog, locationName }: Networ
   };
 
   // --- DELETE AUDIT FROM HISTORY ---
-  const deleteHistoricalAudit = (id: string, label: string) => {
+  const deleteHistoricalAudit = async (id: string, label: string) => {
     try {
       const updated = auditHistory.filter(a => a.id !== id);
       setAuditHistory(updated);
-      localStorage.setItem('redmonitor_audit_history', JSON.stringify(updated));
+      await asyncSetItem('redmonitor_audit_history', updated);
       
       if (selectedPastAuditToCompare?.id === id) {
         setSelectedPastAuditToCompare(null);
@@ -532,8 +567,10 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
   };
 
   // EXPORT 4: HIGHLY-STYLED EXCEL REPORT PRESERVING PDF FORMATTING IDENTICALLY
-  const exportAsExcel = () => {
+  const exportAsExcel = async () => {
+    setIsExporting('excel');
     onAddLog("📊 Generando informe de auditoría en Excel con diseño e iconografía idénticos al PDF...", "info");
+    await new Promise(r => setTimeout(r, 40));
     try {
       const formattedDate = new Date().toISOString().split('T')[0];
       const timestamp = new Date().toLocaleString('es-ES');
@@ -889,11 +926,15 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
     } catch (e: any) {
       console.error(e);
       onAddLog(`❌ Error al generar el archivo Excel: ${e.message || e}`, "error");
+    } finally {
+      setIsExporting(null);
     }
   };
 
-  const exportAsPDF = () => {
+  const exportAsPDF = async () => {
+    setIsExporting('pdf');
     onAddLog("📄 Compilando reporte de auditoría en formato PDF...", "info");
+    await new Promise(r => setTimeout(r, 40));
     try {
       const doc = new jsPDF({
         orientation: 'portrait',
@@ -1192,6 +1233,8 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
     } catch (e: any) {
       console.error(e);
       onAddLog(`❌ Error al generar el PDF: ${e.message || e}`, "error");
+    } finally {
+      setIsExporting(null);
     }
   };
 
@@ -1289,20 +1332,30 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
 
           <button
             onClick={exportAsPDF}
-            className="bg-rose-900/40 hover:bg-rose-800 text-rose-200 hover:text-white font-bold py-1.5 px-3 rounded-xs border border-rose-850 text-[11px] flex items-center gap-1.5 cursor-pointer transition-all"
+            disabled={isExporting !== null}
+            className="bg-rose-900/40 hover:bg-rose-800 text-rose-200 hover:text-white font-bold py-1.5 px-3 rounded-xs border border-rose-850 text-[11px] flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             title="Exportar base de datos a un reporte PDF impreso formal"
           >
-            <Download className="h-3.5 w-3.5 text-rose-450" />
-            <span>Exportar PDF</span>
+            {isExporting === 'pdf' ? (
+              <RefreshCw className="h-3.5 w-3.5 text-rose-400 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5 text-rose-450" />
+            )}
+            <span>{isExporting === 'pdf' ? 'Compilando PDF...' : 'Exportar PDF'}</span>
           </button>
 
           <button
             onClick={exportAsExcel}
-            className="bg-emerald-900/40 hover:bg-emerald-800 text-emerald-200 hover:text-white font-bold py-1.5 px-3 rounded-xs border border-emerald-850 text-[11px] flex items-center gap-1.5 cursor-pointer transition-all"
+            disabled={isExporting !== null}
+            className="bg-emerald-900/40 hover:bg-emerald-800 text-emerald-200 hover:text-white font-bold py-1.5 px-3 rounded-xs border border-emerald-850 text-[11px] flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             title="Exportar informe de auditoría completo a formato Excel con diseño idéntico al PDF"
           >
-            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Exportar Excel</span>
+            {isExporting === 'excel' ? (
+              <RefreshCw className="h-3.5 w-3.5 text-emerald-400 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
+            )}
+            <span>{isExporting === 'excel' ? 'Generando Excel...' : 'Exportar Excel'}</span>
           </button>
 
           <button
@@ -1765,7 +1818,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
                   </td>
                 </tr>
               ) : (
-                filteredDevices.map(d => {
+                paginatedAuditDevices.map(d => {
                   const manufacturer = resolveVendorByMac(d.mac, d.host, d.ip);
                   return (
                     <tr 
@@ -1867,6 +1920,63 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
             </tbody>
           </table>
         </div>
+
+        {/* Audit Table Pagination Footer */}
+        {filteredDevices.length > 0 && (
+          <div className="p-3 bg-[#0B1120] border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-slate-500">
+            <div className="flex items-center gap-3">
+              <div>
+                Mostrando <span className="font-semibold text-slate-300">{(auditPage - 1) * auditPageSize + 1}</span> -{' '}
+                <span className="font-semibold text-slate-300">
+                  {Math.min(auditPage * auditPageSize, filteredDevices.length)}
+                </span>{' '}
+                de <span className="font-semibold text-slate-300">{filteredDevices.length}</span> activos
+              </div>
+
+              <div className="flex items-center gap-1.5 pl-3 border-l border-slate-800 text-[11px]">
+                <span className="text-slate-500">Por página:</span>
+                {[25, 50, 100].map(size => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      setAuditPageSize(size);
+                      setAuditPage(1);
+                    }}
+                    className={`px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                      auditPageSize === size
+                        ? 'bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/40'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {totalAuditPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setAuditPage(p => Math.max(1, p - 1))}
+                  disabled={auditPage === 1}
+                  className="px-2 py-1 border border-slate-800 rounded bg-slate-900 text-slate-400 hover:bg-slate-850 disabled:opacity-30 cursor-pointer"
+                >
+                  Anterior
+                </button>
+                <span className="px-2">
+                  {auditPage} / {totalAuditPages}
+                </span>
+                <button
+                  onClick={() => setAuditPage(p => Math.min(totalAuditPages, p + 1))}
+                  disabled={auditPage === totalAuditPages}
+                  className="px-2 py-1 border border-slate-800 rounded bg-slate-900 text-slate-400 hover:bg-slate-850 disabled:opacity-30 cursor-pointer"
+                >
+                  Siguiente
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
     </div>
