@@ -14,6 +14,7 @@ interface NetworkAuditProps {
   devices: Device[];
   onAddLog: (msg: string, type: 'info' | 'success' | 'warning' | 'error') => void;
   locationName: string;
+  onNavigateToDetailedReport?: () => void;
 }
 
 interface HistoricalAudit {
@@ -35,7 +36,7 @@ interface PortScanResult {
   risk: 'critical' | 'warning' | 'secure' | 'info';
 }
 
-export default function NetworkAudit({ devices, onAddLog, locationName }: NetworkAuditProps) {
+export default function NetworkAudit({ devices, onAddLog, locationName, onNavigateToDetailedReport }: NetworkAuditProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSegment, setFilterSegment] = useState('all');
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
@@ -1320,6 +1321,17 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
             <History className="h-3.5 w-3.5 text-cyan-400" />
             <span>Ver Historial ({auditHistory.length})</span>
           </button>
+
+          {onNavigateToDetailedReport && (
+            <button
+              onClick={onNavigateToDetailedReport}
+              className="bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 font-bold py-1.5 px-3 rounded-xs border border-cyan-500/30 text-[11px] flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+              title="Abrir módulo de Informes Detallados, Vulnerabilidades y Plan de Optimización de Red"
+            >
+              <FileText className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Informe Detallado & Optimización</span>
+            </button>
+          )}
 
           <button
             onClick={copyAsMarkdown}

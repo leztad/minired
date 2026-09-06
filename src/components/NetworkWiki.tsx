@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { 
   BookOpen, HelpCircle, FileText, Search, ChevronRight, ChevronDown, CheckCircle, 
-  AlertTriangle, Copy, Terminal, Shield, Cpu, Cable, Network, AlertCircle, Sparkles, Server
+  AlertTriangle, Copy, Terminal, Shield, Cpu, Cable, Network, AlertCircle, Sparkles, Server,
+  Smartphone, Lock, Bell, Layers, Activity, RefreshCw, Sliders, Eye, Globe, Wifi, Key
 } from 'lucide-react';
 
 interface WikiItem {
@@ -18,6 +19,7 @@ export default function NetworkWiki() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'guide' | 'qa' | 'how-to'>('all');
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
+    'guide-servidor-local-qr': true,
     'qa-saturacion': true,
     'how-to-perdida': true
   });
@@ -410,6 +412,314 @@ export default function NetworkWiki() {
         'Verifique que los operadores de campo no tengan acceso a los controles del Inyector de Anomalías para prevenir accidentes lógicos en entornos productivos.'
       ]
     },
+    {
+      id: 'guide-servidor-local-qr',
+      category: 'guide',
+      title: 'Manual: Servidor de Red Local, Acceso Móvil (Código QR) y Scripts de Ejecución (.bat / .sh)',
+      tags: ['Red Local', 'LAN', 'Wi-Fi', 'Código QR', 'Móvil', 'Firewall', 'Scripts', 'Puerto 3000'],
+      summary: 'Cómo desplegar el monitor en tu red local física, abrir el cortafuegos y acceder desde celulares o tablets escaneando el código QR.',
+      content: `RedMonitor incluye herramientas nativas para operar en modo **Servidor de Red Local (LAN / Wi-Fi)**, permitiendo que cualquier dispositivo conectado a tu red (computadoras portátiles, smartphones Android, iPhones, iPads o consolas técnicas) acceda al panel de control en tiempo real mediante el puerto 3000.
+
+      ### Arquitectura del Servidor Local:
+      * **Enlace Universal (0.0.0.0)**: El backend Node/Express y el servidor Vite vinculan sus sockets en \`0.0.0.0\`, permitiendo tráfico de todas las interfaces de red físicas y virtuales de la máquina.
+      * **Detección Automática de IP LAN**: El servidor identifica automáticamente tu dirección IPv4 privada (\`192.168.X.X\`, \`10.X.X.X\` o \`172.16.X.X\`) y genera la URL directa de acceso.
+      * **Generador de Código QR en Pantalla**: En la barra superior, el botón **"Acceso Móvil"** despliega un código QR dinámico listo para ser escaneado con la cámara de cualquier teléfono celular.
+      * **Soporte Multiplataforma**: Incluye scripts listos para usar en Windows (\`Iniciar_RedMonitor.bat\`) y Linux/macOS (\`Iniciar_RedMonitor.sh\`).
+
+      ### Requisitos de Cortafuegos (Firewall):
+      Para que los dispositivos de la red Wi-Fi puedan cargar la interfaz, el **puerto 3000 TCP** debe estar permitido:
+      * **Windows Defender Firewall**: Reglas de Entrada -> Nueva Regla -> Puerto -> TCP -> 3000 -> Permitir la conexión.
+      * **Linux (UFW)**: Ejecutar en terminal \`sudo ufw allow 3000/tcp\`.`,
+      steps: [
+        'En Windows, ejecute el archivo "Iniciar_RedMonitor.bat". En Linux/macOS, abra una terminal y ejecute "./Iniciar_RedMonitor.sh".',
+        'El script verificará Node.js, instalará dependencias si faltan y levantará el servicio mostrando la URL de tu red.',
+        'Haga clic en el botón "Acceso Móvil" en la barra de navegación superior de RedMonitor.',
+        'Escanee el código QR con la cámara de su teléfono móvil o ingrese manualmente la URL mostrada (ej: http://192.168.1.50:3000) en el navegador del celular.',
+        'Si no conecta desde el móvil, verifique que ambos dispositivos estén en la misma red Wi-Fi y habilite el puerto 3000 TCP en su cortafuegos.'
+      ]
+    },
+    {
+      id: 'guide-auditoria-ssl',
+      category: 'guide',
+      title: 'Manual: Módulo Auditoría de Certificados SSL/TLS y Criptografía HTTPS',
+      tags: ['SSL', 'TLS', 'Certificados', 'HTTPS', 'Criptografía', 'Expiración', 'Ciphers'],
+      summary: 'Auditoría en tiempo real de certificados digitales, fechas de caducidad, suites criptográficas y SANs en hosts web de la LAN.',
+      content: `El módulo de **Auditoría SSL/TLS** inspecciona las capas de seguridad criptográfica de todos los servicios web y paneles administrativos HTTPS alojados en la red local o WAN. Permite prevenir caídas de servicio por expiración imprevista de certificados y detectar protocolos obsoletos.
+
+      ### Métricas y Análisis Criptográfico:
+      * **Conteo Regresivo de Expiración**: Calcula los días restantes de validez del certificado X.509, emitiendo alertas preventivas a los 30, 15 y 7 días previos a la caducidad.
+      * **Cadena de Emisores (Issuer CA)**: Identifica la autoridad de certificación emisora (Let's Encrypt, DigiCert, Sectigo o Certificados Autofirmados de routers).
+      * **Nombres Alternativos del Sujeto (SANs)**: Extrae todos los dominios e IPs autorizados para el certificado digital.
+      * **Evaluación de Algoritmo de Clave y Hash**: Detecta si se utilizan algoritmos robustos (RSA 2048/4096 bits, ECDSA P-256/P-384, SHA-256) o algoritmos vulnerables (SHA-1, MD5).
+      * **Auditoría Masiva por Lotes**: Permite agregar múltiples hosts HTTPS de la infraestructura y auditarlos con un solo clic.`,
+      steps: [
+        'Acceda a la pestaña "Auditoría SSL/TLS" en el menú de navegación.',
+        'Ingrese el dominio o IP local con su puerto seguro (ej: 192.168.1.1:443 o intranet.local:8443).',
+        'Presione "Auditar Certificado" para iniciar el handshake TLS y extraer los metadatos criptográficos.',
+        'Agregue el host a la lista de "Certificados Monitoreados" para supervisar su fecha de caducidad de forma continua.',
+        'Revise las alertas tempranas si la vigencia del certificado es inferior a 15 días para planificar su renovación.'
+      ]
+    },
+    {
+      id: 'guide-seguridad-rogue',
+      category: 'guide',
+      title: 'Manual: Módulo Control de Seguridad y Dispositivos No Autorizados (Rogue Devices & NAC)',
+      tags: ['Seguridad L2', 'Rogue Devices', 'Lista Blanca', 'MAC Spoofing', 'NAC', 'Intrusos'],
+      summary: 'Control de acceso a nivel de red (NAC), lista blanca de MACs autorizadas y detección inmediata de intrusos en la LAN.',
+      content: `El módulo de **Seguridad y Dispositivos Rogue** actúa como un controlador de admisión de red (Network Access Control - NAC) ligero. Compara continuamente todos los hosts activos en el escaneo ARP contra una **Lista Blanca (Whitelist)** de dispositivos corporativos autorizados.
+
+      ### Funcionalidades de Blindaje:
+      * **Lista Blanca de Hardware Aprobado**: Registro de equipos legítimos con su dirección MAC física, nombre descriptivo, departamento y propietario.
+      * **Detección Instantánea de Equipos Rogue (Intrusos)**: Cualquier host descubierto cuya MAC no coincida con la lista blanca es catalogado inmediatamente como "No Autorizado / Rogue".
+      * **Análisis de Dispositivos con MAC Aleatoria**: Advierte sobre equipos móviles que usan ofuscación de dirección física privada.
+      * **Disparo Automático de Alertas**: Envía notificaciones inmediatas a canales configurados (Telegram, Discord) al detectar una conexión desconocida en la subred.`,
+      steps: [
+        'Abra la vista "Seguridad & Rogue Devices" desde el menú lateral.',
+        'Revise los dispositivos actualmente descubiertos y presione "Aprobar y Agregar a Lista Blanca" para los equipos de confianza.',
+        'Configure la política de alerta: si se detecta un host desconocido, el sistema emitirá una alarma acústica y visual en pantalla.',
+        'Para investigar un host no autorizado, copie su dirección MAC e IP y diríjase al "Escáner de Puertos TCP" para auditar sus servicios.'
+      ]
+    },
+    {
+      id: 'guide-snmp-telemetria',
+      category: 'guide',
+      title: 'Manual: Módulo Telemetría SNMP Avanzada y Consultas OID / MIBs',
+      tags: ['SNMP', 'MIB', 'OID', 'v1/v2c/v3', 'Switches', 'Telemetría', 'Interfaces'],
+      summary: 'Consultas directas a agentes SNMP en routers y switches, monitoreo de uso de CPU/RAM y contadores de interfaces físicas.',
+      content: `El protocolo **SNMP (Simple Network Management Protocol)** permite comunicarse directamente con el sistema operativo de switches gestionables (Cisco IOS, Mikrotik RouterOS, Juniper, HP Aruba) para extraer métricas de telemetría interna que no se pueden obtener mediante un simple ping.
+
+      ### Capacidades del Monitor SNMP:
+      * **Soporte SNMP v1 / v2c**: Autenticación por comunidad de lectura (típicamente \`public\`).
+      * **Consultas OID Personalizadas**: Permite consultar cualquier identificador de objeto (OID) estándar de la base de información de administración (MIB-II).
+      * **Métricas Extraídas Automáticamente**:
+        * \`sysDescr\` (1.3.6.1.2.1.1.1.0): Modelo de hardware, versión de firmware y sistema operativo.
+        * \`sysUpTime\` (1.3.6.1.2.1.1.3.0): Tiempo de funcionamiento ininterrumpido del switch.
+        * \`ifInOctets\` / \`ifOutOctets\`: Bytes acumulados transmitidos y recibidos por interfaz.
+        * \`ifOperStatus\`: Estado operacional físico del puerto (1=Up, 2=Down, 3=Testing).
+        * Carga porcentual de procesador (CPU) y utilización de memoria RAM.`,
+      steps: [
+        'Vaya al módulo "Telemetría SNMP" en el panel de navegación.',
+        'Ingrese la dirección IP del switch o router administrable (ej: 192.168.1.254) y la comunidad SNMP (por defecto "public").',
+        'Presione "Consultar Telemetría SNMP" para extraer el resumen de salud, uptime y tabla de interfaces.',
+        'Use la herramienta "Consulta OID Rápida" para inspeccionar parámetros específicos como temperatura del chasis o contadores de tramas de error.'
+      ]
+    },
+    {
+      id: 'guide-syslog-traps',
+      category: 'guide',
+      title: 'Manual: Módulo Servidor Syslog UDP (Puerto 514) y Receptor de Traps SNMP',
+      tags: ['Syslog', 'UDP 514', 'SNMP Traps', 'UDP 162', 'RFC 3164', 'RFC 5424', 'Logs Remotos'],
+      summary: 'Receptor centralizado de logs UDP en vivo para switches, routers y firewalls, con clasificación de severidad RFC.',
+      content: `RedMonitor incorpora un **Servidor Syslog UDP nativo** en el puerto estándar **514** y un receptor de **Traps SNMP** en el puerto **162**. Permite que los conmutadores y cortafuegos de la red envíen sus eventos operativos directamente a esta consola sin requerir software de terceros como Kiwi Syslog o Graylog.
+
+      ### Características del Servidor de Logs:
+      * **Conformidad con Estándares RFC 3164 y RFC 5424**: Parsea automáticamente la prioridad (PRIVAL), facilidad (Facility: kernel, daemon, local0-local7) y severidad del mensaje.
+      * **Escala de Severidades**:
+        * 0 - Emergency (Caída total del sistema).
+        * 1 - Alert (Acción inmediata requerida).
+        * 2 - Critical (Falla crítica de hardware o PoE).
+        * 3 - Error (Condición de error en enlace o interfaz).
+        * 4 - Warning (Advertencia de umbral o flapping).
+        * 5 - Notice (Evento normal pero significativo).
+        * 6 - Informational (Mensaje informativo de conexión/desconexión).
+        * 7 - Debug (Traza de diagnóstico en profundidad).
+      * **Filtrado Dinámico**: Permite filtrar por IP de origen, severidad mínima o texto de mensaje.`,
+      steps: [
+        'Acceda a la pestaña "Syslog & Traps" en el menú principal.',
+        'Verifique que el estado del receptor indique "Escuchando en UDP 514 / 162".',
+        'Configure su switch o router para apuntar su Syslog a la IP de esta máquina (ej: logging host 192.168.1.50).',
+        'Observe cómo ingresan los eventos en tiempo real: caídas de enlaces de puerto (link-down), autenticaciones administrativas o cambios de topología STP.',
+        'Utilice el simulador integrado para generar eventos de prueba y verificar el funcionamiento de las reglas de alerta.'
+      ]
+    },
+    {
+      id: 'guide-notificaciones-canales',
+      category: 'guide',
+      title: 'Manual: Módulo Notificaciones Multicanal (Telegram, Discord, Webhooks, Slack)',
+      tags: ['Notificaciones', 'Telegram', 'Discord', 'Slack', 'Webhooks', 'Alertas', 'Automatización'],
+      summary: 'Despacho automatizado de alertas de red a aplicaciones de mensajería y plataformas de guardia técnica.',
+      content: `El módulo de **Canales de Notificación** permite que el equipo de soporte reciba avisos al instante en sus teléfonos celulares y ordenadores cuando ocurre un incidente crítico en la red, sin necesidad de tener el navegador abierto permanentemente.
+
+      ### Canales Soportados:
+      * **Telegram Bot**: Mensajes directos o a grupos de técnicos mediante la API de Telegram Bot (\`https://api.telegram.org/bot<TOKEN>/sendMessage\`).
+      * **Discord Webhook**: Publicación en canales de alertas de Discord con formato de inserción enriquecido (Embeds de color rojo/amarillo/verde).
+      * **Slack Webhook**: Alertas en canales corporativos de Slack mediante Incoming Webhooks.
+      * **Webhooks HTTP/HTTPS Personalizados**: Peticiones POST con payload JSON estructurado para integrarse con sistemas de tickets (Jira, GLPI, ServiceNow) o APIs internas.
+
+      ### Tipos de Eventos Notificables:
+      1. Dispositivo crítico caído (Gateway, Servidor o Switch fuera de línea).
+      2. Detección de dispositivo no autorizado (Rogue Device).
+      3. Certificado SSL/TLS próximo a caducar (< 7 días).
+      4. Spikes de latencia excesiva (> 200 ms) o pérdida de paquetes sostenida.`,
+      steps: [
+        'Diríjase a la vista "Notificaciones" en la barra de navegación.',
+        'Haga clic en "Nuevo Canal" y seleccione el tipo (Telegram, Discord, Slack o Webhook genérico).',
+        'Complete los parámetros requeridos (Token del Bot y Chat ID para Telegram; Webhook URL para Discord/Slack).',
+        'Presione "Probar Envío" para despachar un mensaje de prueba y verificar que llegue correctamente a su teléfono.',
+        'Active los interruptores de eventos para definir qué alertas específicas deben despacharse por ese canal.'
+      ]
+    },
+    {
+      id: 'guide-mantenimiento-silenciado',
+      category: 'guide',
+      title: 'Manual: Módulo Ventanas de Mantenimiento Programadas y Silenciado Rápido (Quick Mute)',
+      tags: ['Mantenimiento', 'Quick Mute', 'Supresión Alertas', 'Uptime', 'Paradas Programadas'],
+      summary: 'Supresión controlada de alarmas durante trabajos de mantenimiento en racks, reinicios o cortes de energía.',
+      content: `Durante trabajos planificados de mantenimiento físico (sustitución de cableado UTP, actualización de firmware de switches o reubicación de racks), los dispositivos se desconectan intencionalmente. El módulo de **Ventanas de Mantenimiento** previene la "fatiga de alertas" silenciando temporalmente las alarmas sin perder el registro en el historial.
+
+      ### Modos de Silenciado:
+      * **Silenciado Rápido (Quick Mute)**: Silencia instantáneamente un host o segmento específico por un período predeterminado:
+        * ⏱️ 15 minutos (para reinicio de routers o pruebas de parche).
+        * ⏱️ 1 hora (para recableado de pach panels o sustitución de fuentes PoE).
+        * ⏱️ 24 horas (para equipos en laboratorio o reparación técnica).
+      * **Ventanas de Mantenimiento Programadas**: Permite calendarizar paradas con fecha y hora de inicio y fin, definiendo el rango de IPs afectadas y el motivo del trabajo.
+      * **Preservación de Métricas SLA**: Los minutos de caída durante una ventana de mantenimiento programada se pueden excluir del cálculo de penalización de disponibilidad (SLA).`,
+      steps: [
+        'Abra la sección "Mantenimiento & Silenciado" en el menú lateral.',
+        'Para silenciar un dispositivo de inmediato, use "Quick Mute", ingrese su IP y seleccione la duración deseada (15m / 1h / 24h).',
+        'Para programar una parada futura, haga clic en "Nueva Ventana de Mantenimiento", defina el horario, IPs objetivo y notas técnicas.',
+        'Al finalizar las tareas antes de tiempo, puede presionar "Restaurar / Desilenciar" para reactivar la vigilancia en tiempo real.'
+      ]
+    },
+    {
+      id: 'guide-respaldos-config-diff',
+      category: 'guide',
+      title: 'Manual: Módulo Respaldos de Configuración de Switches y Comparador Diff',
+      tags: ['Respaldos', 'Backup', 'Switch Config', 'Diff', 'Cisco IOS', 'Mikrotik', 'Versionado'],
+      summary: 'Almacenamiento versionado de configuraciones de conmutadores (running-config) y comparador visual de diferencias.',
+      content: `Las modificaciones erróneas en configuraciones de switches (como eliminar una VLAN por descuido o aplicar una ACL restrictiva) son una de las principales causas de caídas de red. Este módulo almacena el historial de revisiones de configuración de cada switch y ofrece un **Comparador Visual de Diferencias (Diff)**.
+
+      ### Características del Gestor de Configuraciones:
+      * **Repositorio de Revisiones**: Guarda instantáneas de configuración (\`running-config\`, backups en texto plano o scripts de RouterOS) con fecha, hora y autor.
+      * **Comparador Visual de Diferencias (Diff Engine)**:
+        * 🟢 **Líneas Verdes (+)**: Parámetros o comandos agregados en la nueva versión.
+        * 🔴 **Líneas Rojas (-)**: Comandos eliminados respecto a la versión anterior.
+        * 🟡 **Líneas Modificadas**: Ajustes de parámetros específicos (ej: cambio de número de VLAN o velocidad de puerto).
+      * **Restauración Rápida (Rollback)**: Permite copiar la versión estable anterior para restaurar el switch a su estado operativo funcional en segundos.`,
+      steps: [
+        'Vaya a la vista "Respaldos de Configuración" en la barra de navegación.',
+        'Seleccione el switch deseado o agregue uno nuevo indicando su marca (Cisco, Mikrotik, HP, etc.) y modelo.',
+        'Haga clic en "Nueva Revisión" y pegue el volcado de la configuración actual o cargue el archivo de texto exportado.',
+        'Abra la pestaña "Comparador Diff", elija dos versiones históricas y presione "Comparar Revisiones".',
+        'Revise las líneas resaltadas en rojo y verde para auditar qué cambios se realizaron antes de que surgiera una anomalía.'
+      ]
+    },
+    {
+      id: 'guide-reportes-sla',
+      category: 'guide',
+      title: 'Manual: Módulo Reportes de SLA, Uptime y Métricas de Disponibilidad',
+      tags: ['SLA', 'Uptime', 'Disponibilidad', 'MTBF', 'MTTR', 'Cumplimiento', 'Reportes'],
+      summary: 'Cálculo automatizado de disponibilidad porcentual (99.9%), tiempos medios entre fallas (MTBF) y reportes ejecutivos de servicio.',
+      content: `El módulo de **Reportes de SLA (Service Level Agreement)** permite auditar objetivamente el nivel de servicio entregado por la infraestructura de red, generando métricas estandarizadas de fiabilidad para auditorías corporativas o reportes a clientes.
+
+      ### Indicadores Clave de Fiabilidad:
+      * **Disponibilidad Porcentual (Uptime %)**: Calculado como \`(Tiempo Total - Tiempo Caído) / Tiempo Total * 100\`. Permite verificar el cumplimiento de acuerdos contractuales:
+        * 99.0% = Máximo 7.2 horas de caída al mes.
+        * 99.9% ("Tres Nueves") = Máximo 43.8 minutos de caída al mes.
+        * 99.99% ("Cuatro Nueves") = Máximo 4.38 minutos de caída al mes.
+      * **MTBF (Mean Time Between Failures)**: Tiempo promedio en horas que el sistema opera de forma continua entre incidentes consecutivos.
+      * **MTTR (Mean Time To Recovery / Repair)**: Tiempo promedio en minutos que toma restablecer el servicio una vez ocurrida una caída.
+      * **Exportación de Informes**: Genera reportes estructurados listos para imprimir o exportar con desglose por equipo.`,
+      steps: [
+        'Acceda a la pestaña "Reportes de SLA" en el menú lateral.',
+        'Seleccione el período de evaluación (Últimas 24 horas, Últimos 7 días o Últimos 30 días).',
+        'Defina el umbral de SLA objetivo (por ejemplo, 99.9%).',
+        'Revise la tabla de cumplimiento: los equipos que superen el SLA se mostrarán con insignia verde, mientras que los incumplimientos se destacarán en rojo.',
+        'Haga clic en "Exportar Reporte" para generar el documento oficial de auditoría.'
+      ]
+    },
+    {
+      id: 'guide-topologia-switches-lldp',
+      category: 'guide',
+      title: 'Manual: Módulo Topología de Switches y Descubrimiento LLDP / CDP',
+      tags: ['Topología', 'LLDP', 'CDP', 'Vecinos', 'Switches', 'Capa 2', 'Enlaces'],
+      summary: 'Mapeo automático de interconexiones puerto a puerto entre conmutadores mediante protocolos estándar de Capa 2.',
+      content: `El módulo de **Topología de Switches** permite reconstruir el plano de interconexión física de la red mediante protocolos de descubrimiento de vecinos de Capa 2: **LLDP (Link Layer Discovery Protocol - IEEE 802.1AB)** y **CDP (Cisco Discovery Protocol)**.
+
+      ### Cómo Funciona el Descubrimiento Automático:
+      * **Descubrimiento de Vecinos (Neighbor Discovery)**: Los switches administrables transmiten periódicamente tramas LLDP/CDP por cada boca física. El monitor lee estas tablas para saber con precisión milimétrica qué puerto local está conectado a qué puerto del switch remoto (ej: *Switch-Core Gi0/24 conectado a Switch-Piso1 Gi0/1*).
+      * **Información de Enlace Intercambiada**:
+        * Identificador de chasis y nombre del switch remoto (System Name).
+        * Número y descripción del puerto remoto (Port ID / Port Description).
+        * Capacidades del equipo (Bridge, Router, WLAN Access Point).
+        * VLANs etiquetadas permitidas en el enlace troncal (Trunk 802.1Q).
+      * **Visualización de la Malla de Distribución**: Muestra la jerarquía de conmutación desde el Core hasta el Acceso, previniendo errores de conexionado.`,
+      steps: [
+        'Abra la sección "Topología de Switches" en el panel de navegación.',
+        'Verifique que los switches administrados tengan habilitado LLDP o CDP en su configuración.',
+        'Presione "Iniciar Descubrimiento de Topología" para sondear las tablas de vecinos.',
+        'Explore el mapa de interconexión: pase el cursor sobre los enlaces para ver los puertos específicos de origen y destino.',
+        'Identifique enlaces troncales redundantes y verifique que no existan bucles físicos no gestionados por Spanning Tree.'
+      ]
+    },
+    {
+      id: 'guide-sistema-actualizaciones',
+      category: 'guide',
+      title: 'Manual: Módulo Sistema de Actualizaciones de RedMonitor y Changelog',
+      tags: ['Actualizaciones', 'Updates', 'Changelog', 'Firmware', 'Parches', 'Versiones'],
+      summary: 'Comprobación de nuevas versiones estables, historial de cambios (Changelog) y actualización de la plataforma.',
+      content: `El sistema incluye un **Gestor de Actualizaciones Integrado** para garantizar que la plataforma cuente siempre con las últimas firmas OUI de fabricantes, mejoras en el motor de escaneo ARP y parches de seguridad.
+
+      ### Capacidades del Gestor:
+      * **Consulta de Versión en Tiempo Real**: Compara la versión local activa contra el registro de actualizaciones (\`updates-history.json\`).
+      * **Canales de Lanzamiento**: Soporta canales **Estable (Stable)** para producción y **Beta** para probar funciones experimentales.
+      * **Registro Detallado de Cambios (Changelog)**: Desglosa cada parche con su fecha, notas técnicas, optimizaciones aplicadas y correcciones de estabilidad.
+      * **Flujo Seguro de Aplicación**: Verifica la integridad de los archivos antes de actualizar para evitar estados inconsistentes.`,
+      steps: [
+        'Vaya a "Configuración" -> sección "Actualizaciones del Sistema".',
+        'Consulte la versión actual instalada y presione "Buscar Actualizaciones".',
+        'Si existe una versión más reciente, revise el registro de cambios (Changelog) detallado.',
+        'Haga clic en "Aplicar Actualización" para descargar e instalar el parche de forma transparente.'
+      ]
+    },
+    {
+      id: 'guide-informes-optimizacion-vulnerabilidades',
+      category: 'guide',
+      title: 'Manual: Módulo Informes Detallados, Matriz de Vulnerabilidades y Plan de Optimización de Red',
+      tags: ['Informes', 'Reportes', 'Vulnerabilidades', 'Optimización', 'Hardening', 'PDF', 'Score', 'Roadmap'],
+      summary: 'Generación de informes exhaustivos en tiempo real con diagnóstico de salud, detección de vulnerabilidades L2/L3, recomendaciones técnicas y hoja de ruta interactiva para optimizar la red.',
+      content: `El módulo de **Informes Detallados & Optimización** constituye el centro directivo y de auditoría integral de RedMonitor. Transforma las lecturas crudas del escaneo de subred y telemetría en un informe ejecutivo y técnico formal, ideal para gerencias de TI, auditorías de cumplimiento (ISO 27001, CIS Controls, NIST) y planes de mejora continua.
+
+      ### Estructura y Capacidades del Módulo:
+      * **Diagnóstico del Estado Actual & KPIs de Red**:
+        * **Índice de Salud de Red (Score 0-100%)**: Evaluación ponderada calculada a partir de hosts caídos, advertencias de paquetes, latencia media, picos de jitter y vulnerabilidades activas. Clasificado en cuatro rangos: *Excelente*, *Bueno*, *En Riesgo* o *Crítico*.
+        * **Inventario L2/L3 Clasificado**: Conteo desglosado de Routers/Gateways, Switches de Acceso, Servidores/NAS, Puestos de Trabajo (PCs) y Dispositivos CCTV/IoT.
+        * **Métricas de Latencia y Estabilidad**: Registro de latencia media, pico máximo detectado y cálculo de variación de jitter entre paquetes.
+      * **Matriz Exhaustiva de Vulnerabilidades Identificadas**:
+        * Detección automática de servicios administrativos en texto plano (Telnet TCP 23, HTTP 80 en gateways).
+        * Identificación de topologías planas sin segmentación VLAN (IEEE 802.1Q ausente con tráfico heterogéneo en /24).
+        * Localización de direcciones MAC privadas/aleatorias o no registradas en la IEEE (Rogue Devices).
+        * Detección de recursos compartidos SMB (TCP 445) sin firma criptográfica obligatoria.
+        * Evaluación de puntos únicos de fallo (SPOF) en el enrutador de borde sin redundancia VRRP/HSRP.
+        * Vulnerabilidad a envenenamiento ARP por ausencia de DHCP Snooping y Dynamic ARP Inspection (DAI).
+        * Cada hallazgo detalla: ID único, Severidad (Crítica, Alta, Media, Baja), Categoría, Host/IP afectada, Vector de Ataque y Remediación técnica.
+      * **Recomendaciones de Hardening y Arquitectura**:
+        * Directivas concretas basadas en CIS Benchmarks y NIST SP 800-115 para endurecimiento criptográfico (SSHv2, SNMPv3 AuthPriv), blindaje de capa 2 y priorización de tráfico (QoS).
+        * Incluye comandos prácticos de configuración listos para aplicar en conmutadores Cisco IOS, Mikrotik y Linux.
+      * **Plan de Acción y Hoja de Ruta para Optimización (Interactive Checklist)**:
+        * Organizado en 3 fases secuenciales:
+          * **Fase 1: Mitigación Inmediata de Emergencia (0 - 48 Horas)**: Desactivación de protocolos sin cifrar, aislamiento de MACs anómalas y corrección de duplex.
+          * **Fase 2: Optimización de Rendimiento & Hardening (3 - 14 Días)**: Configuración de DHCP Snooping, DAI, QoS para telefonía VoIP y alertas automatizadas.
+          * **Fase 3: Modernización Arquitectónica & Resiliencia (15 - 45 Días)**: Despliegue de microsegmentación por VLANs, redundancia Multi-WAN con VRRP y respaldos automatizados.
+        * Barra de progreso interactiva que se actualiza en tiempo real al marcar pasos y se preserva en almacenamiento local.
+      * **Exportación Profesional Multiformato**:
+        * **Descarga de PDF Ejecutivo Oficial**: Documento formal de múltiples páginas con membrete institucional, carátula, resumen ejecutivo, tabla de métricas, matriz de vulnerabilidades, recomendaciones y hoja de ruta con firma digital.
+        * **Exportar a CSV / Excel**: Planilla para seguimiento de proyectos de infraestructura y auditorías externas.
+        * **Copiar en Markdown**: Formato listo para pegar en wikis corporativas (Notion, Confluence, Obsidian, GitHub).
+        * **Exportar JSON**: Para interoperabilidad con sistemas SIEM o almacenamiento estructurado.
+      * **Archivo Histórico & Comparativa Temporal**:
+        * Guardado de instantáneas en memoria persistente para comparar la evolución de la red a lo largo de los meses.`,
+      steps: [
+        'Haga clic en "Informes & Optimización" en la sección de Operaciones del menú lateral (o pulse el botón correspondiente desde Auditorías de Red).',
+        'Revise el "Diagnóstico Actual & KPIs": observe el Score de Salud de la red, los dispositivos caídos y los picos de latencia.',
+        'Haga clic en "Configurar Informe" si desea personalizar el título, la organización, el nombre del auditor o acotar el alcance a una subred específica.',
+        'Explore la pestaña "Vulnerabilidades" para examinar los riesgos clasificados por severidad (Crítica, Alta, Media) con sus respectivos vectores de ataque y soluciones.',
+        'Consulte las "Recomendaciones & Hardening" para obtener plantillas de comandos de conmutación de borde.',
+        'Diríjase a la pestaña "Plan de Optimización" y marque las tareas que su equipo técnico vaya completando para observar el incremento porcentual en la barra de avance.',
+        'Utilice los botones superiores para "Descargar PDF" formal o "Copiar Markdown" según las necesidades de documentación de su organización.',
+        'Guarde el estado actual en la pestaña "Historial" para realizar comparativas de deriva en futuras auditorías.'
+      ]
+    },
 
     // --- PREGUNTAS Y RESPUESTAS (Q&A) ---
     {
@@ -473,6 +783,64 @@ export default function NetworkWiki() {
       Si un dispositivo se reporta como "Desconocido" o "Fabricante Estimado Genérico", generalmente se debe a:
       1. **Dirección MAC Virtual / Conmutador de Software**: Máquinas virtuales, contenedores de virtualización interna (como Docker bridge, VirtualBox, Kubernetes) o adaptadores simulados no registran prefijos en las bases de datos registradas de hardware de la IEEE.
       2. **Aleatoriedad de MAC de Dispositivos Móviles**: Por privacidad del usuario, los teléfonos modernos (iOS / Android) y portátiles Windows activan por defecto la opción **"Dirección MAC Aleatoria / Privada"** al conectarse. Esta función genera una dirección MAC ficticia local que rompe la correlación OUI con el fabricante real (ej. Apple se disfraza con un prefijo privado genérico).`
+    },
+    {
+      id: 'qa-acceso-movil-wifi',
+      category: 'qa',
+      title: '¿Cómo conectar y visualizar el panel de RedMonitor desde mi teléfono celular o tablet en la misma Wi-Fi?',
+      tags: ['Móvil', 'Celular', 'Wi-Fi', 'QR', 'LAN', 'Android', 'iOS', 'Acceso Remoto'],
+      summary: 'Pasos exactos para monitorear tu red en tiempo real desde smartphones o tablets sin instalar aplicaciones adicionales.',
+      content: `RedMonitor está desarrollado con una arquitectura de interfaz web progresiva y responsiva (PWA Ready), lo que permite que cualquier celular o tablet funcione como una consola portátil de monitoreo de red sin requerir instalación en tiendas de apps.
+
+      ### Procedimiento de Conexión:
+      1. **Conexión a la Misma Red Wi-Fi**: Asegúrate de que el smartphone o tablet esté conectado al mismo SSID (red inalámbrica Wi-Fi) o a la misma subred que la computadora donde corre el servidor RedMonitor.
+      2. **Obtener el Código QR**: En la computadora, haz clic en el botón superior **"Acceso Móvil"**. Se abrirá una ventana emergente con:
+         * Un **Código QR grande** de alta legibilidad.
+         * La **URL exacta de red** (ej: \`http://192.168.1.50:3000\`).
+      3. **Escanear y Cargar**: Abre la cámara de tu celular (Android o iOS) o tu lector de QR favorito y enfoca el código en la pantalla.
+      4. **Navegación Táctil**: La interfaz se adaptará automáticamente a la pantalla táctil de tu dispositivo móvil, permitiendo disparar pings, revisar estados de switches y recibir alertas de red mientras te desplazas físicamente por las instalaciones.`
+    },
+    {
+      id: 'qa-firewall-puerto-3000',
+      category: 'qa',
+      title: '¿Por qué la web no carga desde otros equipos de la red local y cómo configurar el Cortafuegos (Firewall)?',
+      tags: ['Firewall', 'Puerto 3000', 'Bloqueo', 'Windows Defender', 'ufw', 'iptables', 'Conexión'],
+      summary: 'Solución a los bloqueos de puerto 3000 por cortafuegos de Windows o Linux y aislamiento de puntos de acceso Wi-Fi.',
+      content: `Si al ingresar la IP local en tu celular u otra computadora la página queda cargando indefinidamente o muestra "ERR_CONNECTION_TIMED_OUT", el 99% de las veces se debe al cortafuegos del sistema operativo o a una función de seguridad en tu router.
+
+      ### 1. Desbloqueo en Firewall de Windows Defender:
+      Por defecto, Windows bloquea conexiones entrantes a programas ejecutados por consola.
+      1. Presiona \`Win + R\`, escribe \`wf.msc\` y presiona Enter (*Firewall de Windows Defender con seguridad avanzada*).
+      2. En el panel izquierdo, haz clic en **Reglas de Entrada**.
+      3. En el panel derecho, haz clic en **Nueva Regla...**.
+      4. Selecciona tipo **Puerto** -> Siguiente.
+      5. Selecciona protocolo **TCP** y en *Puertos locales específicos* escribe: \`3000\` -> Siguiente.
+      6. Selecciona **Permitir la conexión** -> Siguiente.
+      7. Marca las opciones de perfil: *Dominio*, *Privada* y *Pública* -> Siguiente.
+      8. Nómbrala como \`RedMonitor Puerto 3000\` y haz clic en **Finalizar**.
+
+      ### 2. Desbloqueo en Linux (Ubuntu, Debian, Raspberry Pi):
+      Si el servidor corre en una máquina Linux con firewall UFW activo, ejecuta en la terminal:
+      \`sudo ufw allow 3000/tcp\`
+      \`sudo ufw reload\`
+
+      ### 3. Aislamiento de Clientes Wi-Fi (AP Isolation / Client Isolation):
+      Algunos routers y puntos de acceso Wi-Fi tienen activada la función "Aislamiento de AP" (Guest Isolation). Esta función impide que dos dispositivos conectados a la misma Wi-Fi se comuniquen entre sí. Desactiva el *AP Isolation* en el panel web de tu router para permitir la comunicación entre tu PC y tu teléfono.`
+    },
+    {
+      id: 'qa-motor-arp-proc',
+      category: 'qa',
+      title: '¿Cómo funciona el nuevo motor de lectura ARP y por qué no depende de comandos externos en Linux?',
+      tags: ['ARP', '/proc/net/arp', 'Kernel', 'Linux', 'PowerShell', 'Escaneo', 'Rendimiento'],
+      summary: 'Detalles de bajo nivel del analizador de tablas de vecinos del kernel y compatibilidad multiplataforma.',
+      content: `En distribuciones Linux modernas y contenedores mínimos de servidor (Ubuntu 22+, Debian 12, Alpine), el paquete histórico \`net-tools\` (que contenía el comando \`arp\`) ya no viene instalado por defecto, provocando fallos de ejecución (\`code 127\`).
+
+      ### Arquitectura Resiliente de RedMonitor:
+      Para solucionar este desafío de forma definitiva, RedMonitor implementa un motor de resolución multinivel:
+      1. **Lectura Directa de Kernel (/proc/net/arp)**: En Linux, el sistema lee directamente el archivo virtual del kernel \`/proc/net/arp\`. Esta operación es **instantánea**, no genera procesos hijos (\`child_process\`), consume **cero ciclos de CPU** y no requiere permisos de superusuario ni paquetes externos.
+      2. **Fallback IP Route / Neigh**: Si no se encuentra \`/proc/net/arp\`, consulta la herramienta moderna de red \`ip -4 neigh show\`.
+      3. **PowerShell Get-NetNeighbor en Windows**: En sistemas Windows, combina la salida clásica de \`arp -a\` con el cmdlet nativo de PowerShell \`Get-NetNeighbor -AddressFamily IPv4\`, extrayendo direcciones MAC con precisión incluso cuando la interfaz de consola está restringida.
+      4. **Inyección de Identidad de "Este PC"**: El motor auto-detecta las tarjetas de red locales del equipo anfitrión y las inyecta en la tabla para garantizar que la máquina servidora siempre aparezca en el mapa de dispositivos.`
     },
 
     // --- CÓMO HACER (HOW-TO) ---
@@ -586,6 +954,97 @@ export default function NetworkWiki() {
         'Implementa direccionamiento estático ordenado para servidores e infraestructura crítica de red.',
         'Habilita protocolos de monitoreo estándar como SNMPv3 o Syslog remoto para centralizar las alertas del switch.',
         'Etiqueta cada extremo del cableado estructurado según la nomenclatura del patch panel (ej: R1-P05).'
+      ]
+    },
+    {
+      id: 'how-to-configurar-telegram-discord',
+      category: 'how-to',
+      title: 'Cómo configurar un Bot de Telegram o Webhook de Discord para recibir alertas críticas al instante',
+      tags: ['Telegram', 'Discord', 'BotFather', 'Webhook', 'Alertas', 'Automatización'],
+      summary: 'Guía práctica para enlazar canales de mensajería y recibir caídas de red directamente en tu smartphone.',
+      content: `La recepción de alertas en tiempo real en tu teléfono inteligente evita tiempos de inactividad prolongados. Configura canales de mensajería instantánea siguiendo estos pasos:
+
+      ### Configuración de Telegram Bot:
+      1. Abre Telegram y busca al bot oficial **@BotFather**.
+      2. Envía el comando \`/newbot\` y sigue las instrucciones para asignarle un nombre y un nombre de usuario terminado en \`bot\`.
+      3. BotFather te entregará un **Token de Acceso HTTP API** (ej: \`7123456789:AAHk..._XYZ\`). Copia este valor.
+      4. Inicia una conversación con tu nuevo bot enviándole cualquier mensaje (ej: "Hola").
+      5. Para obtener tu **Chat ID**, reenvía un mensaje al bot **@userinfobot** o consulta \`https://api.telegram.org/bot<TU_TOKEN>/getUpdates\`.
+      6. En RedMonitor, ve a **Notificaciones** -> **Nuevo Canal** -> selecciona **Telegram** -> pega el Token y el Chat ID -> presiona **Probar Envío**.
+
+      ### Configuración de Discord Webhook:
+      1. En tu servidor de Discord, entra a los **Ajustes del Canal** donde deseas recibir las alertas de red.
+      2. Dirígete a **Integraciones** -> **Webhooks** -> **Crear Webhook**.
+      3. Asígnale el nombre "RedMonitor Alertas" y copia la **URL del Webhook** (\`https://discord.com/api/webhooks/...\`).
+      4. En RedMonitor, ve a **Notificaciones** -> **Nuevo Canal** -> selecciona **Discord** -> pega la URL del Webhook -> presiona **Probar Envío**.`,
+      steps: [
+        'Cree el bot en Telegram con @BotFather o genere el Webhook en Discord desde los ajustes del canal.',
+        'Obtenga el token de autenticación o la URL del Webhook.',
+        'Diríjase a la sección "Notificaciones" en el menú principal de RedMonitor.',
+        'Haga clic en "Nuevo Canal", ingrese los datos y presione "Probar Envío".',
+        'Compruebe la recepción del mensaje de prueba en su celular y active las alertas de dispositivos caídos.'
+      ]
+    },
+    {
+      id: 'how-to-configurar-syslog-remoto',
+      category: 'how-to',
+      title: 'Cómo centralizar logs remotos configurando tu Router o Switch para enviar Syslog a RedMonitor',
+      tags: ['Syslog Remoto', 'UDP 514', 'Cisco', 'Mikrotik', 'Router', 'Logs'],
+      summary: 'Comandos y configuraciones para enviar eventos operativos desde Cisco, Mikrotik o Ubiquiti al puerto UDP 514 de RedMonitor.',
+      content: `Para que RedMonitor capture las alertas generadas por tu hardware de red (desconexión de puertos, fallas de ventiladores, cambios en STP), debes apuntar el demonio Syslog de tus equipos hacia la IP del servidor RedMonitor en el puerto **UDP 514**.
+
+      ### 1. Configuración en Cisco IOS / Catalyst:
+      Accede a la consola del switch y entra en modo de configuración global:
+      \`\`\`bash
+      configure terminal
+      logging host 192.168.1.50   ! Reemplazar por la IP del servidor RedMonitor
+      logging trap warnings       ! Enviar eventos de nivel warning, error y critical
+      logging source-interface GigabitEthernet0/1
+      logging on
+      end
+      write memory
+      \`\`\`
+
+      ### 2. Configuración en Mikrotik RouterOS:
+      Abre New Terminal en WinBox o WebFig:
+      \`\`\`bash
+      /system logging action add name=redmonitor target=remote remote=192.168.1.50:514 remote-port=514
+      /system logging add action=redmonitor topics=critical,error,warning,interface
+      \`\`\`
+
+      ### 3. Configuración en Ubiquiti UniFi:
+      En la consola de UniFi Network:
+      * *Settings* -> *System* -> *Advanced* -> *Remote Syslog Server*.
+      * Activa la casilla, ingresa la IP del servidor RedMonitor y especifica el puerto \`514\`.`,
+      steps: [
+        'Identifique la dirección IP de la computadora donde corre RedMonitor (ej: 192.168.1.50).',
+        'Verifique que el Firewall permita el tráfico entrante en el puerto 514 UDP.',
+        'Aplique los comandos correspondientes en su conmutador Cisco, Mikrotik o firewall.',
+        'Desconecte y reconecte un cable Ethernet en el switch para disparar un evento link-down / link-up.',
+        'Abra la pestaña "Syslog & Traps" en RedMonitor para confirmar la llegada del log en tiempo real.'
+      ]
+    },
+    {
+      id: 'how-to-auditar-certificados-ssl',
+      category: 'how-to',
+      title: 'Cómo auditar la caducidad y vulnerabilidades en certificados SSL/TLS de portales y switches',
+      tags: ['SSL', 'TLS', 'Certificados', 'HTTPS', 'Auditoría', 'Expiración'],
+      summary: 'Procedimiento para descubrir certificados por expirar, cifrados débiles y validar la confianza en la red.',
+      content: `La expiración inesperada de un certificado SSL/TLS en un portal de autenticación o switch administrable puede bloquear el acceso a los usuarios o generar advertencias críticas de seguridad en navegadores.
+
+      ### Procedimiento de Auditoría SSL:
+      1. **Identificar Servicios Web Seguros (HTTPS)**: Revisa los equipos en la tabla de dispositivos que tengan abiertos los puertos 443, 8443 o 4443.
+      2. **Ejecutar la Auditoría**: Ve a la pestaña **Auditoría SSL/TLS**, escribe la dirección y puerto objetivo y pulsa **Auditar Certificado**.
+      3. **Interpretar los Resultados**:
+         * **Días Restantes**: Si quedan menos de 15 días, el sistema marcará el estado en amarillo o rojo.
+         * **Emisor**: Si es autofirmado (*Self-signed*), se recomienda reemplazarlo por un certificado emitido por una CA interna de la empresa o Let's Encrypt para evitar alertas del navegador.
+         * **Versión de TLS**: Verifica que negocie **TLS 1.2 o TLS 1.3**. Si negocia TLS 1.0 o TLS 1.1, actualice el firmware del switch para mitigar vulnerabilidades criptográficas (BEAST, POODLE).`,
+      steps: [
+        'Acceda al módulo "Auditoría SSL/TLS" en RedMonitor.',
+        'Ingrese los hosts HTTPS críticos de la red (routers de borde, portales cautivos, paneles de switches).',
+        'Presione "Auditar Certificado" y revise los días restantes de vigencia.',
+        'Presione "Agregar a Monitoreo" para registrar el host en la matriz de seguimiento continuo.',
+        'Configure alertas en "Notificaciones" para recibir avisos automáticos 7 días antes de la expiración.'
       ]
     }
   ];
@@ -875,31 +1334,47 @@ export default function NetworkWiki() {
       {/* FOOTER WIKI BOX */}
       <div className="bg-slate-900/40 border-t border-slate-800/80 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-[10px] text-slate-500">
         <div>
-          © 2026 Router LAN Monitor L2. Documentación Oficial y Manuales Operativos.
+          © 2026 RedMonitor Network System L2. Documentación Oficial y Manuales Operativos.
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <a
+            href="#wiki-search-input"
+            onClick={() => { setSearchTerm('Móvil'); setSelectedCategory('guide'); }}
+            className="hover:text-cyan-400 hover:underline cursor-pointer"
+          >
+            Acceso Móvil / QR
+          </a>
+          <span>•</span>
+          <a
+            href="#wiki-search-input"
+            onClick={() => { setSearchTerm('SSL'); setSelectedCategory('guide'); }}
+            className="hover:text-cyan-400 hover:underline cursor-pointer"
+          >
+            Auditoría SSL/TLS
+          </a>
+          <span>•</span>
+          <a
+            href="#wiki-search-input"
+            onClick={() => { setSearchTerm('Telegram'); setSelectedCategory('how-to'); }}
+            className="hover:text-cyan-400 hover:underline cursor-pointer"
+          >
+            Telegram / Discord
+          </a>
+          <span>•</span>
+          <a
+            href="#wiki-search-input"
+            onClick={() => { setSearchTerm('Syslog'); setSelectedCategory('guide'); }}
+            className="hover:text-cyan-400 hover:underline cursor-pointer"
+          >
+            Syslog UDP 514
+          </a>
+          <span>•</span>
           <a
             href="#wiki-search-input"
             onClick={() => { setSearchTerm('PoE'); setSelectedCategory('qa'); }}
             className="hover:text-cyan-400 hover:underline cursor-pointer"
           >
-            Buscar "PoE"
-          </a>
-          <span>•</span>
-          <a
-            href="#wiki-search-input"
-            onClick={() => { setSearchTerm('saturada'); setSelectedCategory('qa'); }}
-            className="hover:text-cyan-400 hover:underline cursor-pointer"
-          >
-            Buscar "Saturada"
-          </a>
-          <span>•</span>
-          <a
-            href="#wiki-search-input"
-            onClick={() => { setSearchTerm('pérdida'); setSelectedCategory('how-to'); }}
-            className="hover:text-cyan-400 hover:underline cursor-pointer"
-          >
-            Buscar "Pérdida de Paquetes"
+            Switches PoE
           </a>
         </div>
       </div>

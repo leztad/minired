@@ -43,6 +43,7 @@ const SslCertificateAuditor = React.lazy(() => import('./components/SslCertifica
 const RogueDeviceDetector = React.lazy(() => import('./components/RogueDeviceDetector'));
 const SlaUptimeReport = React.lazy(() => import('./components/SlaUptimeReport'));
 const SwitchConfigBackup = React.lazy(() => import('./components/SwitchConfigBackup'));
+const NetworkDetailedReports = React.lazy(() => import('./components/NetworkDetailedReports'));
 
 const LazyLoadingFallback = () => (
   <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3 font-mono">
@@ -500,6 +501,7 @@ export default function App() {
     | 'seguridad_rogue'
     | 'reportes_sla'
     | 'respaldos_config'
+    | 'informes_optimizacion'
   >('vista_general');
   const [snmpTargetIp, setSnmpTargetIp] = useState<string>('192.168.1.1');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -3602,6 +3604,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
              activeView === 'configuracion' ? 'Configuración' :
              activeView === 'event_logger' ? 'Consola de Eventos' :
              activeView === 'diseno_red' ? 'Herramientas L2/L3' :
+             activeView === 'informes_optimizacion' ? 'Informes & Optimización' :
              'Pruebas y Diagnóstico'}
           </li>
         </ul>
@@ -4059,6 +4062,22 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                   <GitCompare className="h-3.5 w-3.5 text-purple-400" />
                   <span>Respaldos Switches & Diff</span>
                   <span className="ml-auto bg-purple-500/15 text-purple-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-purple-500/20">CFG</span>
+                </button>
+              </li>
+
+              <li>
+                <button 
+                  onClick={() => { setActiveView('informes_optimizacion'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'informes_optimizacion' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-informes-optimizacion-btn"
+                >
+                  <FileText className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Informes & Optimización</span>
+                  <span className="ml-auto bg-cyan-500/15 text-cyan-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-cyan-500/20">REPORTE</span>
                 </button>
               </li>
 
@@ -5180,6 +5199,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                 devices={processedDevices} 
                 onAddLog={addAlert} 
                 locationName={locationName}
+                onNavigateToDetailedReport={() => setActiveView('informes_optimizacion')}
               />
             </React.Suspense>
           )}
@@ -5304,6 +5324,17 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           {activeView === 'respaldos_config' && (
             <React.Suspense fallback={<LazyLoadingFallback />}>
               <SwitchConfigBackup />
+            </React.Suspense>
+          )}
+
+          {activeView === 'informes_optimizacion' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <NetworkDetailedReports 
+                devices={processedDevices}
+                locationName={locationName}
+                onAddLog={addAlert}
+                currentUser={currentUser}
+              />
             </React.Suspense>
           )}
 
