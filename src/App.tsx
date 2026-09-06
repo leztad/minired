@@ -4,7 +4,7 @@ import {
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
   ChevronDown, Monitor, Copy, Plus, Play, Pause, ExternalLink, HelpCircle, 
   ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable,
-  Gauge, Menu, X, Shield, MapPin, Tv, Video, Bell
+  Gauge, Menu, X, Shield, MapPin, Tv, Video, Bell, Calendar, Award, FileText, GitCompare, BellOff
 } from 'lucide-react';
 
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
@@ -37,6 +37,12 @@ const RemoteDiagnosticTools = React.lazy(() => import('./components/RemoteDiagno
 const SnmpTelemetry = React.lazy(() => import('./components/SnmpTelemetry'));
 const NotificationChannels = React.lazy(() => import('./components/NotificationChannels'));
 const SwitchTopologyMap = React.lazy(() => import('./components/SwitchTopologyMap'));
+const SyslogTrapReceiver = React.lazy(() => import('./components/SyslogTrapReceiver'));
+const MaintenanceWindows = React.lazy(() => import('./components/MaintenanceWindows'));
+const SslCertificateAuditor = React.lazy(() => import('./components/SslCertificateAuditor'));
+const RogueDeviceDetector = React.lazy(() => import('./components/RogueDeviceDetector'));
+const SlaUptimeReport = React.lazy(() => import('./components/SlaUptimeReport'));
+const SwitchConfigBackup = React.lazy(() => import('./components/SwitchConfigBackup'));
 
 const LazyLoadingFallback = () => (
   <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3 font-mono">
@@ -461,7 +467,30 @@ export default function App() {
   const [calcCidr, setCalcCidr] = useState<number>(24);
   
   // Navigation
-  const [activeView, setActiveView] = useState<'vista_general' | 'sensores' | 'dispositivos' | 'snmp_telemetry' | 'topologia_switches' | 'notificaciones' | 'ancho_banda' | 'testeo' | 'ai_diagnostic' | 'speed_test' | 'auditorias_red' | 'wiki_soporte' | 'event_logger' | 'diseno_red' | 'instalador_desktop' | 'configuracion'>('vista_general');
+  const [activeView, setActiveView] = useState<
+    | 'vista_general'
+    | 'sensores'
+    | 'dispositivos'
+    | 'snmp_telemetry'
+    | 'topologia_switches'
+    | 'notificaciones'
+    | 'ancho_banda'
+    | 'testeo'
+    | 'ai_diagnostic'
+    | 'speed_test'
+    | 'auditorias_red'
+    | 'wiki_soporte'
+    | 'event_logger'
+    | 'diseno_red'
+    | 'instalador_desktop'
+    | 'configuracion'
+    | 'syslog_traps'
+    | 'mantenimiento'
+    | 'auditoria_ssl'
+    | 'seguridad_rogue'
+    | 'reportes_sla'
+    | 'respaldos_config'
+  >('vista_general');
   const [snmpTargetIp, setSnmpTargetIp] = useState<string>('192.168.1.1');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('netmonitor_theme') as 'dark' | 'light') || 'dark';
@@ -3922,6 +3951,107 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                 </button>
               </li>
 
+              {/* ENTERPRISE & SECURITY MODULES */}
+              <li className="pt-2">
+                <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1 font-display">Operaciones & Empresa</h4>
+              </li>
+
+              <li>
+                <button 
+                  onClick={() => { setActiveView('syslog_traps'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'syslog_traps' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-syslog-traps-btn"
+                >
+                  <Radio className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Syslog & Traps SNMP</span>
+                  <span className="ml-auto bg-amber-500/15 text-amber-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-amber-500/20">UDP</span>
+                </button>
+              </li>
+
+              <li>
+                <button 
+                  onClick={() => { setActiveView('mantenimiento'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'mantenimiento' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-mantenimiento-btn"
+                >
+                  <BellOff className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Ventanas de Mantenimiento</span>
+                  <span className="ml-auto bg-amber-500/15 text-amber-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-amber-500/20">MUTE</span>
+                </button>
+              </li>
+
+              <li>
+                <button 
+                  onClick={() => { setActiveView('auditoria_ssl'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'auditoria_ssl' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-auditoria-ssl-btn"
+                >
+                  <Lock className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Auditor SSL / TLS</span>
+                  <span className="ml-auto bg-emerald-500/15 text-emerald-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-emerald-500/20">TLS</span>
+                </button>
+              </li>
+
+              <li>
+                <button 
+                  onClick={() => { setActiveView('seguridad_rogue'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'seguridad_rogue' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-seguridad-rogue-btn"
+                >
+                  <ShieldAlert className="h-3.5 w-3.5 text-rose-400" />
+                  <span>Detección Rogue & ARP</span>
+                  <span className="ml-auto bg-rose-500/15 text-rose-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-rose-500/20">SOC</span>
+                </button>
+              </li>
+
+              <li>
+                <button 
+                  onClick={() => { setActiveView('reportes_sla'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'reportes_sla' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-reportes-sla-btn"
+                >
+                  <Award className="h-3.5 w-3.5 text-blue-400" />
+                  <span>Informes SLA & Uptime</span>
+                  <span className="ml-auto bg-blue-500/15 text-blue-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-blue-500/20">99.9%</span>
+                </button>
+              </li>
+
+              <li>
+                <button 
+                  onClick={() => { setActiveView('respaldos_config'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'respaldos_config' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                  id="nav-respaldos-config-btn"
+                >
+                  <GitCompare className="h-3.5 w-3.5 text-purple-400" />
+                  <span>Respaldos Switches & Diff</span>
+                  <span className="ml-auto bg-purple-500/15 text-purple-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-purple-500/20">CFG</span>
+                </button>
+              </li>
+
               {/* Collapsible Subnet Folder Entry */}
               <li className="pt-2">
                 <div 
@@ -5128,6 +5258,42 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           {activeView === 'diseno_red' && (
             <React.Suspense fallback={<LazyLoadingFallback />}>
               <NetworkEnterpriseTools />
+            </React.Suspense>
+          )}
+
+          {activeView === 'syslog_traps' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <SyslogTrapReceiver onAddLog={addAlert} />
+            </React.Suspense>
+          )}
+
+          {activeView === 'mantenimiento' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <MaintenanceWindows />
+            </React.Suspense>
+          )}
+
+          {activeView === 'auditoria_ssl' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <SslCertificateAuditor />
+            </React.Suspense>
+          )}
+
+          {activeView === 'seguridad_rogue' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <RogueDeviceDetector devices={processedDevices} />
+            </React.Suspense>
+          )}
+
+          {activeView === 'reportes_sla' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <SlaUptimeReport devices={processedDevices} />
+            </React.Suspense>
+          )}
+
+          {activeView === 'respaldos_config' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <SwitchConfigBackup />
             </React.Suspense>
           )}
 

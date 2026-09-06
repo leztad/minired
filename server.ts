@@ -24,6 +24,45 @@ import {
   type NotificationChannel,
   type AlertPayload
 } from "./server/notificationService";
+import { 
+  getSyslogEvents, 
+  getTrapEvents, 
+  clearSyslogEvents, 
+  clearTrapEvents, 
+  parseSyslogMessage, 
+  recordTrapEvent,
+  startSyslogServer,
+  startTrapServer
+} from "./server/syslogTrapService";
+import { 
+  getMaintenanceWindows, 
+  saveMaintenanceWindow, 
+  deleteMaintenanceWindow, 
+  getQuickMutes, 
+  setQuickMute, 
+  removeQuickMute, 
+  isDeviceSilenced 
+} from "./server/maintenanceService";
+import { 
+  auditCertificate, 
+  getMonitoredSslSites, 
+  addMonitoredSslSite, 
+  deleteMonitoredSslSite, 
+  runBatchSslAudit 
+} from "./server/sslAuditService";
+import { 
+  getApprovedDevices, 
+  addApprovedDevice, 
+  removeApprovedDevice, 
+  analyzeRogueAndConflicts 
+} from "./server/rogueSecurityService";
+import { generateSlaReport } from "./server/slaReportService";
+import { 
+  getSwitchBackupDevices, 
+  registerSwitchDevice, 
+  addConfigRevision, 
+  computeConfigDiff 
+} from "./server/configBackupService";
 
 dotenv.config();
 
@@ -766,6 +805,293 @@ app.get("/api/notifications/history", (req, res) => {
 app.delete("/api/notifications/history", (req, res) => {
   clearDeliveryHistory();
   res.json({ success: true, message: "Historial de entregas limpiado." });
+});
+
+// ==========================================
+// 1. SYSLOG & SNMP TRAPS API (PASIVE RECEIVER)
+// ==========================================
+app.get("/api/syslog", (req, res) => {
+  res.json(getSyslogEvents());
+});
+
+app.post("/api/syslog/clear", (req, res) => {
+  clearSyslogEvents();
+  res.json({ success: true, message: "Búfer de eventos Syslog vaciado." });
+});
+
+app.post("/api/syslog/simulate", async (req, res) => {
+  try {
+    const { message, severity, facility, hostname, sourceIp } = req.body;
+    const priMap: Record<string, number> = {
+      Emergency: 0, Alert: 1, Critical: 2, Error: 3, Warning: 4, Notice: 5, Informational: 6, Debug: 7
+    };
+    const sev = severity || 'Critical';
+    const fac = facility || 'local7';
+    const pri = (23 * 8) + (priMap[sev] !== undefined ? priMap[sev] : 2);
+    const rawMsg = `<${pri}>${new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} ${new Date().toLocaleTimeString()} ${hostname || 'SW-SIMULADO-01'} %NET-SYS: ${message || 'Evento simulado de hardware'}`;
+    
+    const event = parseSyslogMessage(rawMsg, sourceIp || '192.168.1.1');
+
+    if (sev === 'Critical' || sev === 'Alert' || sev === 'Emergency') {
+      await dispatchAlertToAllChannels({
+        title: `🚨 Syslog ${sev}: ${event.hostname}`,
+        message: `${event.tag}: ${event.message}`,
+        severity: 'critical',
+        eventType: 'syslog_alert',
+        deviceIp: event.sourceIp,
+        deviceHost: event.hostname,
+        metric: 'Syslog Event',
+        value: sev,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    }
+
+    res.json({ success: true, event });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Error al simular Syslog." });
+  }
+});
+
+app.get("/api/traps", (req, res) => {
+  res.json(getTrapEvents());
+});
+
+app.post("/api/traps/clear", (req, res) => {
+  clearTrapEvents();
+  res.json({ success: true, message: "Búfer de SNMP Traps vaciado." });
+});
+
+app.post("/api/traps/simulate", async (req, res) => {
+  try {
+    const { sourceIp, trapType, description, severity } = req.body;
+    const trap = recordTrapEvent({
+      sourceIp: sourceIp || "192.168.1.1",
+      trapType: trapType || "linkDown",
+      enterpriseOid: "1.3.6.1.6.3.1.1.5.3",
+      uptime: "32 days, 14:10:02",
+      varbinds: [
+        { oid: "1.3.6.1.2.1.2.2.1.1.12", type: "Integer", value: "12" },
+        { oid: "1.3.6.1.2.1.2.2.1.2.12", type: "OctetString", value: "GigabitEthernet1/0/12" },
+        { oid: "1.3.6.1.2.1.2.2.1.8.12", type: "Integer", value: "2 (down)" }
+      ],
+      severity: severity || "Critical",
+      description: description || "Trap linkDown: Pérdida abrupta de enlace físico en puerto GigabitEthernet1/0/12"
+    });
+
+    if (trap.severity === 'Critical') {
+      await dispatchAlertToAllChannels({
+        title: `⚡ SNMP Trap Crítico: ${trap.trapType} en ${trap.sourceIp}`,
+        message: trap.description,
+        severity: 'critical',
+        eventType: 'trap_alert',
+        deviceIp: trap.sourceIp,
+        metric: 'SNMP Trap',
+        value: trap.trapType,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    }
+
+    res.json({ success: true, trap });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Error al simular trampa SNMP." });
+  }
+});
+
+// ==========================================
+// 2. MAINTENANCE WINDOWS & QUICK MUTE API
+// ==========================================
+app.get("/api/maintenance/windows", (req, res) => {
+  res.json(getMaintenanceWindows());
+});
+
+app.post("/api/maintenance/windows", (req, res) => {
+  try {
+    const win = req.body;
+    if (!win.name || !win.startTime || !win.endTime) {
+      return res.status(400).json({ error: "Faltan campos requeridos (nombre, fecha inicio, fecha fin)." });
+    }
+    const updated = saveMaintenanceWindow(win);
+    res.json({ success: true, windows: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/maintenance/windows/:id", (req, res) => {
+  const updated = deleteMaintenanceWindow(req.params.id);
+  res.json({ success: true, windows: updated });
+});
+
+app.get("/api/maintenance/quick-mutes", (req, res) => {
+  res.json(getQuickMutes());
+});
+
+app.post("/api/maintenance/quick-mute", (req, res) => {
+  try {
+    const { ip, durationMinutes, reason, hostName } = req.body;
+    if (!ip || durationMinutes === undefined) {
+      return res.status(400).json({ error: "IP y duración en minutos requeridos." });
+    }
+    const mutes = setQuickMute(ip, Number(durationMinutes), reason, hostName);
+    res.json({ success: true, quickMutes: mutes });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/maintenance/quick-mute/:ip", (req, res) => {
+  const mutes = removeQuickMute(req.params.ip);
+  res.json({ success: true, quickMutes: mutes });
+});
+
+app.get("/api/maintenance/check/:ip", (req, res) => {
+  const status = isDeviceSilenced(req.params.ip);
+  res.json(status);
+});
+
+// ==========================================
+// 3. SSL / TLS AUDIT API
+// ==========================================
+app.post("/api/ssl/audit", async (req, res) => {
+  try {
+    const { host, port } = req.body;
+    if (!host) {
+      return res.status(400).json({ error: "Host o dirección IP requerida para auditar SSL." });
+    }
+    const result = await auditCertificate(host, port ? Number(port) : 443);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Error al auditar certificado TLS." });
+  }
+});
+
+app.get("/api/ssl/monitored", (req, res) => {
+  res.json(getMonitoredSslSites());
+});
+
+app.post("/api/ssl/monitored", (req, res) => {
+  try {
+    const { host, port, label } = req.body;
+    if (!host) {
+      return res.status(400).json({ error: "Host o dominio requerido." });
+    }
+    const sites = addMonitoredSslSite(host, port ? Number(port) : 443, label);
+    res.json({ success: true, sites });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/ssl/monitored/:id", (req, res) => {
+  const sites = deleteMonitoredSslSite(req.params.id);
+  res.json({ success: true, sites });
+});
+
+app.post("/api/ssl/batch-audit", async (req, res) => {
+  try {
+    const sites = await runBatchSslAudit();
+    res.json({ success: true, sites });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Error al ejecutar lote de auditoría SSL." });
+  }
+});
+
+// ==========================================
+// 4. ROGUE DEVICES & ARP SECURITY API
+// ==========================================
+app.get("/api/security/approved", (req, res) => {
+  res.json(getApprovedDevices());
+});
+
+app.post("/api/security/approved", (req, res) => {
+  try {
+    const device = req.body;
+    if (!device.mac || !device.hostName) {
+      return res.status(400).json({ error: "MAC y Nombre de equipo requeridos para lista blanca." });
+    }
+    const devices = addApprovedDevice(device);
+    res.json({ success: true, approvedDevices: devices });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/security/approved/:mac", (req, res) => {
+  const devices = removeApprovedDevice(req.params.mac);
+  res.json({ success: true, approvedDevices: devices });
+});
+
+app.post("/api/security/analyze", (req, res) => {
+  try {
+    const { devices } = req.body;
+    const analysis = analyzeRogueAndConflicts(Array.isArray(devices) ? devices : []);
+    res.json(analysis);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Error al analizar dispositivos de seguridad." });
+  }
+});
+
+// ==========================================
+// 5. SLA & UPTIME REPORTS API
+// ==========================================
+app.post("/api/sla/report", (req, res) => {
+  try {
+    const { devices, organizationName, auditorName } = req.body;
+    const report = generateSlaReport(
+      Array.isArray(devices) ? devices : [],
+      organizationName,
+      auditorName
+    );
+    res.json(report);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Error al generar informe SLA." });
+  }
+});
+
+// ==========================================
+// 6. SWITCH CONFIG BACKUPS & DIFF API
+// ==========================================
+app.get("/api/configs/switches", (req, res) => {
+  res.json(getSwitchBackupDevices());
+});
+
+app.post("/api/configs/switches", (req, res) => {
+  try {
+    const { device, initialConfig } = req.body;
+    if (!device || !device.name || !device.ip) {
+      return res.status(400).json({ error: "Nombre e IP del switch requeridos." });
+    }
+    const updated = registerSwitchDevice(device, initialConfig);
+    res.json({ success: true, devices: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/configs/revisions", (req, res) => {
+  try {
+    const { deviceId, configText, author, changeSummary, versionLabel } = req.body;
+    if (!deviceId || !configText) {
+      return res.status(400).json({ error: "ID del dispositivo y texto de configuración requeridos." });
+    }
+    const updated = addConfigRevision(deviceId, configText, author, changeSummary, versionLabel);
+    res.json({ success: true, devices: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/configs/diff", (req, res) => {
+  try {
+    const { oldText, newText } = req.body;
+    if (oldText === undefined || newText === undefined) {
+      return res.status(400).json({ error: "Se requieren oldText y newText para comparar." });
+    }
+    const diff = computeConfigDiff(oldText, newText);
+    res.json(diff);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Error al calcular Diff de configuración." });
+  }
 });
 
 // Authentication & User Management API Endpoints
@@ -2905,6 +3231,10 @@ Proporciona 3 a 5 pasos exactos que el usuario puede realizar para mejorar la se
 });
 
 async function start() {
+  // Iniciar receptores UDP pasivos para Syslog y Traps SNMP
+  startSyslogServer(10514).catch(() => {});
+  startTrapServer(10162).catch(() => {});
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

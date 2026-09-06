@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { isDeviceSilenced } from "./maintenanceService";
 
 export interface NotificationChannel {
   id: string;
@@ -24,7 +25,7 @@ export interface AlertPayload {
   title: string;
   message: string;
   severity: 'critical' | 'warning' | 'info' | 'success';
-  eventType?: 'device_down' | 'device_up' | 'high_latency' | 'new_device' | 'snmp_alert' | 'test';
+  eventType?: 'device_down' | 'device_up' | 'high_latency' | 'new_device' | 'snmp_alert' | 'syslog_alert' | 'trap_alert' | 'ssl_alert' | 'rogue_alert' | 'test';
   deviceIp?: string;
   deviceHost?: string;
   metric?: string;
@@ -366,6 +367,15 @@ export async function sendToChannel(channel: NotificationChannel, alert: AlertPa
  * Dispatch alert to all matching active channels with anti-flood cooldown
  */
 export async function dispatchAlertToAllChannels(alert: AlertPayload): Promise<NotificationDeliveryLog[]> {
+  // Check maintenance windows and quick mute suppression (except for manual test events)
+  if (alert.eventType !== 'test' && alert.deviceIp) {
+    const silenceCheck = isDeviceSilenced(alert.deviceIp);
+    if (silenceCheck.silenced) {
+      console.log(`🔕 Alerta para ${alert.deviceIp} suprimida por mantenimiento: ${silenceCheck.source} (${silenceCheck.reason})`);
+      return [];
+    }
+  }
+
   // Anti-flood: key based on IP + eventType
   if (alert.deviceIp && alert.eventType) {
     const key = `${alert.deviceIp}:${alert.eventType}`;
@@ -390,6 +400,9 @@ export async function dispatchAlertToAllChannels(alert: AlertPayload): Promise<N
     else if (alert.eventType === 'high_latency' && channel.triggers.onHighLatency) shouldSend = true;
     else if (alert.eventType === 'new_device' && channel.triggers.onNewDevice) shouldSend = true;
     else if (alert.eventType === 'snmp_alert' && channel.triggers.onSnmpThreshold) shouldSend = true;
+    else if (alert.eventType === 'syslog_alert' || alert.eventType === 'trap_alert' || alert.eventType === 'ssl_alert' || alert.eventType === 'rogue_alert') {
+      shouldSend = alert.severity === 'critical';
+    }
 
     if (shouldSend) {
       const log = await sendToChannel(channel, alert);
