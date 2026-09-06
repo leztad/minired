@@ -1,56 +1,64 @@
 @echo off
-title RedMonitor - Iniciar Servidor Local
+title RedMonitor - Servidor de Red Local
 color 0b
 
-:: Cambiar al directorio del lote
+:: Cambiar al directorio donde reside este archivo
 cd /d "%~dp0"
 
 echo ==========================================================
 echo               REDMONITOR NETWORK SYSTEM
+echo             Iniciador en Red Local (LAN / Wi-Fi)
 echo ==========================================================
 echo.
-echo [+] Detectando entorno del sistema...
+echo [+] Verificando requisitos del sistema...
 
-:: Verificar si Node.js esta instalado de forma mas robusta
+:: 1. Verificar si Node.js esta instalado
 node -v >nul 2>nul
 if errorlevel 1 goto NoNode
 
-:: Verificar si existe la carpeta node_modules
+:: 2. Verificar si existe la carpeta node_modules
 if not exist node_modules goto NoModules
 
 :StartDev
-:: Detectar la IP local IPv4 del computador para la conexion movil
+:: 3. Detectar la IP local IPv4 del equipo
 set "LOCAL_IP=localhost"
 for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /i "IPv4"') do (
     set "LOCAL_IP=%%i"
     goto :FoundIP
 )
 :FoundIP
-:: Limpiar espacios en blanco de la IP
 if defined LOCAL_IP (
     set "LOCAL_IP=%LOCAL_IP: =%"
 )
 
+:: 4. Verificar si el puerto 3000 ya esta ocupado
+netstat -ano | findstr ":3000 " | findstr "LISTENING" >nul 2>nul
+if not errorlevel 1 (
+    echo [!] AVISO: El puerto 3000 parece estar ya en uso por otro proceso.
+    echo     Si RedMonitor ya esta corriendo, puedes abrirlo en el navegador.
+    echo     Si es otra aplicacion, puedes cerrar esa aplicacion o usar otro puerto.
+    echo.
+)
+
 echo.
 echo ==========================================================
-echo   COMO ACCEDER DESDE TU CELULAR:
+echo   ACCESOS EN TU RED LOCAL (LAN):
 echo ==========================================================
-echo   1. Aseguramiento de red:
-echo      Tanto tu computadora como tu celular DEBEN estar
-echo      conectados a la misma red Wi-Fi.
+echo   1. En este mismo computador:
+echo      http://localhost:3000
 echo.
-echo   2. Abre este enlace en el navegador de tu celular:
+echo   2. Desde celulares u otras computadoras en la misma Wi-Fi:
 echo      http://%LOCAL_IP%:3000
 echo.
-echo   * NOTA SOBRE SEGURIDAD (Firewall):
-echo     Si la pagina se queda cargando en el movil, es probable
-echo     que el Cortafuegos/Firewall de Windows este bloqueando la
-echo     conexion entrante. Asegurate de darle permisos "Privados"
-echo     o permitir el trafico en el puerto 3000.
+echo   * CORTAFUEGOS (FIREWALL DE WINDOWS):
+echo     Si al abrir http://%LOCAL_IP%:3000 desde otro dispositivo
+echo     la pagina no carga o da tiempo de espera agotado:
+echo     1. Abre 'Firewall de Windows Defender con seguridad avanzada'.
+echo     2. Reglas de Entrada -> Nueva Regla -> Puerto -> TCP -> 3000 -> Permitir conexion.
 echo ==========================================================
 echo.
-echo [+] Iniciando el servidor de desarrollo...
-echo [+] Abriendo navegador en esta computadora...
+echo [+] Iniciando el servidor RedMonitor...
+echo [+] Abriendo navegador local...
 
 start "" "http://localhost:3000"
 call npm run dev
@@ -59,9 +67,9 @@ goto End
 
 :NoNode
 echo.
-echo [X] ERROR: Node.js no esta instalado en tu sistema.
-echo     Es indispensable para ejecutar RedMonitor localmente.
-echo     Por favor descarga e instala Node.js desde: https://nodejs.org/
+echo [X] ERROR: Node.js no esta instalado en este equipo.
+echo     Es indispensable para ejecutar RedMonitor en tu red local.
+echo     Descargalo gratis desde: https://nodejs.org/ (version LTS recomendada).
 echo.
 pause
 exit /b
@@ -69,8 +77,8 @@ exit /b
 :NoModules
 echo.
 echo [+] No se encontro la carpeta node_modules.
-echo [+] Instalando las dependencias del proyecto automaticamente...
-echo [+] Esto puede tomar de 1 a 2 minutos. Por favor espera...
+echo [+] Instalando dependencias de npm automaticamente...
+echo [+] Esto puede tomar 1 o 2 minutos. Por favor espera...
 call npm install
 if errorlevel 1 goto InstallError
 goto StartDev
@@ -78,16 +86,17 @@ goto StartDev
 :InstallError
 echo.
 echo [X] ERROR: No se pudieron instalar las dependencias con 'npm install'.
-echo     Por favor, abre una consola (cmd), ve a este directorio y ejecuta
-echo     'npm install' manualmente para ver el error detallado.
+echo     Verifica tu conexion a internet y permisos de carpeta.
 echo.
 pause
 exit /b
 
 :DevError
 echo.
-echo [X] ERROR: El servidor de desarrollo (Vite) se detuvo inesperadamente.
-echo     Revisa los mensajes de arriba para identificar el problema.
+echo [X] ERROR: El servidor RedMonitor se detuvo inesperadamente.
+echo     Posibles causas:
+echo     1. El puerto 3000 ya esta ocupado por otro programa.
+echo     2. Error de sintaxis o modulo no encontrado en npm.
 echo.
 pause
 exit /b

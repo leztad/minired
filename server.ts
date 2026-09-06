@@ -2733,12 +2733,12 @@ const getRealPing = (ip: string, retries = 1): Promise<number | null> => {
   return new Promise(async (resolve) => {
     const isWindows = process.platform === "win32";
     const cmd = isWindows 
-      ? `ping -n 1 -w 250 ${ip}`
+      ? `ping -n 1 -w 500 ${ip}`
       : `ping -c 1 -W 1 ${ip}`;
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       const pingTime = await new Promise<number | null>((resAttempt) => {
-        exec(cmd, { timeout: 250 }, (err, stdout) => {
+        exec(cmd, { timeout: 1500 }, (err, stdout) => {
           if (err || !stdout) {
             return resAttempt(null);
           }
@@ -2760,11 +2760,94 @@ const getRealPing = (ip: string, retries = 1): Promise<number | null> => {
 
       // Delay before retrying to allow potential network congestion to clear
       if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, 150));
+        await new Promise((r) => setTimeout(r, 100));
       }
     }
     resolve(null);
   });
+};
+
+// Resilient ARP Reader supporting Linux /proc/net/arp, ip neigh, and Windows/Mac arp
+const getSystemArpEntries = async (baseSubnet: string): Promise<Array<{ ip: string; mac: string }>> => {
+  const entries: Array<{ ip: string; mac: string }> = [];
+
+  // 1. Linux Kernel native /proc/net/arp (instantaneous, zero-dependency, works without net-tools or sudo)
+  if (fs.existsSync("/proc/net/arp")) {
+    try {
+      const rawProc = fs.readFileSync("/proc/net/arp", "utf8");
+      const lines = rawProc.split("\n").slice(1);
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 4) {
+          const ip = parts[0];
+          const flags = parts[2];
+          const rawMac = parts[3];
+          if (ip.startsWith(baseSubnet + ".") && rawMac && rawMac !== "00:00:00:00:00:00" && flags !== "0x0") {
+            const mac = rawMac.split(/[:-]/).map(p => p.length === 1 ? `0${p}` : p).join(":").toUpperCase();
+            if (!entries.some(e => e.ip === ip)) {
+              entries.push({ ip, mac });
+            }
+          }
+        }
+      }
+      if (entries.length > 0) {
+        return entries;
+      }
+    } catch (e) {
+      console.warn("Error reading /proc/net/arp:", e);
+    }
+  }
+
+  // 2. Command-based fallback (arp -a, ip neigh, PowerShell)
+  const isWindows = process.platform === "win32";
+  const cmds = isWindows
+    ? [
+        "arp -a",
+        "powershell -NoProfile -Command \"Get-NetNeighbor -AddressFamily IPv4 | Where-Object { $_.State -ne 'Unreachable' -and $_.LinkLayerAddress } | ForEach-Object { $_.IPAddress + ' ' + $_.LinkLayerAddress }\""
+      ]
+    : [
+        "arp -a",
+        "ip neigh show",
+        "/usr/sbin/arp -a"
+      ];
+
+  for (const cmd of cmds) {
+    try {
+      const stdout = await new Promise<string>((resCmd) => {
+        exec(cmd, { timeout: 2000 }, (err, out) => {
+          if (err || !out) return resCmd("");
+          resCmd(out);
+        });
+      });
+
+      if (!stdout) continue;
+
+      const ipMacRegex = /((?:\d{1,3}\.){3}\d{1,3})[^\d\w]+((?:[0-9a-fA-F]{1,2}[:-]){5}[0-9a-fA-F]{1,2})/i;
+      const altRegex = /\(((?:\d{1,3}\.){3}\d{1,3})\) at ((?:[0-9a-fA-F]{1,2}[:-]){5}[0-9a-fA-F]{1,2})/i;
+      const ipNeighRegex = /((?:\d{1,3}\.){3}\d{1,3})\s+.*lladdr\s+((?:[0-9a-fA-F]{1,2}[:-]){5}[0-9a-fA-F]{1,2})/i;
+
+      for (const line of stdout.split("\n")) {
+        const match = line.match(ipMacRegex) || line.match(altRegex) || line.match(ipNeighRegex);
+        if (match) {
+          const ip = match[1];
+          if (!ip.startsWith(baseSubnet + ".")) continue;
+          if (ip.startsWith("224.") || ip.startsWith("239.") || ip === "255.255.255.255" || ip.endsWith(".255") || ip.startsWith("127.")) continue;
+
+          const rawMac = match[2];
+          const mac = rawMac.split(/[:-]/).map(p => p.length === 1 ? `0${p}` : p).join(":").toUpperCase();
+          if (mac !== "00:00:00:00:00:00" && !entries.some(e => e.ip === ip)) {
+            entries.push({ ip, mac });
+          }
+        }
+      }
+
+      if (entries.length > 0) {
+        break;
+      }
+    } catch {}
+  }
+
+  return entries;
 };
 
 // API endpoint to retrieve the real online devices in the computer's ARP cache
@@ -2898,18 +2981,10 @@ app.get("/api/scan-real-arp", (req, res) => {
   }
 
   // First perform an active ping sweep to populate the OS ARP cache table (using optimized timeout for the quick round)
-  exec(sweepCmd, { timeout: execTimeout }, (sweepErr) => {
-    // Execute the standard ARP table reader
-    const cmd = "arp -a";
-    exec(cmd, (error, stdout, stderr) => {
+  exec(sweepCmd, { timeout: execTimeout }, async (sweepErr) => {
+    try {
       const devices: any[] = [];
-      if (error) {
-        return res.json({ devices: [] });
-      }
-      
-      const lines = stdout.split("\n");
-      const ipMacRegex = /((?:\d{1,3}\.){3}\d{1,3})[^\d\w]+((?:[0-9a-fA-F]{1,2}[:-]){5}[0-9a-fA-F]{1,2})/i;
-      const altRegex = /\(((?:\d{1,3}\.){3}\d{1,3})\) at ((?:[0-9a-fA-F]{1,2}[:-]){5}[0-9a-fA-F]{1,2})/i;
+      const arpEntries = await getSystemArpEntries(base);
       
       // Determine this PC's own network interface IP for the target subnet to prevent missing "Este PC"
       let localPcIp = "";
@@ -2934,42 +3009,18 @@ app.get("/api/scan-real-arp", (req, res) => {
         console.warn("Could not determine local network interface details:", e);
       }
 
-      lines.forEach(line => {
-        let match = line.match(ipMacRegex);
-        if (!match) {
-          match = line.match(altRegex);
-        }
-        
-        if (match) {
-          const ip = match[1];
-          // Robustly clean and split the MAC address, padding any single hex-digit octets (e.g. "0" -> "00")
-          let mac = match[2]
-            .split(/[:-]/)
-            .map(part => part.length === 1 ? `0${part}` : part)
-            .join(":")
-            .toUpperCase();
-          
-          if (ip.startsWith("224.") || ip.startsWith("239.") || ip === "255.255.255.255" || ip.endsWith(".255") || ip.startsWith("127.")) {
-            return;
-          }
-
-          if (!ip.startsWith(base + ".")) {
-            return;
-          }
-
-          // Force router/gateway (.1 or .254) as OK with active low latency, preventing false negatives 
-          // if the home modem/fiber router blocks ICMP requests on L3 but is active in ARP table L2.
-          const isRouterIp = ip.endsWith(".1") || ip.endsWith(".254");
-          
-          devices.push({
-            ip,
-            mac,
-            estado: "OK",
-            ping: isRouterIp ? 2 : Math.floor(Math.random() * 8) + 1,
-            vendor: isRouterIp ? "Gateway / Router principal" : getVendorByMac(mac)
-          });
-        }
-      });
+      for (const entry of arpEntries) {
+        const ip = entry.ip;
+        const mac = entry.mac;
+        const isRouterIp = ip.endsWith(".1") || ip.endsWith(".254");
+        devices.push({
+          ip,
+          mac,
+          estado: "OK",
+          ping: isRouterIp ? 2 : Math.floor(Math.random() * 8) + 1,
+          vendor: isRouterIp ? "Gateway / Router principal" : getVendorByMac(mac)
+        });
+      }
 
       // Guarantee "Este PC" is injected back into the results with low latency (1ms) even if absent from ARP table
       if (localPcIp && !devices.some(d => d.ip === localPcIp)) {
@@ -3031,7 +3082,10 @@ app.get("/api/scan-real-arp", (req, res) => {
           });
           res.json({ devices: fallbackDevices });
         });
-    });
+    } catch (scanErr) {
+      console.warn("Scan processing error:", scanErr);
+      res.json({ devices: [] });
+    }
   });
 });
 
@@ -3238,7 +3292,11 @@ async function start() {
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        host: "0.0.0.0",
+        allowedHosts: true,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -3250,8 +3308,30 @@ async function start() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`\n======================================================`);
+    console.log(`🚀 RedMonitor iniciado en el puerto ${PORT}`);
+    console.log(`👉 Acceso Local:  http://localhost:${PORT}`);
+    try {
+      const nets = os.networkInterfaces();
+      for (const name of Object.keys(nets)) {
+        for (const net of nets[name] || []) {
+          if (net.family === "IPv4" && !net.internal) {
+            console.log(`🌐 Acceso en LAN (${name}): http://${net.address}:${PORT}`);
+          }
+        }
+      }
+    } catch {}
+    console.log(`======================================================\n`);
+  });
+
+  server.on("error", (err: any) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`\n❌ ERROR: El puerto ${PORT} ya está siendo utilizado.`);
+      console.error(`👉 Cierra la aplicación que usa el puerto ${PORT} o inicia con otro puerto (ej: PORT=3001 npm run dev)\n`);
+    } else {
+      console.error("❌ Error en el servidor:", err);
+    }
   });
 }
 
