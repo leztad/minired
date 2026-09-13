@@ -13,6 +13,7 @@ import { calculateSubnetDetails } from './utils/subnetMath';
 import { resolveVendorByMac, resolveDeviceNameByMac, fetchVendorFromApi, isGenericVendor } from './utils/macUtils';
 import MapSubred from './components/MapSubred';
 import HistorialHosts from './components/HistorialHosts';
+import SimpleDashboard from './components/SimpleDashboard';
 import DeviceTable from './components/DeviceTable';
 import SensorTable from './components/SensorTable';
 import BandwidthMonitor from './components/BandwidthMonitor';
@@ -511,6 +512,22 @@ export default function App() {
   const handleSetTheme = (newTheme: 'dark' | 'light') => {
     setTheme(newTheme);
     localStorage.setItem('netmonitor_theme', newTheme);
+  };
+
+  // Modo Simple vs Modo Avanzado UI State
+  const [interfaceMode, setInterfaceMode] = useState<'simple' | 'advanced'>(() => {
+    return (localStorage.getItem('netmonitor_interface_mode') as 'simple' | 'advanced') || 'simple';
+  });
+
+  const handleSetInterfaceMode = (mode: 'simple' | 'advanced') => {
+    setInterfaceMode(mode);
+    localStorage.setItem('netmonitor_interface_mode', mode);
+    addAlert(
+      mode === 'simple'
+        ? '✨ Modo Simple activado: Interfaz clara, resumida y fácil de entender.'
+        : '⚙️ Modo Avanzado activado: Todas las herramientas técnicas y consolas L2/L3 habilitadas.',
+      'info'
+    );
   };
 
   const [sidebarSearch, setSidebarSearch] = useState<string>('');
@@ -3081,27 +3098,32 @@ Generado por: RedMonitor Network Diagnostic Tool`;
             <span className="select-none text-[11px] font-bold font-sans">🧪 Modo Demo</span>
           </label>
 
-          {/* CHECKBOX Virtuales */}
-          <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer" title="Habilita la simulación de hosts y contenedores virtuales en la subred activa">
-            <input 
-              type="checkbox" 
-              checked={includeVirtuals}
-              onChange={handleVirtualsChange}
-              className="rounded-xs border-slate-800/50 text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-cyan-500"
-            />
-            <span className="select-none text-[11px] font-medium">Virtuales</span>
-          </label>
+          {/* ADVANCED-ONLY HEADER CONTROLS */}
+          {interfaceMode === 'advanced' && (
+            <>
+              {/* CHECKBOX Virtuales */}
+              <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer" title="Habilita la simulación de hosts y contenedores virtuales en la subred activa">
+                <input 
+                  type="checkbox" 
+                  checked={includeVirtuals}
+                  onChange={handleVirtualsChange}
+                  className="rounded-xs border-slate-800/50 text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-cyan-500"
+                />
+                <span className="select-none text-[11px] font-medium">Virtuales</span>
+              </label>
 
-          {/* CHECKBOX Scan All Configured Subnets */}
-          <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer" title="Escaneo y sonda secuencial completa sobre todas las VLANs y subredes registradas en esta interfaz">
-            <input 
-              type="checkbox" 
-              checked={scanAllSegments}
-              onChange={(e) => setScanAllSegments(e.target.checked)}
-              className="rounded-xs border-slate-800/50 text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-cyan-500"
-            />
-            <span className="select-none text-[11px] font-medium text-cyan-400/90 font-bold">Escaneo Multi-Red</span>
-          </label>
+              {/* CHECKBOX Scan All Configured Subnets */}
+              <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer" title="Escaneo y sonda secuencial completa sobre todas las VLANs y subredes registradas en esta interfaz">
+                <input 
+                  type="checkbox" 
+                  checked={scanAllSegments}
+                  onChange={(e) => setScanAllSegments(e.target.checked)}
+                  className="rounded-xs border-slate-800/50 text-cyan-500 focus:ring-cyan-500 h-3.5 w-3.5 bg-slate-950 cursor-pointer accent-cyan-500"
+                />
+                <span className="select-none text-[11px] font-medium text-cyan-400/90 font-bold">Escaneo Multi-Red</span>
+              </label>
+            </>
+          )}
 
           {/* Segmento IP Input */}
           <div className="flex items-center gap-1.5">
@@ -3123,106 +3145,141 @@ Generado por: RedMonitor Network Diagnostic Tool`;
             </div>
           </div>
 
-          {/* Intervalo Dropdown */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-slate-500 font-medium">Intervalo</span>
-            <select 
-              value={selectedInterval}
-              onChange={(e) => setSelectedInterval(e.target.value)}
-              className="bg-slate-950 text-slate-300 border border-slate-800/50 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-sans"
+          {/* ADVANCED-ONLY SECONDARY CONTROLS & MODALS */}
+          {interfaceMode === 'advanced' && (
+            <>
+              {/* Intervalo Dropdown */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 font-medium">Intervalo</span>
+                <select 
+                  value={selectedInterval}
+                  onChange={(e) => setSelectedInterval(e.target.value)}
+                  className="bg-slate-950 text-slate-300 border border-slate-800/50 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-sans"
+                >
+                  <option value="30 segundos">30 segundos</option>
+                  <option value="1 minuto">1 minuto</option>
+                  <option value="5 minutos">5 minutos</option>
+                  <option value="Manual">Manual</option>
+                </select>
+              </div>
+
+              {/* Velocidad Dropdown */}
+              <div className="flex items-center gap-1.5" title="Ajusta la velocidad del barrido y animación de simulación">
+                <span className="text-slate-500 font-medium">Velocidad</span>
+                <select 
+                  value={scanSpeed}
+                  onChange={(e) => {
+                    const speed = e.target.value as 'ultra' | 'fast' | 'normal';
+                    setScanSpeed(speed);
+                    localStorage.setItem('netmonitor_scan_speed', speed);
+                    addAlert(`Velocidad de escaneo cambiada a: ${speed === 'ultra' ? '🚀 Ultra Rápido (0.5s)' : speed === 'fast' ? '⚡ Rápido (1.2s)' : '⏳ Normal (2.5s)'}`, 'info');
+                  }}
+                  className="bg-slate-950 text-slate-300 border border-slate-800/50 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-sans font-bold cursor-pointer"
+                >
+                  <option value="ultra">🚀 Ultra (0.5s)</option>
+                  <option value="fast">⚡ Rápido (1.2s)</option>
+                  <option value="normal">⏳ Normal (2.5s)</option>
+                </select>
+              </div>
+
+              {/* CONSULTAR FABRICANTES API BUTTON */}
+              <button 
+                disabled={isResolvingVendors || isCheckingInternet || isScanning}
+                onClick={() => checkRealInternetConnection(false)}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border shrink-0 ${
+                  isCheckingInternet
+                    ? 'bg-slate-950 text-cyan-400 border-cyan-500/50 cursor-wait'
+                    : isResolvingVendors 
+                      ? 'bg-slate-950 text-amber-500 border-amber-500/50 cursor-wait' 
+                      : isScanning
+                        ? 'bg-slate-900 text-slate-500 border-slate-800 cursor-not-allowed opacity-50'
+                        : 'bg-slate-950 text-amber-400 border-slate-850 hover:border-amber-500/50 hover:text-amber-300 active:scale-95 cursor-pointer'
+                }`}
+                title="Verifica la salida a internet de tu red local y, si la hay, consulta las direcciones MAC en bases de datos externas para resolver los nombres de fabricantes reales."
+              >
+                <Globe className={`h-3.5 w-3.5 ${
+                  isCheckingInternet 
+                    ? 'text-cyan-400 animate-pulse' 
+                    : isResolvingVendors 
+                      ? 'text-amber-400 animate-spin' 
+                      : 'text-amber-400'
+                }`} style={{ animationDuration: isResolvingVendors ? '2s' : undefined }} />
+                {isCheckingInternet 
+                  ? 'Verificando Internet...' 
+                  : isResolvingVendors 
+                    ? 'Resolviendo Nombres...' 
+                    : 'Verificar Internet y Nombres'}
+              </button>
+
+              {/* ESCANER DE PUERTOS BUTTON */}
+              <button 
+                onClick={() => {
+                  setPortScannerTargetIp(subnetSegment.replace('/24', '.1').replace('/16', '.1'));
+                  setPortScannerDevice(null);
+                  setShowPortScannerModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border bg-slate-950 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/10 hover:border-cyan-400 active:scale-95 cursor-pointer shadow-sm"
+                title="Abre el Escáner de Puertos Abiertos TCP y Auditoría de Servicios de Ciberseguridad"
+              >
+                <ShieldAlert className="h-3.5 w-3.5 text-cyan-400" />
+                <span>Escáner de Puertos TCP</span>
+              </button>
+
+              {/* BOTON DIAGNOSTICO DE CAMARAS CCTV / DVR */}
+              <button 
+                onClick={() => setShowCctvModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border bg-slate-950 text-amber-400 border-amber-500/40 hover:bg-amber-500/10 hover:border-amber-400 active:scale-95 cursor-pointer shadow-sm"
+                title="Abre la guía y herramientas de sonda para cámaras IP y DVRs en subredes aisladas PoE"
+              >
+                <Video className="h-3.5 w-3.5 text-amber-400" />
+                <span>Diagnóstico Cámaras / DVR</span>
+              </button>
+
+              {/* HERRAMIENTAS DE DIAGNOSTICO Y CONTROL REMOTO BUTTON */}
+              <button 
+                onClick={() => {
+                  const localPcDevice = devices.find(d => d.host.toLowerCase().includes('este pc') || d.host.toLowerCase().includes('computador')) || devices[0];
+                  setRemoteToolsDevice(localPcDevice || null);
+                  setShowRemoteToolsModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border bg-slate-950 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/10 hover:border-emerald-400 active:scale-95 cursor-pointer shadow-sm"
+                title="Abre las Herramientas de Diagnóstico Continuo, Wake-on-LAN y Control Remoto SSH/HTTP"
+              >
+                <Radio className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Diagnóstico & Control Remoto</span>
+              </button>
+            </>
+          )}
+
+          {/* MODE SELECTOR TOGGLE (Simple / Avanzado) */}
+          <div className="flex items-center bg-slate-950 p-0.5 rounded-sm border border-slate-800 shadow-inner shrink-0" title="Alterna entre el Modo Simple (resumido y fácil) y el Modo Avanzado (con consolas y herramientas completas)">
+            <button
+              type="button"
+              onClick={() => handleSetInterfaceMode('simple')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xs text-[11px] font-bold transition-all cursor-pointer ${
+                interfaceMode === 'simple'
+                  ? 'bg-cyan-500 text-slate-950 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              id="mode-toggle-simple-btn"
             >
-              <option value="30 segundos">30 segundos</option>
-              <option value="1 minuto">1 minuto</option>
-              <option value="5 minutos">5 minutos</option>
-              <option value="Manual">Manual</option>
-            </select>
-          </div>
-
-          {/* Velocidad Dropdown */}
-          <div className="flex items-center gap-1.5" title="Ajusta la velocidad del barrido y animación de simulación">
-            <span className="text-slate-500 font-medium">Velocidad</span>
-            <select 
-              value={scanSpeed}
-              onChange={(e) => {
-                const speed = e.target.value as 'ultra' | 'fast' | 'normal';
-                setScanSpeed(speed);
-                localStorage.setItem('netmonitor_scan_speed', speed);
-                addAlert(`Velocidad de escaneo cambiada a: ${speed === 'ultra' ? '🚀 Ultra Rápido (0.5s)' : speed === 'fast' ? '⚡ Rápido (1.2s)' : '⏳ Normal (2.5s)'}`, 'info');
-              }}
-              className="bg-slate-950 text-slate-300 border border-slate-800/50 rounded-xs px-2 py-1 text-[11px] focus:outline-hidden focus:border-cyan-500 font-sans font-bold cursor-pointer"
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Modo Simple</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSetInterfaceMode('advanced')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xs text-[11px] font-bold transition-all cursor-pointer ${
+                interfaceMode === 'advanced'
+                  ? 'bg-slate-800 text-cyan-400 border border-cyan-500/40 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              id="mode-toggle-advanced-btn"
             >
-              <option value="ultra">🚀 Ultra (0.5s)</option>
-              <option value="fast">⚡ Rápido (1.2s)</option>
-              <option value="normal">⏳ Normal (2.5s)</option>
-            </select>
+              <Sliders className="h-3.5 w-3.5" />
+              <span>Avanzado</span>
+            </button>
           </div>
-
-          {/* CONSULTAR FABRICANTES API BUTTON */}
-          <button 
-            disabled={isResolvingVendors || isCheckingInternet || isScanning}
-            onClick={() => checkRealInternetConnection(false)}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border shrink-0 ${
-              isCheckingInternet
-                ? 'bg-slate-950 text-cyan-400 border-cyan-500/50 cursor-wait'
-                : isResolvingVendors 
-                  ? 'bg-slate-950 text-amber-500 border-amber-500/50 cursor-wait' 
-                  : isScanning
-                    ? 'bg-slate-900 text-slate-500 border-slate-800 cursor-not-allowed opacity-50'
-                    : 'bg-slate-950 text-amber-400 border-slate-850 hover:border-amber-500/50 hover:text-amber-300 active:scale-95 cursor-pointer'
-            }`}
-            title="Verifica la salida a internet de tu red local y, si la hay, consulta las direcciones MAC en bases de datos externas para resolver los nombres de fabricantes reales."
-          >
-            <Globe className={`h-3.5 w-3.5 ${
-              isCheckingInternet 
-                ? 'text-cyan-400 animate-pulse' 
-                : isResolvingVendors 
-                  ? 'text-amber-400 animate-spin' 
-                  : 'text-amber-400'
-            }`} style={{ animationDuration: isResolvingVendors ? '2s' : undefined }} />
-            {isCheckingInternet 
-              ? 'Verificando Internet...' 
-              : isResolvingVendors 
-                ? 'Resolviendo Nombres...' 
-                : 'Verificar Internet y Nombres'}
-          </button>
-
-          {/* ESCANER DE PUERTOS BUTTON */}
-          <button 
-            onClick={() => {
-              setPortScannerTargetIp(subnetSegment.replace('/24', '.1').replace('/16', '.1'));
-              setPortScannerDevice(null);
-              setShowPortScannerModal(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border bg-slate-950 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/10 hover:border-cyan-400 active:scale-95 cursor-pointer shadow-sm"
-            title="Abre el Escáner de Puertos Abiertos TCP y Auditoría de Servicios de Ciberseguridad"
-          >
-            <ShieldAlert className="h-3.5 w-3.5 text-cyan-400" />
-            <span>Escáner de Puertos TCP</span>
-          </button>
-
-          {/* BOTON DIAGNOSTICO DE CAMARAS CCTV / DVR */}
-          <button 
-            onClick={() => setShowCctvModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border bg-slate-950 text-amber-400 border-amber-500/40 hover:bg-amber-500/10 hover:border-amber-400 active:scale-95 cursor-pointer shadow-sm"
-            title="Abre la guía y herramientas de sonda para cámaras IP y DVRs en subredes aisladas PoE"
-          >
-            <Video className="h-3.5 w-3.5 text-amber-400" />
-            <span>Diagnóstico Cámaras / DVR</span>
-          </button>
-
-          {/* HERRAMIENTAS DE DIAGNOSTICO Y CONTROL REMOTO BUTTON */}
-          <button 
-            onClick={() => {
-              const localPcDevice = devices.find(d => d.host.toLowerCase().includes('este pc') || d.host.toLowerCase().includes('computador')) || devices[0];
-              setRemoteToolsDevice(localPcDevice || null);
-              setShowRemoteToolsModal(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-xs text-xs font-bold transition-all border bg-slate-950 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/10 hover:border-emerald-400 active:scale-95 cursor-pointer shadow-sm"
-            title="Abre las Herramientas de Diagnóstico Continuo, Wake-on-LAN y Control Remoto SSH/HTTP"
-          >
-            <Radio className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Diagnóstico & Control Remoto</span>
-          </button>
 
           {/* ESCANEAR AHORA BUTTON (Highlight Accent cyan) */}
           <button 
@@ -3609,14 +3666,42 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           </li>
         </ul>
 
-        {isScanning && (
-          <div className="flex items-center gap-2">
-            <span className="text-[9px] text-cyan-400 font-mono">BARRIDA IP: {scannedIndex} / 254 IP</span>
-            <div className="w-24 bg-slate-950 rounded-full h-1.5 overflow-hidden">
-              <div className="bg-cyan-400 h-full transition-all duration-150" style={{ width: `${scanProgress}%` }}></div>
+        <div className="flex items-center gap-3">
+          {isScanning && (
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-cyan-400 font-mono">BARRIDA IP: {scannedIndex} / 254 IP</span>
+              <div className="w-24 bg-slate-950 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-cyan-400 h-full transition-all duration-150" style={{ width: `${scanProgress}%` }}></div>
+              </div>
             </div>
+          )}
+
+          <div className="hidden sm:flex items-center gap-1.5 text-[10px]">
+            <span className="text-slate-500">Vista:</span>
+            <button
+              type="button"
+              onClick={() => handleSetInterfaceMode(interfaceMode === 'simple' ? 'advanced' : 'simple')}
+              className={`px-2 py-0.5 rounded-full font-semibold border flex items-center gap-1 cursor-pointer transition-all ${
+                interfaceMode === 'simple'
+                  ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300 hover:bg-cyan-900/60'
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
+              }`}
+              title="Haz clic para alternar entre Modo Simple y Modo Avanzado"
+            >
+              {interfaceMode === 'simple' ? (
+                <>
+                  <Sparkles className="h-2.5 w-2.5 text-cyan-400" />
+                  <span>Simple</span>
+                </>
+              ) : (
+                <>
+                  <Sliders className="h-2.5 w-2.5 text-slate-400" />
+                  <span>Avanzado</span>
+                </>
+              )}
+            </button>
           </div>
-        )}
+        </div>
       </nav>
 
       {/* COLOR COUNTERS (Sleek Geometric Balance cards) */}
@@ -3702,9 +3787,122 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           </div>
 
           {/* NAVIGATION TREE NODES */}
-          <div>
-            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 px-1 font-display">Navegación</h4>
-            <ul className="space-y-1 text-xs">
+          {interfaceMode === 'simple' ? (
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 px-1 font-display">Vistas Principales</h4>
+                <ul className="space-y-1 text-xs">
+                  <li>
+                    <button 
+                      onClick={() => { setActiveView('vista_general'); setIsMobileMenuOpen(false); }}
+                      className={`w-full text-left py-2 px-2.5 rounded-md flex items-center gap-2.5 font-medium transition-colors ${
+                        activeView === 'vista_general' 
+                          ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                          : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                      }`}
+                      id="simple-nav-vista-general"
+                    >
+                      <Activity className="h-4 w-4 text-cyan-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-xs">Vista general</div>
+                        <div className="text-[10px] text-slate-500">Semáforo y estado de salud</div>
+                      </div>
+                    </button>
+                  </li>
+                  <li>
+                    <button 
+                      onClick={() => { setActiveView('dispositivos'); setIsMobileMenuOpen(false); }}
+                      className={`w-full text-left py-2 px-2.5 rounded-md flex items-center gap-2.5 font-medium transition-colors ${
+                        activeView === 'dispositivos' 
+                          ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                          : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                      }`}
+                      id="simple-nav-dispositivos"
+                    >
+                      <Server className="h-4 w-4 text-indigo-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-xs">Dispositivos Conectados</div>
+                        <div className="text-[10px] text-slate-500">{devices.length} equipos detectados</div>
+                      </div>
+                    </button>
+                  </li>
+                  <li>
+                    <button 
+                      onClick={() => { setActiveView('informes_optimizacion'); setIsMobileMenuOpen(false); }}
+                      className={`w-full text-left py-2 px-2.5 rounded-md flex items-center gap-2.5 font-medium transition-colors ${
+                        activeView === 'informes_optimizacion' 
+                          ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                          : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                      }`}
+                      id="simple-nav-informes"
+                    >
+                      <FileText className="h-4 w-4 text-purple-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-xs">Informes & Optimización</div>
+                        <div className="text-[10px] text-slate-500">Salud, problemas y exportar PDF</div>
+                      </div>
+                    </button>
+                  </li>
+                  <li>
+                    <button 
+                      onClick={() => { setActiveView('speed_test'); setIsMobileMenuOpen(false); }}
+                      className={`w-full text-left py-2 px-2.5 rounded-md flex items-center gap-2.5 font-medium transition-colors ${
+                        activeView === 'speed_test' 
+                          ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                          : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                      }`}
+                      id="simple-nav-speedtest"
+                    >
+                      <Gauge className="h-4 w-4 text-emerald-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-xs">Prueba de Velocidad</div>
+                        <div className="text-[10px] text-slate-500">Test de conexión a Internet</div>
+                      </div>
+                    </button>
+                  </li>
+                  <li>
+                    <button 
+                      onClick={() => { setActiveView('wiki_soporte'); setIsMobileMenuOpen(false); }}
+                      className={`w-full text-left py-2 px-2.5 rounded-md flex items-center gap-2.5 font-medium transition-colors ${
+                        activeView === 'wiki_soporte' 
+                          ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                          : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                      }`}
+                      id="simple-nav-wiki"
+                    >
+                      <HelpCircle className="h-4 w-4 text-amber-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-xs">Wiki y Ayuda</div>
+                        <div className="text-[10px] text-slate-500">Preguntas y manual de red</div>
+                      </div>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+
+              {/* SIMPLE MODE HELPER CALLOUT */}
+              <div className="p-3.5 bg-gradient-to-b from-slate-900/80 to-slate-950 border border-slate-800/80 rounded-md text-xs space-y-2">
+                <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-[11px]">
+                  <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Modo Simple Activo</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Interfaz clara y sin tecnicismos. Para acceder a consolas avanzadas (SNMP, Syslog, topología L2 y respaldos):
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleSetInterfaceMode('advanced')}
+                  className="w-full py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-cyan-400 hover:text-cyan-300 font-bold rounded text-[10px] uppercase tracking-wider border border-cyan-500/30 hover:border-cyan-500/50 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Sliders className="h-3 w-3" />
+                  <span>Activar Modo Avanzado</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 px-1 font-display">Navegación</h4>
+              <ul className="space-y-1 text-xs">
               <li>
                 <button 
                   onClick={() => { setActiveView('vista_general'); setIsMobileMenuOpen(false); }}
@@ -4125,6 +4323,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
               </li>
             </ul>
           </div>
+        )}
 
           {/* PERSONALIZACIÓN DE ADAPTADOR FÍSICO */}
           <div className="bg-slate-950 p-3 rounded-md border border-slate-800/50 shadow-inner text-slate-300">
@@ -4346,8 +4545,24 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           
           {/* RENDER CHOSEN COMPONENT PATH */}
           {activeView === 'vista_general' && (
-            <>
-              <div className="space-y-4">
+            interfaceMode === 'simple' ? (
+              <SimpleDashboard
+                devices={processedDevices}
+                counts={counts}
+                isScanning={isScanning}
+                onStartScan={handleStartScan}
+                onNavigateView={(view) => setActiveView(view as any)}
+                locationName={locationName || 'Sede Local'}
+                hasRealInternetAccess={hasRealInternetAccess}
+                statsAvgLatency={statsAvgLatency}
+                statsAvailability={statsAvailability}
+                isNetworkOffline={isNetworkOffline}
+                currentUser={currentUser}
+                onSwitchToAdvanced={() => handleSetInterfaceMode('advanced')}
+              />
+            ) : (
+              <>
+                <div className="space-y-4">
               
               {/* INTERACTIVE SEGMENTS TAB SELECTOR (Supports custom multi-segment view states) */}
               <div className="bg-[#0B1120]/40 border border-slate-800/80 p-3.5 rounded-md flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -5097,8 +5312,9 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                 </div>
               </div>
             )}
-          </>
-        )}
+            </>
+            )
+          )}
 
           {activeView === 'sensores' && (
             <SensorTable sensors={sensors} isScanning={isScanning} />
