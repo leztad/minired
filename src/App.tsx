@@ -45,6 +45,7 @@ const RogueDeviceDetector = React.lazy(() => import('./components/RogueDeviceDet
 const SlaUptimeReport = React.lazy(() => import('./components/SlaUptimeReport'));
 const SwitchConfigBackup = React.lazy(() => import('./components/SwitchConfigBackup'));
 const NetworkDetailedReports = React.lazy(() => import('./components/NetworkDetailedReports'));
+const PacketLossStabilityTest = React.lazy(() => import('./components/PacketLossStabilityTest'));
 
 const LazyLoadingFallback = () => (
   <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3 font-mono">
@@ -503,6 +504,7 @@ export default function App() {
     | 'reportes_sla'
     | 'respaldos_config'
     | 'informes_optimizacion'
+    | 'estabilidad_red'
   >('vista_general');
   const [snmpTargetIp, setSnmpTargetIp] = useState<string>('192.168.1.1');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -793,8 +795,10 @@ export default function App() {
         if (serverData && serverData.online) {
           setHasRealInternetAccess(true);
           setIsCheckingInternet(false);
-          addAlert("🌐 Conexión externa confirmada: El servidor local de monitoreo reporta salida autoritativa a Internet.", "success", "Sistema", "NET-102");
-          handleResolveAllVendorsViaApi(true);
+          if (!silent) {
+            addAlert("🌐 Conexión externa confirmada: El servidor local de monitoreo reporta salida autoritativa a Internet.", "success", "Sistema", "NET-102");
+            handleResolveAllVendorsViaApi(true);
+          }
           return true;
         }
       }
@@ -817,10 +821,10 @@ export default function App() {
       setHasRealInternetAccess(true);
       setIsCheckingInternet(false);
       
-      addAlert("🌐 Conexión externa confirmada: El navegador tiene salida real a Internet.", "success", "Sistema", "NET-102");
-      
-      // Auto resolve names since we have internet
-      handleResolveAllVendorsViaApi(true);
+      if (!silent) {
+        addAlert("🌐 Conexión externa confirmada: El navegador tiene salida real a Internet.", "success", "Sistema", "NET-102");
+        handleResolveAllVendorsViaApi(true);
+      }
       return true;
     } catch (e) {
       console.warn("Primary WAN check failed, trying fallback...", e);
@@ -838,9 +842,10 @@ export default function App() {
         setHasRealInternetAccess(true);
         setIsCheckingInternet(false);
         
-        addAlert("🌐 Conexión externa confirmada (vía fallback): El sistema tiene salida real a Internet.", "success", "Sistema", "NET-102");
-        
-        handleResolveAllVendorsViaApi(true);
+        if (!silent) {
+          addAlert("🌐 Conexión externa confirmada (vía fallback): El sistema tiene salida real a Internet.", "success", "Sistema", "NET-102");
+          handleResolveAllVendorsViaApi(true);
+        }
         return true;
       } catch (errFallback) {
         setHasRealInternetAccess(false);
@@ -2101,68 +2106,27 @@ Generado por: RedMonitor Network Diagnostic Tool`;
               }
             });
 
-            // If the scanning has already finished (or timer cleared), immediately apply these real hosts to state
+            // If the scanning has already finished, enrich host MAC/vendor quietly without layout jumps
             if (!scanTimerRef.current) {
               setDevices(prev => {
-                const nextPool = [...prev];
-                realHosts.forEach(r => {
-                  const rSubnet = extractSubnetFromIp(r.ip);
-                  if (segmentsToScan.includes(rSubnet)) {
-                    const idx = nextPool.findIndex(d => d.ip === r.ip);
-                    const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
-                    const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
-                    const isThisPc = r.ip === currentInterfaceObj.ip;
-                    
-                    let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
-                    const labelLower = nameLabel.toLowerCase();
-                    if (
-                      labelLower.includes('genérico') || 
-                      labelLower.includes('generico') || 
-                      labelLower.includes('dispositivo lan') || 
-                      labelLower.includes('dispositivo de red') || 
-                      labelLower.includes('sonda de red') || 
-                      nameLabel === '—'
-                    ) {
-                      nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
-                    }
-                    let hostNameStr = nameLabel;
-                    if (isThisPc) {
-                      hostNameStr = `Este PC (${nameLabel})`;
-                    } else if (isGateway) {
-                      hostNameStr = `Gateway/Router (${nameLabel})`;
-                    }
-
-                    const deviceObj = {
-                      id: `host-${r.ip.replace(/\./g, '_')}`,
-                      ip: r.ip,
-                      host: hostNameStr,
-                      mac: macToUse,
-                      ping: r.ping || 4,
-                      estado: 'OK' as const,
-                      lastChecked: new Date().toLocaleTimeString(),
-                      sensorPing: true,
-                      sensorHttp: isGateway || isThisPc,
-                      consumoDownload: isThisPc ? 8.5 : Number((Math.random() * 5).toFixed(1)),
-                      consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
-                      totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
-                      interfaz: selectedInterface,
-                      segmento: rSubnet
-                    };
-
-                    if (idx !== -1) {
-                      nextPool[idx] = deviceObj;
-                    } else {
-                      nextPool.push(deviceObj);
+                let hasChanges = false;
+                const nextPool = prev.map(d => {
+                  const r = realHosts.find(host => host.ip === d.ip);
+                  if (r) {
+                    const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : d.mac;
+                    if (d.mac !== macToUse || (r.vendor && !d.vendor)) {
+                      hasChanges = true;
+                      return {
+                        ...d,
+                        mac: macToUse,
+                        vendor: r.vendor || d.vendor,
+                        serialNumber: r.serialNumber || d.serialNumber
+                      };
                     }
                   }
+                  return d;
                 });
-
-                // Safely schedule sensor update outside of render cycle
-                setTimeout(() => {
-                  setSensors(generateSensorsForDevices(nextPool));
-                }, 0);
-
-                return nextPool;
+                return hasChanges ? nextPool : prev;
               });
             }
           }
@@ -2281,7 +2245,10 @@ Generado por: RedMonitor Network Diagnostic Tool`;
         });
       }
 
-      setDevices([...currentDevicesList]);
+      // Throttle intermediate device updates to avoid freezing the UI thread
+      if (stepCount % 3 === 0 || stepCount >= totalSteps) {
+        setDevices([...currentDevicesList]);
+      }
 
       // Advance to the next configured segment if step reached threshold
       if (stepCount % totalStepsPerSegment === 0) {
@@ -2402,11 +2369,6 @@ Generado por: RedMonitor Network Diagnostic Tool`;
         setScanDurationSec(duration);
         setLastScanDone(true);
         setIsScanning(false);
-
-        // Quietly check internet and resolve MAC manufacturers via the external API in the background if online
-        setTimeout(() => {
-          checkRealInternetConnection(true);
-        }, 600);
 
         // Latency aggregates
         const validPings = activeHostsFiltered.filter(d => d.ping !== null).map(d => d.ping as number);
@@ -3862,6 +3824,23 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                   </li>
                   <li>
                     <button 
+                      onClick={() => { setActiveView('estabilidad_red'); setIsMobileMenuOpen(false); }}
+                      className={`w-full text-left py-2 px-2.5 rounded-md flex items-center gap-2.5 font-medium transition-colors ${
+                        activeView === 'estabilidad_red' 
+                          ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                          : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                      }`}
+                      id="simple-nav-estabilidad"
+                    >
+                      <Activity className="h-4 w-4 text-rose-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold text-xs">Pérdida & Estabilidad</div>
+                        <div className="text-[10px] text-slate-500">Jitter, microcortes y drop</div>
+                      </div>
+                    </button>
+                  </li>
+                  <li>
+                    <button 
                       onClick={() => { setActiveView('wiki_soporte'); setIsMobileMenuOpen(false); }}
                       className={`w-full text-left py-2 px-2.5 rounded-md flex items-center gap-2.5 font-medium transition-colors ${
                         activeView === 'wiki_soporte' 
@@ -4061,6 +4040,20 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                   </button>
                 </li>
               )}
+              <li>
+                <button 
+                  onClick={() => { setActiveView('estabilidad_red'); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left py-1.5 px-2.5 rounded-xs flex items-center gap-2 font-medium transition-colors ${
+                    activeView === 'estabilidad_red' 
+                      ? 'bg-[#0f172a] text-cyan-400 font-semibold border-l-2 border-cyan-500' 
+                      : 'hover:bg-slate-900/40 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Activity className="h-3.5 w-3.5 text-rose-400" />
+                  <span>Estabilidad & Jitter</span>
+                  <span className="ml-auto bg-rose-500/10 text-rose-400 font-mono text-[8px] tracking-wider px-1 py-0.2 rounded-xs border border-rose-500/20">PAQUETES</span>
+                </button>
+              </li>
               {enabledFeatures.auditorias_red !== false && (
                 <li>
                   <button 
@@ -5406,6 +5399,16 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           {activeView === 'speed_test' && (
             <React.Suspense fallback={<LazyLoadingFallback />}>
               <SpeedTest onAddLog={addAlert} />
+            </React.Suspense>
+          )}
+
+          {activeView === 'estabilidad_red' && (
+            <React.Suspense fallback={<LazyLoadingFallback />}>
+              <PacketLossStabilityTest 
+                devices={processedDevices}
+                subnetSegment={subnetSegment}
+                onAddLog={addAlert}
+              />
             </React.Suspense>
           )}
 

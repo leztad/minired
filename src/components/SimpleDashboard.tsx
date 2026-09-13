@@ -3,9 +3,11 @@ import {
   CheckCircle2, AlertTriangle, XCircle, RefreshCw, Server, 
   Wifi, Globe, ShieldCheck, ArrowRight, Activity, 
   Sparkles, Sliders, FileText, Gauge, HelpCircle, Laptop,
-  Router, Printer, Smartphone, Radio, ChevronRight, Lock
+  Router, Printer, Smartphone, Radio, ChevronRight, Lock,
+  Download, Check
 } from 'lucide-react';
 import { Device, ScanStats } from '../types';
+import { generateFormalPdfReport } from '../utils/pdfReportExport';
 
 interface SimpleDashboardProps {
   devices: Device[];
@@ -37,6 +39,28 @@ export default function SimpleDashboard({
   onSwitchToAdvanced,
 }: SimpleDashboardProps) {
   const [showQuickTips, setShowQuickTips] = useState(true);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pdfDownloaded, setPdfDownloaded] = useState(false);
+
+  // Trigger Formal PDF Report Generation
+  const handleDownloadFormalPdf = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await generateFormalPdfReport({
+        devices,
+        locationName: locationName || 'Sede Principal LAN',
+        organization: 'Auditoría & Telecomunicaciones',
+        auditorName: currentUser?.fullName || 'Auditor Técnico de Redes'
+      });
+      setPdfDownloaded(true);
+      setTimeout(() => setPdfDownloaded(false), 3000);
+    } catch (err) {
+      console.error("Error exporting PDF from SimpleDashboard:", err);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   // Categorize devices simply
   const activeDevices = devices.filter(d => d.estado === 'OK' || d.estado === 'Advertencia');
@@ -142,9 +166,30 @@ export default function SimpleDashboard({
           {/* Quick Action Button */}
           <div className="flex flex-col sm:flex-row items-stretch md:items-center gap-2.5 shrink-0">
             <button
+              onClick={handleDownloadFormalPdf}
+              disabled={isExportingPdf}
+              className={`px-4 py-2.5 rounded-md font-bold text-xs flex items-center justify-center gap-2 transition-all border cursor-pointer ${
+                pdfDownloaded 
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
+                  : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-slate-700 hover:border-slate-600'
+              }`}
+              id="simple-mode-pdf-btn"
+              title="Genera y descarga un informe ejecutivo formal en formato PDF con membrete y auditoría"
+            >
+              {isExportingPdf ? (
+                <RefreshCw className="h-4 w-4 animate-spin text-purple-400" />
+              ) : pdfDownloaded ? (
+                <Check className="h-4 w-4 text-emerald-400" />
+              ) : (
+                <Download className="h-4 w-4 text-purple-400" />
+              )}
+              <span>{isExportingPdf ? 'Generando PDF...' : pdfDownloaded ? '¡PDF Descargado!' : 'Informe PDF Formal'}</span>
+            </button>
+
+            <button
               onClick={onStartScan}
               disabled={isScanning}
-              className={`px-5 py-3 rounded-md font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer ${
+              className={`px-5 py-2.5 rounded-md font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer ${
                 isScanning
                   ? 'bg-slate-800 text-slate-400 cursor-not-allowed'
                   : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 active:scale-95'
@@ -350,7 +395,7 @@ export default function SimpleDashboard({
       </div>
 
       {/* 4. QUICK ACTIONS & HELPFUL SHORTCUTS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <button
           onClick={() => onNavigateView('dispositivos')}
           className="p-4 rounded-lg bg-[#0B1120]/60 hover:bg-[#0f172a] border border-slate-800 hover:border-slate-700 text-left transition-all group cursor-pointer flex items-center gap-3"
@@ -365,6 +410,19 @@ export default function SimpleDashboard({
         </button>
 
         <button
+          onClick={() => onNavigateView('estabilidad_red')}
+          className="p-4 rounded-lg bg-[#0B1120]/60 hover:bg-[#0f172a] border border-slate-800 hover:border-slate-700 text-left transition-all group cursor-pointer flex items-center gap-3"
+        >
+          <div className="p-2 rounded bg-rose-500/10 text-rose-400 group-hover:scale-105 transition-transform">
+            <Activity className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-white group-hover:text-rose-400 transition-colors">Pérdida & Estabilidad</div>
+            <div className="text-[11px] text-slate-400">Jitter, microcortes y drop</div>
+          </div>
+        </button>
+
+        <button
           onClick={() => onNavigateView('informes_optimizacion')}
           className="p-4 rounded-lg bg-[#0B1120]/60 hover:bg-[#0f172a] border border-slate-800 hover:border-slate-700 text-left transition-all group cursor-pointer flex items-center gap-3"
         >
@@ -373,20 +431,20 @@ export default function SimpleDashboard({
           </div>
           <div>
             <div className="text-xs font-bold text-white group-hover:text-purple-400 transition-colors">Informe & Optimización</div>
-            <div className="text-[11px] text-slate-400">Recomendaciones y exportar a PDF</div>
+            <div className="text-[11px] text-slate-400">Recomendaciones y PDF formal</div>
           </div>
         </button>
 
         <button
-          onClick={() => onNavigateView('wiki_soporte')}
+          onClick={() => onNavigateView('speed_test')}
           className="p-4 rounded-lg bg-[#0B1120]/60 hover:bg-[#0f172a] border border-slate-800 hover:border-slate-700 text-left transition-all group cursor-pointer flex items-center gap-3"
         >
           <div className="p-2 rounded bg-emerald-500/10 text-emerald-400 group-hover:scale-105 transition-transform">
-            <HelpCircle className="h-5 w-5" />
+            <Gauge className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">Guías y Soporte</div>
-            <div className="text-[11px] text-slate-400">Preguntas frecuentes y tutoriales</div>
+            <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">Test de Velocidad</div>
+            <div className="text-[11px] text-slate-400">Medición de Mbps de Internet</div>
           </div>
         </button>
       </div>

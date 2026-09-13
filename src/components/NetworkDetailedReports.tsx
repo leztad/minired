@@ -9,6 +9,7 @@ import {
 import { jsPDF } from 'jspdf';
 import { Device, DetailedNetworkReport, VulnerabilityItem, OptimizationStep, NetworkRecommendation, VulnerabilitySeverity } from '../types';
 import { generateDetailedNetworkReport } from '../utils/reportGenerator';
+import { generateFormalPdfReport } from '../utils/pdfReportExport';
 import { asyncGetItem, asyncSetItem } from '../utils/storageUtils';
 
 interface NetworkDetailedReportsProps {
@@ -333,6 +334,25 @@ ${r.ejemploConfiguracion ? `\`\`\`bash\n${r.ejemploConfiguracion}\n\`\`\`\n` : '
     onAddLog("📄 Compilando Informe Ejecutivo y Técnico en formato PDF oficial...", "info");
     await new Promise(r => setTimeout(r, 60));
 
+    try {
+      await generateFormalPdfReport({
+        report: currentReport,
+        devices,
+        locationName: location || locationName || 'Sede Principal LAN',
+        organization: organization || 'Corporación & Telecomunicaciones',
+        auditorName: auditorName || currentUser?.fullName || 'Auditor Técnico de Red'
+      });
+      onAddLog("📄 Archivo PDF formal generado y descargado correctamente.", "success");
+      return;
+    } catch (err) {
+      console.error(err);
+      onAddLog("❌ Error durante la generación del PDF formal.", "error");
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const unusedOldPdfExport = async () => {
     try {
       const doc = new jsPDF({
         orientation: 'portrait',
