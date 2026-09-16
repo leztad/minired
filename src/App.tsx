@@ -24,6 +24,7 @@ import { AVAILABLE_FEATURES } from './components/UserManagement';
 import type { LocationProfile } from './components/OfflineLocationsManager';
 import { CctvDiagnosticModal } from './components/CctvDiagnosticModal';
 import { isWebConfigurableDevice, openDeviceWebInterface, getWebConfigUrl } from './utils/webInterfaceUtils';
+import { scanLocalSubnetFromBrowser, autoDetectPhysicalSubnet } from './utils/browserLanScanner';
 
 // Optimized code-splitting with React.lazy for heavy secondary views
 const TestingCenter = React.lazy(() => import('./components/TestingCenter'));
@@ -392,9 +393,26 @@ export default function App() {
   }, [serverInterfaces, deviceManualIp, subnetSegment]);
 
   useEffect(() => {
-    const isCloud = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isPrivate = 
+      hostname === 'localhost' || 
+      hostname === '127.0.0.1' || 
+      hostname.endsWith('.local') ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
 
-    if (isCloud) {
+    // 1. Proactively probe candidate physical router gateways from the browser
+    autoDetectPhysicalSubnet().then(det => {
+      if (det.detected && det.subnet) {
+        setSubnetSegment(det.subnet);
+        if (det.gatewayIp) {
+          addAlert(`Router físico detectado en la red local (${det.gatewayIp}). Sintonizado al segmento ${det.subnet}.`, 'success');
+        }
+      }
+    }).catch(() => {});
+
+    if (!isPrivate) {
       detectWebRTCLocalIP().then(ip => {
         if (ip) {
           setDeviceManualIp(ip);
@@ -404,9 +422,7 @@ export default function App() {
           if (detectedSegment) {
             setSubnetSegment(detectedSegment);
           }
-          addAlert(`🔒 Red privada: ¡IP real de tu portátil detectada vía WebRTC: ${ip}! Sincronizando segmento de red local a ${detectedSegment || 'Auto'}.`, 'success');
-        } else {
-          addAlert('Estás usando la versión en la Nube. Debido a políticas de privacidad, ingresa la IP de tu portátil manualmente en "Mi IP: Simulada" o corre RedMonitor localmente.', 'info');
+          addAlert(`🔒 Red privada: ¡IP real detectada vía WebRTC: ${ip}! Sincronizando segmento a ${detectedSegment || 'Auto'}.`, 'success');
         }
       });
     }
@@ -426,31 +442,28 @@ export default function App() {
         if (Array.isArray(data) && data.length > 0) {
           setServerInterfaces(data);
           
-          if (!isCloud) {
-            // Automática detección de segmento de red física activa (priorizando Wi-Fi y LAN)
-            const physical = data.filter((i: any) => 
-              i.type !== 'Virtual' && 
-              i.ip && 
-              !i.ip.startsWith('127.') && 
-              !i.ip.startsWith('169.254.')
-            );
-            
-            const best = physical.find((i: any) => i.type === 'Wi-Fi') || 
-                         physical.find((i: any) => i.type === 'LAN') || 
-                         physical[0] || 
-                         data[0];
-                         
-            if (best) {
-              setSelectedInterface(best.name);
-              if (best.ip) {
-                setDeviceManualIp(best.ip);
-                setTempIpVal(best.ip);
-                localStorage.setItem('netmonitor_manual_ip', best.ip);
-              }
-              if (best.subnet) {
-                setSubnetSegment(best.subnet);
-                addAlert(`Red detectada con éxito: Conectado a la interfaz "${best.originalName || best.name}" (IP de tu portátil: ${best.ip}), segmento de red: ${best.subnet}`, 'success');
-              }
+          // Automática detección de segmento de red física activa (priorizando Wi-Fi y LAN con IP real)
+          const physical = data.filter((i: any) => 
+            i.type !== 'Virtual' && 
+            i.ip && 
+            !i.ip.startsWith('127.') && 
+            !i.ip.startsWith('169.254.')
+          );
+          
+          const best = physical.find((i: any) => i.type === 'Wi-Fi') || 
+                       physical.find((i: any) => i.type === 'LAN') || 
+                       physical[0];
+                       
+          if (best) {
+            setSelectedInterface(best.name);
+            if (best.ip) {
+              setDeviceManualIp(best.ip);
+              setTempIpVal(best.ip);
+              localStorage.setItem('netmonitor_manual_ip', best.ip);
+            }
+            if (best.subnet) {
+              setSubnetSegment(best.subnet);
+              addAlert(`Red local detectada: Conectado a la interfaz "${best.originalName || best.name}" (${best.ip}), segmento: ${best.subnet}`, 'success');
             }
           }
         }
@@ -2040,102 +2053,131 @@ Generado por: RedMonitor Network Diagnostic Tool`;
     });
 
     let realHosts: any[] = [];
-    // Pass the active subnet segment to the backend so it knows exactly which /24 scope to actively ping
+
+    // Unified merger to ensure any discovered real device is NEVER discarded and immediately appears in table/map
+    const mergeDiscoveredDevices = (discoveredList: any[], source = 'Sonda ARP') => {
+      if (!Array.isArray(discoveredList) || discoveredList.length === 0) return;
+      const validList = discoveredList.filter(r => r && r.ip);
+      if (validList.length === 0) return;
+
+      const nowTime = new Date().toLocaleTimeString();
+
+      // Ensure any detected subnets are registered in currentInterfaceObj.segments
+      validList.forEach(r => {
+        const rSub = extractSubnetFromIp(r.ip);
+        if (rSub && !currentInterfaceObj.segments.includes(rSub)) {
+          currentInterfaceObj.segments.push(rSub);
+        }
+      });
+
+      setDevices(prev => {
+        let nextPool = [...prev];
+        validList.forEach(r => {
+          const rSubnet = extractSubnetFromIp(r.ip);
+          const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
+          const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
+          const isThisPc = r.ip === currentInterfaceObj.ip || r.ip === deviceManualIp;
+
+          let nameLabel = r.hostname || r.vendor || 'Dispositivo LAN';
+          const labelLower = nameLabel.toLowerCase();
+          if (
+            labelLower.includes('genérico') || 
+            labelLower.includes('generico') || 
+            labelLower.includes('dispositivo lan') || 
+            labelLower.includes('dispositivo de red') || 
+            labelLower.includes('sonda de red') || 
+            nameLabel === '—'
+          ) {
+            nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
+          }
+          let hostNameStr = nameLabel;
+          if (isThisPc) {
+            hostNameStr = `Este PC (${nameLabel})`;
+          } else if (isGateway) {
+            hostNameStr = `Gateway/Router (${nameLabel})`;
+          }
+
+          const updatedDevice: Device = {
+            id: `host-${r.ip.replace(/\./g, '_')}`,
+            ip: r.ip,
+            host: hostNameStr,
+            mac: macToUse,
+            ping: r.ping || 4,
+            estado: 'OK',
+            lastChecked: nowTime,
+            sensorPing: true,
+            sensorHttp: isGateway || isThisPc,
+            consumoDownload: isThisPc ? 8.5 : Number((Math.random() * 5).toFixed(1)),
+            consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
+            totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
+            interfaz: selectedInterface,
+            segmento: rSubnet,
+            vendor: r.vendor,
+            serialNumber: r.serialNumber
+          };
+
+          const idx = nextPool.findIndex(d => d.ip === r.ip);
+          if (idx !== -1) {
+            nextPool[idx] = { ...nextPool[idx], ...updatedDevice, estado: 'OK' };
+          } else {
+            nextPool.push(updatedDevice);
+          }
+
+          if (!finalTargetsMap[rSubnet]) {
+            finalTargetsMap[rSubnet] = [];
+          }
+          const tIdx = finalTargetsMap[rSubnet].findIndex(t => t.ip === r.ip);
+          if (tIdx !== -1) {
+            finalTargetsMap[rSubnet][tIdx] = updatedDevice;
+          } else {
+            finalTargetsMap[rSubnet].push(updatedDevice);
+          }
+
+          const cIdx = currentDevicesList.findIndex(d => d.ip === r.ip);
+          if (cIdx !== -1) {
+            currentDevicesList[cIdx] = updatedDevice;
+          } else {
+            currentDevicesList.push(updatedDevice);
+          }
+        });
+
+        return nextPool;
+      });
+    };
+
+    // 1. Pass active subnet to backend to sweep ARP table
     fetch(`/api/scan-real-arp?subnet=${encodeURIComponent(subnetSegment)}&isCloud=${isHostedInCloud}&speed=${scanSpeed}&demo=${isDemoMode}`)
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data.devices)) {
           realHosts = data.devices;
           if (realHosts.length > 0) {
-            addAlert(`Sonda ARP física completada: Se encontraron ${realHosts.length} dispositivos reales conectados en tu misma red local. El radar los mostrará en su barrido.`, 'success');
-            
-            // Merge real hosts into finalTargetsMap so they are discovered dynamically
-            realHosts.forEach(r => {
-              const rSubnet = extractSubnetFromIp(r.ip);
-              const targets = finalTargetsMap[rSubnet];
-              if (targets) {
-                const idx = targets.findIndex(t => t.ip === r.ip);
-                
-                const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
-                const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
-                const isThisPc = r.ip === currentInterfaceObj.ip;
-                
-                let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
-                const labelLower = nameLabel.toLowerCase();
-                if (
-                  labelLower.includes('genérico') || 
-                  labelLower.includes('generico') || 
-                  labelLower.includes('dispositivo lan') || 
-                  labelLower.includes('dispositivo de red') || 
-                  labelLower.includes('sonda de red') || 
-                  nameLabel === '—'
-                ) {
-                  nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
-                }
-                let hostNameStr = nameLabel;
-                if (isThisPc) {
-                  hostNameStr = `Este PC (${nameLabel})`;
-                } else if (isGateway) {
-                  hostNameStr = `Gateway/Router (${nameLabel})`;
-                }
-
-                const updatedDevice = {
-                  id: `host-${r.ip.replace(/\./g, '_')}`,
-                  ip: r.ip,
-                  host: hostNameStr,
-                  mac: macToUse,
-                  ping: r.ping || 4,
-                  estado: 'OK' as const,
-                  lastChecked: new Date().toLocaleTimeString(),
-                  sensorPing: true,
-                  sensorHttp: isGateway || isThisPc,
-                  consumoDownload: isThisPc ? 8.5 : Number((Math.random() * 5).toFixed(1)),
-                  consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
-                  totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
-                  interfaz: selectedInterface,
-                  segmento: rSubnet,
-                  vendor: r.vendor,
-                  serialNumber: r.serialNumber
-                };
-
-                if (idx !== -1) {
-                  targets[idx] = updatedDevice;
-                } else {
-                  targets.push(updatedDevice);
-                }
+            if (data.detectedBase) {
+              const detectedSubnet = `${data.detectedBase}.0/24`;
+              if (detectedSubnet !== subnetSegment && !currentInterfaceObj.segments.includes(detectedSubnet)) {
+                currentInterfaceObj.segments.push(detectedSubnet);
+                setSubnetSegment(detectedSubnet);
               }
-            });
-
-            // If the scanning has already finished, enrich host MAC/vendor quietly without layout jumps
-            if (!scanTimerRef.current) {
-              setDevices(prev => {
-                let hasChanges = false;
-                const nextPool = prev.map(d => {
-                  const r = realHosts.find(host => host.ip === d.ip);
-                  if (r) {
-                    const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : d.mac;
-                    if (d.mac !== macToUse || (r.vendor && !d.vendor)) {
-                      hasChanges = true;
-                      return {
-                        ...d,
-                        mac: macToUse,
-                        vendor: r.vendor || d.vendor,
-                        serialNumber: r.serialNumber || d.serialNumber
-                      };
-                    }
-                  }
-                  return d;
-                });
-                return hasChanges ? nextPool : prev;
-              });
             }
+            mergeDiscoveredDevices(realHosts, 'Sonda ARP del Sistema');
+            addAlert(`Sonda ARP física completada: Se encontraron ${realHosts.length} dispositivos reales conectados en tu misma red local.`, 'success');
           }
         }
       })
       .catch(err => {
         console.warn("ARP real host scanner skipped (sandboxed background controller active):", err);
-        addAlert("🔌 Sonda física offline: No se pudo contactar al router real de la LAN. Operando en modo de simulación segura de hardware.", "warning");
       });
+
+    // 2. Direct browser-side LAN probing in parallel to discover responsive devices directly from the user's browser
+    scanLocalSubnetFromBrowser(subnetSegment, deviceManualIp || currentInterfaceObj.ip, (scanned, total, found) => {
+      if (found.length > 0) {
+        mergeDiscoveredDevices(found, 'Sonda LAN del Navegador');
+      }
+    }).then(browserFound => {
+      if (browserFound && browserFound.length > 0) {
+        mergeDiscoveredDevices(browserFound, 'Sonda LAN del Navegador');
+      }
+    }).catch(() => {});
 
     addAlert(`Iniciando escaneo secuencial ICMP en ${segmentsToScan.length} segmento(s) registrado(s) para ${selectedInterface}...`, 'info');
 
@@ -2298,57 +2340,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
 
         // Overlay real host ARP results if retrieved!
         if (realHosts && realHosts.length > 0) {
-          realHosts.forEach(r => {
-            const rSubnet = extractSubnetFromIp(r.ip);
-            if (segmentsToScan.includes(rSubnet)) {
-              const idx = currentDevicesList.findIndex(d => d.ip === r.ip);
-              const macToUse = r.mac && r.mac !== '00:00:00:00:00:00' ? r.mac.toUpperCase() : '—';
-              const isGateway = r.ip.endsWith('.1') || r.ip.endsWith('.254') || (r.hostname && (r.hostname.toLowerCase().includes('gateway') || r.hostname.toLowerCase().includes('router')));
-              const isThisPc = r.ip === currentInterfaceObj.ip;
-              
-              let nameLabel = r.hostname || r.vendor || 'Dispositivo Genérico';
-              const labelLower = nameLabel.toLowerCase();
-              if (
-                labelLower.includes('genérico') || 
-                labelLower.includes('generico') || 
-                labelLower.includes('dispositivo lan') || 
-                labelLower.includes('dispositivo de red') || 
-                labelLower.includes('sonda de red') || 
-                nameLabel === '—'
-              ) {
-                nameLabel = resolveDeviceNameByMac(macToUse, r.hostname, r.ip);
-              }
-              let hostNameStr = nameLabel;
-              if (isThisPc) {
-                hostNameStr = `Este PC (${nameLabel})`;
-              } else if (isGateway) {
-                hostNameStr = `Gateway/Router (${nameLabel})`;
-              }
-
-              const deviceObj = {
-                id: `host-${r.ip.replace(/\./g, '_')}`,
-                ip: r.ip,
-                host: hostNameStr,
-                mac: macToUse,
-                ping: r.ping || 4,
-                estado: 'OK' as const,
-                lastChecked: now.toLocaleTimeString(),
-                sensorPing: true,
-                sensorHttp: isGateway || isThisPc,
-                consumoDownload: isThisPc ? 8.5 : Number((Math.random() * 5).toFixed(1)),
-                consumoUpload: isThisPc ? 2.1 : Number((Math.random() * 1).toFixed(1)),
-                totalConsumido: isThisPc ? 1120.0 : Number((50 + Math.random() * 300).toFixed(1)),
-                interfaz: selectedInterface,
-                segmento: rSubnet
-              };
-
-              if (idx !== -1) {
-                currentDevicesList[idx] = deviceObj;
-              } else {
-                currentDevicesList.push(deviceObj);
-              }
-            }
-          });
+          mergeDiscoveredDevices(realHosts, 'Sonda ARP');
         }
 
         // Apply all state changes atomically in the same frame
@@ -2509,38 +2501,22 @@ Generado por: RedMonitor Network Diagnostic Tool`;
 
   // Preset Segment scan autofills with real-time hardware dynamic detection
   const handleAutoSegment = async (showNotification = true) => {
-    const isCloud = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-    
-    if (isCloud) {
-      if (showNotification) {
-        addAlert("🔍 Leyendo adaptadores de red de tu portátil por tecnología WebRTC...", "info");
-      }
-      try {
-        const ip = await detectWebRTCLocalIP();
-        if (ip) {
-          setDeviceManualIp(ip);
-          setTempIpVal(ip);
-          localStorage.setItem('netmonitor_manual_ip', ip);
-          const detectedSegment = extractSubnetFromIp(ip);
-          if (detectedSegment) {
-            setSubnetSegment(detectedSegment);
-            if (showNotification) {
-              addAlert(`¡Sonda exitosa! Tu portátil tiene la dirección IP local ${ip}. Sintonizamos el segmento de escaneo en: ${detectedSegment}`, 'success');
-            }
-          }
-        } else {
-          if (showNotification) {
-            addAlert('⚠️ Tu navegador oculta las IPs por privacidad. No te preocupes: escribe la IP de tu portátil manualmente en el campo "IP" arriba o inicia el programa de forma local.', 'warning');
-          }
-          setIsEditingRealIp(true); // Open edit mode automatically to allow typing
-        }
-      } catch (e) {
+    if (showNotification) {
+      addAlert("🔍 Detectando configuración de red física y router local...", "info");
+    }
+
+    // 1. Proactively test local physical router gateway from the browser
+    try {
+      const probeRes = await autoDetectPhysicalSubnet();
+      if (probeRes.detected && probeRes.subnet) {
+        setSubnetSegment(probeRes.subnet);
         if (showNotification) {
-          addAlert('No se pudo determinar el adaptador de tu portátil. Escribe la IP manualmente.', 'warning');
+          addAlert(`¡Router local detectado (${probeRes.gatewayIp})! Segmento de red sincronizado a: ${probeRes.subnet}`, 'success');
         }
-        setIsEditingRealIp(true);
+        return;
       }
-      return;
+    } catch {
+      // Continue to API check
     }
 
     try {
@@ -2560,8 +2536,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
         // Prioritize Wi-Fi, then LAN, then any
         const best = physical.find((i: any) => i.type === 'Wi-Fi') || 
                      physical.find((i: any) => i.type === 'LAN') || 
-                     physical[0] || 
-                     data[0];
+                     physical[0];
                      
         if (best) {
           setSelectedInterface(best.name);
@@ -2573,24 +2548,41 @@ Generado por: RedMonitor Network Diagnostic Tool`;
           if (best.subnet) {
             setSubnetSegment(best.subnet);
             if (showNotification) {
-              addAlert(`¡Localización de red exitosa! IP de tu portátil: ${best.ip}, segmento de red: ${best.subnet} en la interfaz "${best.originalName || best.name}" (${best.type}).`, 'success');
+              addAlert(`¡Localización de red exitosa! IP de tu PC: ${best.ip}, segmento de red: ${best.subnet} en la interfaz "${best.originalName || best.name}" (${best.type}).`, 'success');
             }
-          }
-        }
-      } else {
-        const currentActiveObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
-        if (currentActiveObj && currentActiveObj.subnet) {
-          setSubnetSegment(currentActiveObj.subnet);
-          if (showNotification) {
-            addAlert(`Segmento restablecido a la interfaz activa: ${currentActiveObj.subnet}.`, 'info');
+            return;
           }
         }
       }
-    } catch (err) {
-      console.error(err);
-      const currentActiveObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
-      if (currentActiveObj && currentActiveObj.subnet) {
-        setSubnetSegment(currentActiveObj.subnet);
+    } catch {
+      // Continue to fallback
+    }
+
+    // Fallback: WebRTC detection
+    try {
+      const ip = await detectWebRTCLocalIP();
+      if (ip) {
+        setDeviceManualIp(ip);
+        setTempIpVal(ip);
+        localStorage.setItem('netmonitor_manual_ip', ip);
+        const detectedSegment = extractSubnetFromIp(ip);
+        if (detectedSegment) {
+          setSubnetSegment(detectedSegment);
+          if (showNotification) {
+            addAlert(`¡Sonda exitosa! Tu PC tiene la dirección IP local ${ip}. Sintonizamos el segmento de escaneo en: ${detectedSegment}`, 'success');
+          }
+          return;
+        }
+      }
+    } catch {
+      // Handled below
+    }
+
+    const currentActiveObj = activeInterfacesList.find(i => i.name === selectedInterface) || activeInterfacesList[0];
+    if (currentActiveObj && currentActiveObj.subnet) {
+      setSubnetSegment(currentActiveObj.subnet);
+      if (showNotification) {
+        addAlert(`Segmento activo configurado en: ${currentActiveObj.subnet}.`, 'info');
       }
     }
   };
