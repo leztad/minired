@@ -5448,6 +5448,8 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                 onAddAlert={addAlert}
                 activeProfileId={loadedProfileId}
                 onUnloadProfile={handleUnloadOfflineProfile}
+                onNavigateToAudit={() => setActiveView('auditorias_red')}
+                onNavigateToDetailedReport={() => setActiveView('informes_optimizacion')}
               />
             </React.Suspense>
           )}

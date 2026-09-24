@@ -128,3 +128,19 @@ export interface DetailedNetworkReport {
   };
   conclusiones: string[];
 }
+
+export interface LocationProfile {
+  id: string;
+  name: string;
+  subnet: string;
+  interfaceName: string;
+  gateway: string;
+  dns: string;
+  description: string;
+  department?: string;
+  createdAt: string;
+  devices: Device[];
+  contactName?: string;
+  contactPhone?: string;
+  securityNotes?: string;
+}

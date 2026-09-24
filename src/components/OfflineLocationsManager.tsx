@@ -3,26 +3,24 @@ import {
   MapPin, Database, Save, Download, Upload, Trash2, Eye, Play, Check, Plus, 
   Search, Share2, FileText, Layers, Activity, Cpu, Server, Globe, Clock, 
   ArrowLeft, AlertTriangle, CheckCircle2, Info, FileCode, CheckSquare, PlusCircle, HelpCircle, Key, ChevronRight,
-  Filter
+  Filter, FileSpreadsheet, FileJson, Copy, RefreshCw, X, ShieldCheck, Printer, CheckCheck
 } from 'lucide-react';
-import { Device } from '../types';
+import { Device, LocationProfile } from '../types';
 import { resolveDeviceNameByMac, resolveVendorByMac } from '../utils/macUtils';
+import { 
+  calculateLocationTotals, 
+  exportOfflineLocationPDF, 
+  exportOfflineLocationExcel, 
+  exportOfflineLocationCSV, 
+  exportOfflineLocationJSON, 
+  generateOfflineLocationMarkdown, 
+  exportConsolidatedOfflinePDF, 
+  exportConsolidatedOfflineExcel, 
+  exportConsolidatedOfflineCSV 
+} from '../utils/offlineReportGenerator';
+import { generateFormalPdfReport } from '../utils/pdfReportExport';
 
-export interface LocationProfile {
-  id: string;
-  name: string;
-  subnet: string;
-  interfaceName: string;
-  gateway: string;
-  dns: string;
-  description: string;
-  department?: string;
-  createdAt: string;
-  devices: Device[];
-  contactName?: string;
-  contactPhone?: string;
-  securityNotes?: string;
-}
+export type { LocationProfile };
 
 interface OfflineLocationsManagerProps {
   currentLocationName: string;
@@ -34,6 +32,8 @@ interface OfflineLocationsManagerProps {
   onAddAlert: (msg: string, type: 'success' | 'warning' | 'error' | 'info') => void;
   activeProfileId: string | null;
   onUnloadProfile: () => void;
+  onNavigateToAudit?: () => void;
+  onNavigateToDetailedReport?: () => void;
 }
 
 export default function OfflineLocationsManager({
@@ -45,7 +45,9 @@ export default function OfflineLocationsManager({
   onAddLog,
   onAddAlert,
   activeProfileId,
-  onUnloadProfile
+  onUnloadProfile,
+  onNavigateToAudit,
+  onNavigateToDetailedReport
 }: OfflineLocationsManagerProps) {
   // Local state for profiles list loaded from localStorage
   const [profiles, setProfiles] = useState<LocationProfile[]>(() => {
@@ -266,6 +268,153 @@ export default function OfflineLocationsManager({
     };
     fileReader.readAsText(files[0]);
     e.target.value = ''; // Reset file input
+  };
+
+  // --- OFFLINE AUDIT REPORT STATES & HANDLERS ---
+  const [profileForReportModal, setProfileForReportModal] = useState<LocationProfile | null>(null);
+  const [isExporting, setIsExporting] = useState<'pdf' | 'excel' | 'formal-pdf' | 'csv' | 'json' | 'consolidated-pdf' | 'consolidated-excel' | null>(null);
+  const [copiedMarkdown, setCopiedMarkdown] = useState(false);
+  const [showConsolidatedModal, setShowConsolidatedModal] = useState(false);
+
+  const handleExportPDF = async (profile: LocationProfile) => {
+    setIsExporting('pdf');
+    onAddLog(`📄 Compilando reporte de auditoría en PDF para sede "${profile.name}"...`, 'info');
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      await exportOfflineLocationPDF(profile);
+      onAddAlert(`🏆 Reporte PDF de la sede "${profile.name}" descargado exitosamente.`, 'success');
+      onAddLog(`📄 Reporte PDF oficial generado: Sede ${profile.name}`, 'success');
+    } catch (e: any) {
+      console.error(e);
+      onAddAlert(`Error al generar reporte PDF: ${e.message || e}`, 'error');
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleExportExcel = async (profile: LocationProfile) => {
+    setIsExporting('excel');
+    onAddLog(`📊 Generando informe de auditoría en Excel para sede "${profile.name}"...`, 'info');
+    await new Promise(r => setTimeout(r, 50));
+    try {
+      await exportOfflineLocationExcel(profile);
+      onAddAlert(`📊 Hoja Excel de la sede "${profile.name}" generada con diseño enriquecido idéntico al PDF.`, 'success');
+      onAddLog(`📊 Reporte Excel descargado: Sede ${profile.name}`, 'success');
+    } catch (e: any) {
+      console.error(e);
+      onAddAlert(`Error al generar reporte Excel: ${e.message || e}`, 'error');
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleExportFormalPDF = async (profile: LocationProfile) => {
+    setIsExporting('formal-pdf');
+    onAddLog(`📑 Generando informe técnico integral formal (ciberseguridad y optimización) para sede "${profile.name}"...`, 'info');
+    await new Promise(r => setTimeout(r, 60));
+    try {
+      await generateFormalPdfReport({
+        devices: profile.devices,
+        title: `Informe Técnico y Auditoría Integral de Red — Sede ${profile.name}`,
+        organization: profile.department || 'Infraestructura de Red y Telecomunicaciones',
+        locationName: profile.name,
+        auditorName: profile.contactName || 'Auditor Técnico RedMonitor'
+      });
+      onAddAlert(`📑 Reporte Formal Completo en PDF generado exitosamente.`, 'success');
+      onAddLog(`📑 Informe Técnico Integral descargado: Sede ${profile.name}`, 'success');
+    } catch (e: any) {
+      console.error(e);
+      onAddAlert(`Error al generar informe formal: ${e.message || e}`, 'error');
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleExportCSV = (profile: LocationProfile) => {
+    try {
+      exportOfflineLocationCSV(profile);
+      onAddAlert(`📋 Tabla CSV de la sede "${profile.name}" exportada correctamente.`, 'success');
+      onAddLog(`📋 Tabla CSV exportada: Sede ${profile.name}`, 'info');
+    } catch (e: any) {
+      onAddAlert(`Error al exportar CSV: ${e.message || e}`, 'error');
+    }
+  };
+
+  const handleExportJSON = (profile: LocationProfile) => {
+    try {
+      exportOfflineLocationJSON(profile);
+      onAddAlert(`📦 Reporte técnico JSON de la sede "${profile.name}" descargado.`, 'success');
+      onAddLog(`📦 Archivo JSON de auditoría descargado: Sede ${profile.name}`, 'info');
+    } catch (e: any) {
+      onAddAlert(`Error al exportar JSON: ${e.message || e}`, 'error');
+    }
+  };
+
+  const handleCopyMarkdown = (profile: LocationProfile) => {
+    try {
+      const md = generateOfflineLocationMarkdown(profile);
+      navigator.clipboard.writeText(md);
+      setCopiedMarkdown(true);
+      setTimeout(() => setCopiedMarkdown(false), 2500);
+      onAddAlert(`📋 Reporte estructurado en Markdown copiado al portapapeles.`, 'info');
+      onAddLog(`📋 Reporte de auditoría Markdown copiado: Sede ${profile.name}`, 'info');
+    } catch (e: any) {
+      onAddAlert(`Error al copiar Markdown: ${e.message || e}`, 'error');
+    }
+  };
+
+  const handleExportConsolidatedPDF = async () => {
+    if (profiles.length === 0) {
+      onAddAlert('No hay sedes registradas para generar el informe consolidado.', 'warning');
+      return;
+    }
+    setIsExporting('consolidated-pdf');
+    onAddLog(`📄 Compilando reporte consolidado multi-sede en PDF (${profiles.length} sedes)...`, 'info');
+    await new Promise(r => setTimeout(r, 60));
+    try {
+      await exportConsolidatedOfflinePDF(profiles);
+      onAddAlert(`🏆 Reporte consolidado de todas las sedes (${profiles.length}) generado en PDF.`, 'success');
+      onAddLog(`🏆 Reporte consolidado multi-sede en PDF descargado`, 'success');
+    } catch (e: any) {
+      console.error(e);
+      onAddAlert(`Error al generar reporte consolidado: ${e.message || e}`, 'error');
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleExportConsolidatedExcel = async () => {
+    if (profiles.length === 0) {
+      onAddAlert('No hay sedes registradas para exportar Excel.', 'warning');
+      return;
+    }
+    setIsExporting('consolidated-excel');
+    onAddLog(`📊 Generando hoja Excel consolidada multi-sede (${profiles.length} sedes)...`, 'info');
+    await new Promise(r => setTimeout(r, 60));
+    try {
+      await exportConsolidatedOfflineExcel(profiles);
+      onAddAlert(`📊 Archivo Excel consolidado generado correctamente.`, 'success');
+      onAddLog(`📊 Reporte Excel multi-sede descargado`, 'success');
+    } catch (e: any) {
+      console.error(e);
+      onAddAlert(`Error al exportar Excel consolidado: ${e.message || e}`, 'error');
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleExportConsolidatedCSV = () => {
+    if (profiles.length === 0) {
+      onAddAlert('No hay sedes registradas para exportar CSV.', 'warning');
+      return;
+    }
+    try {
+      exportConsolidatedOfflineCSV(profiles);
+      onAddAlert(`📋 Archivo CSV consolidado de todas las sedes descargado.`, 'success');
+      onAddLog(`📋 CSV consolidado multi-sede descargado`, 'info');
+    } catch (e: any) {
+      onAddAlert(`Error al exportar CSV consolidado: ${e.message || e}`, 'error');
+    }
   };
 
   // Filter devices based on state and ping filters
@@ -564,6 +713,15 @@ export default function OfflineLocationsManager({
         </div>
         
         <div className="flex flex-wrap gap-2 shrink-0">
+          <button
+            onClick={() => setShowConsolidatedModal(true)}
+            className="bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-200 text-xs font-bold py-2 px-3.5 rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Generar informe consolidado de todas las sedes offline registradas"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-cyan-400" />
+            <span>Informe Consolidado Multi-Sede</span>
+          </button>
+
           <label className="bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded flex items-center gap-2 cursor-pointer transition-colors">
             <Upload className="h-3.5 w-3.5" />
             <span>Importar JSON</span>
@@ -830,6 +988,16 @@ export default function OfflineLocationsManager({
                       
                       <div className="flex gap-1">
                         <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProfileForReportModal(p);
+                          }}
+                          title="Generar informes de auditoría (PDF, Excel, CSV, Markdown)"
+                          className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-slate-900 rounded transition-colors"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                        </button>
+                        <button
                           onClick={(e) => handleExportProfile(p, e)}
                           title="Exportar archivo de configuración JSON"
                           className="p-1 text-slate-550 hover:text-cyan-400 hover:bg-slate-900 rounded transition-colors"
@@ -883,35 +1051,50 @@ export default function OfflineLocationsManager({
                     </div>
 
                     {/* Action Footer */}
-                    <div className="p-3 bg-slate-950/50 border-t border-slate-850/60 flex items-center justify-between text-[11px]">
+                    <div className="p-3 bg-slate-950/50 border-t border-slate-850/60 flex items-center justify-between text-[11px] gap-2">
                       <span className="text-cyan-400 font-bold flex items-center gap-1 hover:underline">
                         Ver Mapa & Auditoría <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
                       </span>
                       
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (isActive) {
-                            onUnloadProfile();
-                          } else {
-                            onLoadProfile(p);
-                          }
-                        }}
-                        className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors ${
-                          isActive 
-                            ? 'bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-slate-950 border border-rose-500/20'
-                            : 'bg-cyan-500 hover:bg-cyan-600 text-slate-950'
-                        }`}
-                      >
-                        {isActive ? (
-                          <> Desconectar </>
-                        ) : (
-                          <>
-                            <Play className="h-3 w-3 fill-current" /> Cargar offline
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProfileForReportModal(p);
+                          }}
+                          className="px-2 py-1.5 rounded text-[10px] font-bold border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Abrir generador de informes de auditoría de esta sede"
+                        >
+                          <FileText className="h-3 w-3 text-cyan-400" />
+                          <span>Informes</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isActive) {
+                              onUnloadProfile();
+                            } else {
+                              onLoadProfile(p);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors ${
+                            isActive 
+                              ? 'bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-slate-950 border border-rose-500/20'
+                              : 'bg-cyan-500 hover:bg-cyan-600 text-slate-950'
+                          }`}
+                        >
+                          {isActive ? (
+                            <> Desconectar </>
+                          ) : (
+                            <>
+                              <Play className="h-3 w-3 fill-current" /> Cargar
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -939,12 +1122,43 @@ export default function OfflineLocationsManager({
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                onClick={() => setProfileForReportModal(selectedProfile)}
+                className="bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-bold py-2 px-3.5 rounded flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                title="Abrir generador de informes de auditoría para esta sede"
+              >
+                <FileText className="h-4 w-4 text-cyan-400" />
+                <span>Generar Informe de Auditoría</span>
+              </button>
+
+              <button
+                onClick={() => handleExportPDF(selectedProfile)}
+                disabled={isExporting !== null}
+                className="bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-200 text-xs font-bold py-2 px-3 rounded flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                title="Exportar informe oficial en PDF"
+              >
+                {isExporting === 'pdf' ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-rose-400" /> : <Download className="h-3.5 w-3.5 text-rose-400" />}
+                <span>PDF</span>
+              </button>
+
+              <button
+                onClick={() => handleExportExcel(selectedProfile)}
+                disabled={isExporting !== null}
+                className="bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/60 text-emerald-200 text-xs font-bold py-2 px-3 rounded flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                title="Exportar informe formateado en Excel"
+              >
+                {isExporting === 'excel' ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-400" /> : <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />}
+                <span>Excel</span>
+              </button>
+
               <button
                 onClick={(e) => handleExportProfile(selectedProfile, e)}
-                className="bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 text-xs font-bold py-2 px-4 rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 text-xs font-bold py-2 px-3 rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Exportar configuración en formato JSON"
               >
-                <Share2 className="h-3.5 w-3.5" /> Exportar JSON
+                <Share2 className="h-3.5 w-3.5" />
+                <span>JSON</span>
               </button>
 
               <button
@@ -955,14 +1169,14 @@ export default function OfflineLocationsManager({
                     onLoadProfile(selectedProfile);
                   }
                 }}
-                className={`text-xs font-bold py-2 px-5 rounded flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`text-xs font-bold py-2 px-4 rounded flex items-center gap-1.5 transition-colors cursor-pointer ${
                   activeProfileId === selectedProfile.id
                     ? 'bg-rose-500 hover:bg-rose-600 text-white'
                     : 'bg-cyan-500 hover:bg-cyan-600 text-[#020617]'
                 }`}
               >
                 <Play className="h-3.5 w-3.5 fill-current" />
-                {activeProfileId === selectedProfile.id ? 'Cerrar Modo Offline' : 'Cargar en Monitor Activo'}
+                {activeProfileId === selectedProfile.id ? 'Cerrar Modo Offline' : 'Cargar en Monitor'}
               </button>
             </div>
           </div>
@@ -1397,12 +1611,52 @@ export default function OfflineLocationsManager({
           {/* SECTION 3: TABULAR DEVICE INVENTARY (Bottom Full Width) */}
           <div className="bg-[#0a0f1d] border border-slate-850 p-4 rounded-lg space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-850 pb-2">
-              <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                <Database className="h-4 w-4 text-cyan-400" /> Inventario de Dispositivos Registrados
-              </h4>
-              <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-900">
-                Mostrando <strong className="text-cyan-400">{filteredDevices.length}</strong> de <strong className="text-slate-300">{selectedProfile.devices.length}</strong> hosts
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <Database className="h-4 w-4 text-cyan-400" /> Inventario de Dispositivos Registrados
+                </h4>
+                <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-900">
+                  Mostrando <strong className="text-cyan-400">{filteredDevices.length}</strong> de <strong className="text-slate-300">{selectedProfile.devices.length}</strong> hosts
+                </span>
+              </div>
+
+              {/* Quick Report Actions for this Table */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => handleCopyMarkdown(selectedProfile)}
+                  className="text-[10px] text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-850 px-2.5 py-1 rounded border border-slate-800 flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Copiar tabla en formato Markdown"
+                >
+                  <Copy className="h-3 w-3 text-cyan-400" />
+                  <span>{copiedMarkdown ? '¡Copiado!' : 'Markdown'}</span>
+                </button>
+                <button
+                  onClick={() => handleExportCSV(selectedProfile)}
+                  className="text-[10px] text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-850 px-2.5 py-1 rounded border border-slate-800 flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Exportar tabla a formato CSV"
+                >
+                  <FileSpreadsheet className="h-3 w-3 text-emerald-400" />
+                  <span>CSV</span>
+                </button>
+                <button
+                  onClick={() => handleExportExcel(selectedProfile)}
+                  disabled={isExporting !== null}
+                  className="text-[10px] text-emerald-300 hover:text-emerald-200 bg-emerald-950/40 hover:bg-emerald-950/70 px-2.5 py-1 rounded border border-emerald-800/50 flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-50"
+                  title="Exportar a Excel (.xls) con formato enriquecido"
+                >
+                  <FileSpreadsheet className="h-3 w-3 text-emerald-400" />
+                  <span>Excel</span>
+                </button>
+                <button
+                  onClick={() => handleExportPDF(selectedProfile)}
+                  disabled={isExporting !== null}
+                  className="text-[10px] text-rose-300 hover:text-rose-200 bg-rose-950/40 hover:bg-rose-950/70 px-2.5 py-1 rounded border border-rose-850/50 flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-50"
+                  title="Exportar a PDF oficial"
+                >
+                  <Download className="h-3 w-3 text-rose-400" />
+                  <span>PDF</span>
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto text-xs">
@@ -1467,6 +1721,332 @@ export default function OfflineLocationsManager({
         </div>
       )}
 
+      {/* ================= MODAL 1: REPORTE DE AUDITORÍA DE SEDE OFFLINE ================= */}
+      {profileForReportModal && (() => {
+        const reportTotals = calculateLocationTotals(profileForReportModal);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="bg-[#0b1120] border border-cyan-500/30 w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+              {/* Modal Header */}
+              <div className="bg-[#0e1629] p-4 border-b border-slate-800 flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded font-mono font-bold tracking-wider uppercase">
+                      Auditoría Sede Offline
+                    </span>
+                    <span className="text-slate-400 text-xs font-mono">{profileForReportModal.subnet}</span>
+                  </div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-cyan-400" />
+                    Informe de Auditoría: {profileForReportModal.name}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Genere y descargue informes oficiales con el mismo formato, diseño y rigurosidad técnica de las auditorías de red en vivo.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setProfileForReportModal(null)}
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-5 space-y-4 overflow-y-auto">
+                {/* Metric Summary Card */}
+                <div className="bg-[#080d19] border border-cyan-500/20 rounded-lg p-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                  <div className="p-2 bg-slate-900/60 rounded border border-slate-800/60">
+                    <span className="text-[9px] font-mono text-slate-400 uppercase block font-bold">Total Hosts</span>
+                    <span className="text-base font-bold text-white">{reportTotals.totalHosts}</span>
+                    <span className="text-[9px] text-emerald-400 block font-mono">({reportTotals.okHosts} OK)</span>
+                  </div>
+                  <div className="p-2 bg-slate-900/60 rounded border border-slate-800/60">
+                    <span className="text-[9px] font-mono text-slate-400 uppercase block font-bold">Latencia Media</span>
+                    <span className="text-base font-bold text-cyan-400">{reportTotals.avgLatency} ms</span>
+                    <span className="text-[9px] text-slate-500 block font-mono">LAN Local</span>
+                  </div>
+                  <div className="p-2 bg-slate-900/60 rounded border border-slate-800/60">
+                    <span className="text-[9px] font-mono text-slate-400 uppercase block font-bold">Seguridad LAN</span>
+                    <span className="text-base font-bold text-emerald-400">{reportTotals.safetyScore}%</span>
+                    <span className="text-[9px] text-slate-400 block truncate font-mono">{reportTotals.rank.split('(')[0]}</span>
+                  </div>
+                  <div className="p-2 bg-slate-900/60 rounded border border-slate-800/60">
+                    <span className="text-[9px] font-mono text-slate-400 uppercase block font-bold">Gateway / DNS</span>
+                    <span className="text-[11px] font-mono font-bold text-slate-300 block truncate" title={profileForReportModal.gateway}>
+                      {profileForReportModal.gateway || '192.168.1.1'}
+                    </span>
+                    <span className="text-[9px] text-slate-500 block font-mono">{profileForReportModal.dns || '1.1.1.1'}</span>
+                  </div>
+                </div>
+
+                {/* Export Format Cards */}
+                <div className="space-y-2.5">
+                  <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                    Seleccione el formato del informe:
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* PDF Ejecutivo */}
+                    <div className="p-3.5 bg-slate-900/50 hover:bg-slate-900/80 border border-slate-800 hover:border-rose-500/40 rounded-lg flex flex-col justify-between transition-all">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
+                          <Download className="h-4 w-4" /> Informe Ejecutivo PDF
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-snug">
+                          Documento formal imprimible con encabezados corporativos, métricas, score de seguridad y tabla completa de interfaces y direcciones MAC.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleExportPDF(profileForReportModal)}
+                        disabled={isExporting !== null}
+                        className="mt-3 w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-1.5 px-3 rounded text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {isExporting === 'pdf' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                        <span>{isExporting === 'pdf' ? 'Generando...' : 'Descargar Informe PDF'}</span>
+                      </button>
+                    </div>
+
+                    {/* Excel Formateado */}
+                    <div className="p-3.5 bg-slate-900/50 hover:bg-slate-900/80 border border-slate-800 hover:border-emerald-500/40 rounded-lg flex flex-col justify-between transition-all">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+                          <FileSpreadsheet className="h-4 w-4" /> Informe Formateado Excel (.xls)
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-snug">
+                          Hoja de cálculo estructurada con la tipografía, banners y paleta de colores idéntica al PDF, ideal para análisis y tabulación en Microsoft Excel.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleExportExcel(profileForReportModal)}
+                        disabled={isExporting !== null}
+                        className="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1.5 px-3 rounded text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {isExporting === 'excel' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+                        <span>{isExporting === 'excel' ? 'Generando...' : 'Descargar Informe Excel'}</span>
+                      </button>
+                    </div>
+
+                    {/* PDF Formal Exhaustivo */}
+                    <div className="p-3.5 bg-slate-900/50 hover:bg-slate-900/80 border border-slate-800 hover:border-cyan-500/40 rounded-lg flex flex-col justify-between transition-all">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-cyan-400 font-bold text-xs">
+                          <ShieldCheck className="h-4 w-4" /> Auditoría Formal ISO & Plan de Optimización
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-snug">
+                          Reporte técnico multi-página exhaustivo con categorización de vulnerabilidades CVSS, segmentación L2/L3 y plan de mitigación paso a paso.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleExportFormalPDF(profileForReportModal)}
+                        disabled={isExporting !== null}
+                        className="mt-3 w-full bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold py-1.5 px-3 rounded text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {isExporting === 'formal-pdf' ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                        <span>{isExporting === 'formal-pdf' ? 'Generando...' : 'Generar PDF Formal Completo'}</span>
+                      </button>
+                    </div>
+
+                    {/* Copiar Markdown */}
+                    <div className="p-3.5 bg-slate-900/50 hover:bg-slate-900/80 border border-slate-800 hover:border-slate-600 rounded-lg flex flex-col justify-between transition-all">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-slate-200 font-bold text-xs">
+                          <Copy className="h-4 w-4 text-cyan-400" /> Copiar al Portapapeles (Markdown)
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-snug">
+                          Texto formateado con tablas y viñetas listo para enviar por correo electrónico, agregar a wikis internas, tickets de Jira o documentación técnica.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleCopyMarkdown(profileForReportModal)}
+                        className="mt-3 w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-1.5 px-3 rounded text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        {copiedMarkdown ? <CheckCheck className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-cyan-400" />}
+                        <span>{copiedMarkdown ? '¡Markdown Copiado!' : 'Copiar Texto Markdown'}</span>
+                      </button>
+                    </div>
+
+                    {/* CSV */}
+                    <div className="p-3.5 bg-slate-900/50 hover:bg-slate-900/80 border border-slate-800 hover:border-slate-600 rounded-lg flex flex-col justify-between transition-all">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-slate-300 font-bold text-xs">
+                          <FileSpreadsheet className="h-4 w-4 text-emerald-400" /> Tabla CSV (Datos Puros)
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-snug">
+                          Archivo delimitado por comas con todos los hosts, interfaces y latencias para importar en bases de datos relacionales o Power BI.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleExportCSV(profileForReportModal)}
+                        className="mt-3 w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-1.5 px-3 rounded text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Exportar Archivo CSV</span>
+                      </button>
+                    </div>
+
+                    {/* JSON */}
+                    <div className="p-3.5 bg-slate-900/50 hover:bg-slate-900/80 border border-slate-800 hover:border-slate-600 rounded-lg flex flex-col justify-between transition-all">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-slate-300 font-bold text-xs">
+                          <FileJson className="h-4 w-4 text-cyan-400" /> Metadatos Técnicos JSON
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-snug">
+                          Esquema estructurado compatible con auditorías de red y respaldos automatizados de RedMonitor.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleExportJSON(profileForReportModal)}
+                        className="mt-3 w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-1.5 px-3 rounded text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Exportar Archivo JSON</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Action: Open in Live Audit */}
+                {onNavigateToAudit && (
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+                    <span className="text-slate-400">
+                      ¿Desea explorar los {reportTotals.totalHosts} hosts en el radar de escaneo y auditoría en tiempo real?
+                    </span>
+                    <button
+                      onClick={() => {
+                        onLoadProfile(profileForReportModal);
+                        setProfileForReportModal(null);
+                        onNavigateToAudit();
+                      }}
+                      className="text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                    >
+                      <Play className="h-3 w-3 fill-current" />
+                      <span>Cargar y Abrir en Auditoría de Red</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="bg-[#0e1629] p-3.5 border-t border-slate-800 flex items-center justify-between text-xs">
+                <span className="text-[11px] text-slate-500 font-mono">
+                  RedMonitor Sonda Offline • Diseñado por Asneider Zapata
+                </span>
+                <button
+                  onClick={() => setProfileForReportModal(null)}
+                  className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-1.5 px-4 rounded text-xs cursor-pointer transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ================= MODAL 2: INFORME CONSOLIDADO MULTI-SEDE ================= */}
+      {showConsolidatedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-[#0b1120] border border-cyan-500/30 w-full max-w-xl rounded-xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="bg-[#0e1629] p-4 border-b border-slate-800 flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <span className="text-[9px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded font-mono font-bold tracking-wider uppercase">
+                  Consolidado Corporativo
+                </span>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <FileSpreadsheet className="h-5 w-5 text-cyan-400" />
+                  Informe Consolidado Multi-Sede ({profiles.length} Sedes)
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Agrupe y consolide el inventario de todas las sedes y sucursales físicas en un único informe ejecutivo y de telecomunicaciones.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowConsolidatedModal(false)}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Global Statistics */}
+              <div className="bg-[#080d19] border border-cyan-500/20 rounded-lg p-3.5 grid grid-cols-3 gap-3 text-center">
+                <div className="p-2 bg-slate-900/60 rounded border border-slate-800/60">
+                  <span className="text-[9px] font-mono text-slate-400 uppercase block font-bold">Total Sedes</span>
+                  <span className="text-base font-bold text-cyan-400">{profiles.length}</span>
+                </div>
+                <div className="p-2 bg-slate-900/60 rounded border border-slate-800/60">
+                  <span className="text-[9px] font-mono text-slate-400 uppercase block font-bold">Dispositivos Globales</span>
+                  <span className="text-base font-bold text-white">
+                    {profiles.reduce((acc, p) => acc + (p.devices?.length || 0), 0)}
+                  </span>
+                </div>
+                <div className="p-2 bg-slate-900/60 rounded border border-slate-800/60">
+                  <span className="text-[9px] font-mono text-slate-400 uppercase block font-bold">Estado General</span>
+                  <span className="text-base font-bold text-emerald-400">Sincronizado</span>
+                </div>
+              </div>
+
+              {/* Format Options */}
+              <div className="space-y-3">
+                <button
+                  onClick={handleExportConsolidatedPDF}
+                  disabled={isExporting !== null}
+                  className="w-full bg-rose-900/40 hover:bg-rose-800/70 border border-rose-850 text-rose-200 hover:text-white p-3.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-3 text-left">
+                    <Download className="h-5 w-5 text-rose-400 shrink-0" />
+                    <div>
+                      <div className="font-bold text-xs text-white">Descargar PDF Consolidado Multi-Sede</div>
+                      <div className="text-[11px] text-slate-400">Reporte imprimible con tabla comparativa de sedes y desglose de hosts.</div>
+                    </div>
+                  </div>
+                  {isExporting === 'consolidated-pdf' ? <RefreshCw className="h-4 w-4 animate-spin text-rose-400" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+                </button>
+
+                <button
+                  onClick={handleExportConsolidatedExcel}
+                  disabled={isExporting !== null}
+                  className="w-full bg-emerald-900/40 hover:bg-emerald-800/70 border border-emerald-850 text-emerald-200 hover:text-white p-3.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-3 text-left">
+                    <FileSpreadsheet className="h-5 w-5 text-emerald-400 shrink-0" />
+                    <div>
+                      <div className="font-bold text-xs text-white">Descargar Excel Consolidado Multi-Sede (.xls)</div>
+                      <div className="text-[11px] text-slate-400">Hoja de cálculo formateada con resumen de sucursales e inventario general.</div>
+                    </div>
+                  </div>
+                  {isExporting === 'consolidated-excel' ? <RefreshCw className="h-4 w-4 animate-spin text-emerald-400" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+                </button>
+
+                <button
+                  onClick={handleExportConsolidatedCSV}
+                  className="w-full bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 hover:text-white p-3.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 text-left">
+                    <FileSpreadsheet className="h-5 w-5 text-slate-400 shrink-0" />
+                    <div>
+                      <div className="font-bold text-xs text-white">Exportar CSV Consolidado Global</div>
+                      <div className="text-[11px] text-slate-400">Listado plano delimitado por comas con todas las sedes y hosts.</div>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-slate-500" />
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-[#0e1629] p-3.5 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setShowConsolidatedModal(false)}
+                className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-1.5 px-4 rounded text-xs cursor-pointer transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
