@@ -4,7 +4,7 @@ import {
   ShieldCheck, ShieldAlert, Download, FileJson, FileSpreadsheet, Copy, 
   Search, Sliders, Server, Wifi, Activity, Terminal, CheckCircle2, AlertTriangle, Info, Network,
   ChevronDown, ChevronUp, Cpu, HelpCircle, Check, Trash2, Eye, Save, Play, RefreshCw, Sparkles,
-  Target, History, FileText, Database, ArrowRight, CheckCircle, CheckSquare, X, MapPin
+  Target, History, FileText, Database, ArrowRight, CheckCircle, CheckSquare, X, MapPin, Pencil
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { resolveVendorByMac } from '../utils/macUtils';
@@ -15,6 +15,8 @@ interface NetworkAuditProps {
   onAddLog: (msg: string, type: 'info' | 'success' | 'warning' | 'error') => void;
   locationName: string;
   onNavigateToDetailedReport?: () => void;
+  onUpdateLocationName?: (newLocation: string) => void;
+  onUpdateDeviceLocation?: (deviceId: string, newLocation: string) => void;
 }
 
 interface HistoricalAudit {
@@ -36,10 +38,44 @@ interface PortScanResult {
   risk: 'critical' | 'warning' | 'secure' | 'info';
 }
 
-export default function NetworkAudit({ devices, onAddLog, locationName, onNavigateToDetailedReport }: NetworkAuditProps) {
+export default function NetworkAudit({
+  devices,
+  onAddLog,
+  locationName,
+  onNavigateToDetailedReport,
+  onUpdateLocationName,
+  onUpdateDeviceLocation
+}: NetworkAuditProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSegment, setFilterSegment] = useState('all');
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
+
+  // --- LOCATION EDITING AFTER SCAN STATE ---
+  const [isEditingAuditLocation, setIsEditingAuditLocation] = useState(false);
+  const [tempAuditLocation, setTempAuditLocation] = useState('');
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [editingDeviceLocationText, setEditingDeviceLocationText] = useState('');
+
+  const AUDIT_LOCATION_PRESETS = [
+    'Sede Principal - Datacenter',
+    'Piso 1 - Recepción',
+    'Piso 2 - Sala de Servidores',
+    'Piso 3 - Gerencia General',
+    'Oficina de TI / Soporte',
+    'Gabinete Principal de Telecomunicaciones',
+    'Sucursal Norte',
+    'Sucursal Centro',
+    'Planta Industrial / Bodega'
+  ];
+
+  const handleSaveAuditLocationName = (newLocStr: string) => {
+    const trimmed = newLocStr.trim();
+    if (onUpdateLocationName) {
+      onUpdateLocationName(trimmed || 'Sede Local');
+    }
+    setIsEditingAuditLocation(false);
+    onAddLog(`📍 Ubicación de la auditoría actualizada a: "${trimmed || 'Sede Local'}"`, 'success');
+  };
 
   // --- HISTORICAL AUDITS STATE ---
   const [auditHistory, setAuditHistory] = useState<HistoricalAudit[]>([]);
@@ -1132,7 +1168,7 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
         doc.text(device.mac, 35, y + 4.8);
 
         const rawLoc = device.ubicacion || locationName || 'Sede Local';
-        let deviceLoc = rawLoc.length > 20 ? rawLoc.substring(0, 18) + '...' : rawLoc;
+        let deviceLoc = rawLoc.length > 26 ? rawLoc.substring(0, 24) + '...' : rawLoc;
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(7.5);
         doc.setTextColor(217, 119, 6);
@@ -1242,20 +1278,108 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
   return (
     <div className="space-y-4" id="network-audit-view">
       
-      {/* LOCALIZACIÓN DE LA AUDITORÍA */}
-      <div className="bg-[#0f172a]/90 border border-cyan-500/10 p-3.5 rounded-md flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-cyan-950 flex items-center justify-center border border-cyan-500/20">
-            <span className="text-base text-cyan-400">📍</span>
+      {/* LOCALIZACIÓN DE LA AUDITORÍA - INTERACTIVA POST-ESCANEO */}
+      {!isEditingAuditLocation ? (
+        <div className="bg-gradient-to-r from-amber-500/10 via-[#0f172a] to-[#0f172a] border border-amber-500/30 p-3.5 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-full bg-amber-950/60 flex items-center justify-center border border-amber-500/30 shrink-0">
+              <MapPin className="h-4 w-4 text-amber-400" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] text-amber-400/90 font-mono uppercase font-bold tracking-wider flex items-center gap-2">
+                <span>Ubicación Física de la Auditoría</span>
+                <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-sans font-normal">
+                  Se reflejará en el Informe PDF y Excel
+                </span>
+              </div>
+              <div className="text-sm font-bold text-slate-100 mt-0.5 break-words">
+                {locationName ? locationName : "No registrada / Sede Local"}
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="text-[10px] text-slate-500 font-mono uppercase font-bold tracking-wider">Ubicación Registrada de Pruebas</div>
-            <div className="text-xs font-bold text-slate-200">
-              {locationName ? locationName : "No registrada / Local"}
+
+          <button
+            onClick={() => {
+              setTempAuditLocation(locationName || '');
+              setIsEditingAuditLocation(true);
+            }}
+            className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-xs hover:border-amber-400 ml-auto shrink-0"
+            title="Escribir o modificar la ubicación física donde se realizó el escaneo"
+          >
+            <Pencil className="h-3.5 w-3.5 text-amber-400" />
+            <span>Escribir / Cambiar Ubicación</span>
+          </button>
+        </div>
+      ) : (
+        <div className="bg-[#0b1120] border-2 border-amber-500/50 p-4 rounded-lg space-y-3 text-xs shadow-xl animate-in fade-in duration-150">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
+            <div className="flex items-center gap-2 text-amber-300 font-bold">
+              <MapPin className="h-4 w-4 text-amber-400" />
+              <span>Escribir Ubicación Física para esta Auditoría de Red</span>
+            </div>
+            <button
+              onClick={() => setIsEditingAuditLocation(false)}
+              className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] text-slate-300 font-bold block">
+              Nombre de la Ubicación / Sede / Sitio Físico:
+            </label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <input
+                type="text"
+                autoFocus
+                value={tempAuditLocation}
+                onChange={(e) => setTempAuditLocation(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveAuditLocationName(tempAuditLocation);
+                  if (e.key === 'Escape') setIsEditingAuditLocation(false);
+                }}
+                placeholder="Ej: Sede Principal - Datacenter, Piso 2 - Sala de Servidores, Sucursal Norte..."
+                className="flex-1 bg-slate-950 text-amber-200 border border-amber-500/60 rounded px-3 py-2 text-xs focus:outline-hidden focus:border-amber-400 font-sans shadow-inner placeholder-slate-600"
+              />
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => handleSaveAuditLocationName(tempAuditLocation)}
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-md flex-1 sm:flex-initial"
+                >
+                  <Check className="h-4 w-4 stroke-[3]" />
+                  <span>Guardar Ubicación</span>
+                </button>
+                <button
+                  onClick={() => setIsEditingAuditLocation(false)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-3 py-2 rounded text-xs transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Sugerencias rápidas */}
+          <div className="space-y-1 pt-1">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+              Sugerencias rápidas (clic para rellenar):
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {AUDIT_LOCATION_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setTempAuditLocation(preset)}
+                  className="text-[11px] bg-slate-900 hover:bg-amber-950/40 hover:text-amber-300 border border-slate-800 hover:border-amber-500/40 text-slate-300 px-2.5 py-1 rounded transition-colors cursor-pointer"
+                >
+                  {preset}
+                </button>
+              ))}
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* HEADER CARD */}
       <div className="bg-[#0B1120]/40 border border-slate-800/80 p-4 rounded-md flex flex-col md:flex-row md:items-start justify-between gap-4">
@@ -1863,10 +1987,66 @@ Fecha: \`${new Date().toLocaleString('es-ES')}\`
 
                       {/* PHYSICAL LOCATION */}
                       <td className="p-3 font-sans">
-                        <span className="bg-slate-950/80 px-2 py-0.5 rounded text-[11px] text-amber-300 border border-slate-800 flex items-center gap-1.5 w-fit font-mono">
-                          <MapPin className="h-3 w-3 text-amber-400 shrink-0" />
-                          <span className="truncate max-w-[130px]" title={d.ubicacion || locationName || 'Sede Local'}>{d.ubicacion || locationName || 'Sede Local'}</span>
-                        </span>
+                        {editingDeviceId === d.id ? (
+                          <div className="flex items-center gap-1.5 min-w-[220px]">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={editingDeviceLocationText}
+                              onChange={(e) => setEditingDeviceLocationText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  if (onUpdateDeviceLocation) {
+                                    onUpdateDeviceLocation(d.id, editingDeviceLocationText);
+                                  } else {
+                                    d.ubicacion = editingDeviceLocationText.trim();
+                                  }
+                                  setEditingDeviceId(null);
+                                } else if (e.key === 'Escape') {
+                                  setEditingDeviceId(null);
+                                }
+                              }}
+                              placeholder="Ej: Rack 1, Piso 2, Oficina..."
+                              className="bg-slate-950 text-amber-200 border border-amber-500/60 rounded px-2 py-1 text-xs font-mono focus:outline-hidden focus:border-amber-400 w-full shadow-inner"
+                            />
+                            <button
+                              onClick={() => {
+                                if (onUpdateDeviceLocation) {
+                                  onUpdateDeviceLocation(d.id, editingDeviceLocationText);
+                                } else {
+                                  d.ubicacion = editingDeviceLocationText.trim();
+                                }
+                                setEditingDeviceId(null);
+                              }}
+                              className="p-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded cursor-pointer transition-colors shrink-0"
+                              title="Guardar ubicación"
+                            >
+                              <Check className="h-3.5 w-3.5 stroke-[3]" />
+                            </button>
+                            <button
+                              onClick={() => setEditingDeviceId(null)}
+                              className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded cursor-pointer transition-colors shrink-0"
+                              title="Cancelar"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span
+                            onClick={() => {
+                              setEditingDeviceId(d.id);
+                              setEditingDeviceLocationText(d.ubicacion || locationName || '');
+                            }}
+                            className="bg-slate-950/80 hover:bg-slate-900 px-2.5 py-1 rounded text-[11px] text-amber-300 border border-slate-800 hover:border-amber-500/50 flex items-center gap-1.5 w-fit font-mono cursor-pointer transition-all group"
+                            title="Haga clic para editar la ubicación física de esta IP para el informe"
+                          >
+                            <MapPin className="h-3 w-3 text-amber-400 shrink-0" />
+                            <span className="truncate max-w-[200px]" title={d.ubicacion || locationName || 'Sede Local'}>
+                              {d.ubicacion || locationName || 'Sede Local'}
+                            </span>
+                            <Pencil className="h-2.5 w-2.5 text-amber-400/60 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
+                          </span>
+                        )}
                       </td>
 
 

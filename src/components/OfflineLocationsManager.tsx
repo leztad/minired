@@ -298,6 +298,29 @@ export default function OfflineLocationsManager({
   const [selectedDevicesForBulk, setSelectedDevicesForBulk] = useState<string[]>([]);
   const [bulkLocationInput, setBulkLocationInput] = useState<string>('');
   const [modalSearchTerm, setModalSearchTerm] = useState<string>('');
+  const [isEditingProfileName, setIsEditingProfileName] = useState(false);
+  const [tempProfileName, setTempProfileName] = useState('');
+
+  const handleSaveProfileRename = () => {
+    if (!selectedProfile) return;
+    const trimmed = tempProfileName.trim();
+    if (!trimmed) {
+      onAddAlert('El nombre de la sede no puede estar vacío.', 'warning');
+      return;
+    }
+    const updatedProfile: LocationProfile = {
+      ...selectedProfile,
+      name: trimmed
+    };
+    const newProfiles = profiles.map(p => p.id === updatedProfile.id ? updatedProfile : p);
+    saveToStorage(newProfiles);
+    if (profileForReportModal && profileForReportModal.id === updatedProfile.id) {
+      setProfileForReportModal(updatedProfile);
+    }
+    setIsEditingProfileName(false);
+    onAddAlert(`Nombre de sede actualizado a: "${trimmed}"`, 'success');
+    onAddLog(`✏️ Sede renombrada exitosamente: "${trimmed}"`, 'success');
+  };
   const [newDeviceForm, setNewDeviceForm] = useState<{
     ip: string;
     host: string;
@@ -1282,9 +1305,56 @@ export default function OfflineLocationsManager({
                 </span>
                 <span className="text-slate-500 text-xs font-mono">Último Guardado: {selectedProfile.createdAt}</span>
               </div>
-              <h3 className="text-md font-bold text-slate-100 flex items-center gap-2">
-                <Globe className="h-5 w-5 text-cyan-400" /> {selectedProfile.name}
-              </h3>
+              {isEditingProfileName ? (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pt-1 max-w-xl">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={tempProfileName}
+                    onChange={(e) => setTempProfileName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveProfileRename();
+                      if (e.key === 'Escape') setIsEditingProfileName(false);
+                    }}
+                    placeholder="Nuevo nombre de la sede..."
+                    className="bg-slate-950 text-cyan-300 border border-cyan-500/60 rounded px-3 py-1 text-sm font-bold focus:outline-hidden focus:border-cyan-400 w-full shadow-inner"
+                  />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={handleSaveProfileRename}
+                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1 rounded text-xs transition-colors cursor-pointer flex items-center gap-1"
+                      title="Guardar nuevo nombre de la sede"
+                    >
+                      <Check className="h-3.5 w-3.5 stroke-[3]" />
+                      <span>Guardar</span>
+                    </button>
+                    <button
+                      onClick={() => setIsEditingProfileName(false)}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-2.5 py-1 rounded text-xs transition-colors cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-slate-100 flex items-center gap-2 break-words">
+                    <Globe className="h-5 w-5 text-cyan-400 shrink-0" />
+                    <span>{selectedProfile.name}</span>
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setTempProfileName(selectedProfile.name);
+                      setIsEditingProfileName(true);
+                    }}
+                    className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-slate-900 rounded transition-colors cursor-pointer flex items-center gap-1 text-[11px] font-sans"
+                    title="Editar nombre de esta sede"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-cyan-400" />
+                    <span className="text-slate-400 hover:text-cyan-300 text-[10px]">Cambiar Nombre</span>
+                  </button>
+                </div>
+              )}
               <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
                 {selectedProfile.description || 'Este perfil no cuenta con descripción detallada escrita por auditores de red.'}
               </p>
@@ -1903,21 +1973,21 @@ export default function OfflineLocationsManager({
                                     if (e.key === 'Escape') setEditingDeviceId(null);
                                   }}
                                   placeholder="Ej: Rack 1, Piso 2, Recepción..."
-                                  className="bg-slate-950 text-amber-300 border border-amber-500/60 rounded px-2 py-0.5 text-[11px] font-mono focus:outline-hidden focus:border-amber-400 w-44 shadow-inner"
+                                  className="bg-slate-950 text-amber-300 border border-amber-500/60 rounded px-2.5 py-1 text-[11px] font-mono focus:outline-hidden focus:border-amber-400 min-w-[200px] max-w-[340px] w-full shadow-inner"
                                 />
                                 <button
                                   onClick={() => handleSaveDeviceLocation(d.id, editingLocationText)}
-                                  className="p-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded cursor-pointer transition-colors"
+                                  className="p-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded cursor-pointer transition-colors shrink-0"
                                   title="Guardar ubicación"
                                 >
-                                  <Check className="h-3 w-3 stroke-[3]" />
+                                  <Check className="h-3.5 w-3.5 stroke-[3]" />
                                 </button>
                                 <button
                                   onClick={() => setEditingDeviceId(null)}
-                                  className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded cursor-pointer transition-colors"
+                                  className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded cursor-pointer transition-colors shrink-0"
                                   title="Cancelar"
                                 >
-                                  <X className="h-3 w-3" />
+                                  <X className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                             ) : (
@@ -1926,10 +1996,10 @@ export default function OfflineLocationsManager({
                                   <span 
                                     onClick={() => handleStartEditingLocation(d)}
                                     className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded font-medium flex items-center gap-1 cursor-pointer hover:border-amber-400 transition-colors"
-                                    title="Haga clic para editar la ubicación física de esta IP"
+                                    title={`Ubicación física: ${d.ubicacion} (Haga clic para editar)`}
                                   >
                                     <MapPin className="h-3 w-3 text-amber-400 shrink-0" />
-                                    <span className="truncate max-w-[130px]">{d.ubicacion}</span>
+                                    <span className="truncate max-w-[220px]">{d.ubicacion}</span>
                                     <Pencil className="h-2.5 w-2.5 text-amber-400/60 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
                                   </span>
                                 ) : (

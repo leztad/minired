@@ -4,7 +4,7 @@ import {
   Settings, Layers, Wifi, AlertTriangle, XCircle, CheckCircle2, ChevronRight, 
   ChevronDown, Monitor, Copy, Plus, Play, Pause, ExternalLink, HelpCircle, 
   ShieldCheck, Info, Radio, Terminal, Brain, Sparkles, ShieldAlert, Lock, Unlock, Cable,
-  Gauge, Menu, X, Shield, MapPin, Tv, Video, Bell, Calendar, Award, FileText, GitCompare, BellOff
+  Gauge, Menu, X, Shield, MapPin, Tv, Video, Bell, Calendar, Award, FileText, GitCompare, BellOff, Check
 } from 'lucide-react';
 
 import { Device, Sensor, ScanStats, HistoryPoint } from './types';
@@ -288,6 +288,7 @@ export default function App() {
     return localStorage.getItem('netmonitor_current_location') || '';
   });
   const [showLocationModal, setShowLocationModal] = useState<boolean>(true);
+  const [showPostScanLocationModal, setShowPostScanLocationModal] = useState<boolean>(false);
   const [loadedProfileId, setLoadedProfileId] = useState<string | null>(null);
 
   // Probe UI States
@@ -2361,6 +2362,7 @@ Generado por: RedMonitor Network Diagnostic Tool`;
         setScanDurationSec(duration);
         setLastScanDone(true);
         setIsScanning(false);
+        setShowPostScanLocationModal(true);
 
         // Latency aggregates
         const validPings = activeHostsFiltered.filter(d => d.ping !== null).map(d => d.ping as number);
@@ -5411,6 +5413,13 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                 onAddLog={addAlert} 
                 locationName={locationName}
                 onNavigateToDetailedReport={() => setActiveView('informes_optimizacion')}
+                onUpdateLocationName={(newName) => {
+                  const final = newName.trim();
+                  setLocationName(final);
+                  localStorage.setItem('netmonitor_current_location', final);
+                  addAlert(`📍 Ubicación de pruebas asignada a: "${final}"`, 'success');
+                }}
+                onUpdateDeviceLocation={handleUpdateDeviceLocation}
               />
             </React.Suspense>
           )}
@@ -5837,7 +5846,6 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                                   value={tempLocation}
                                   onChange={(e) => setTempLocation(e.target.value)}
                                   className="bg-slate-900 border border-slate-800 text-slate-200 text-[11px] px-2 py-1 rounded focus:outline-hidden focus:border-cyan-500 w-full font-sans animate-none"
-                                  maxLength={48}
                                   autoFocus
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
@@ -6374,48 +6382,89 @@ Generado por: RedMonitor Network Diagnostic Tool`;
         />
       )}
 
-      {/* MODAL DE SOLICITUD DE UBICACIÓN INICIAL */}
+      {/* MODAL DE SOLICITUD DE UBICACIÓN INICIAL / MANUAL */}
       {showLocationModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
-          <div className="bg-[#0b0f19] border border-cyan-500/30 rounded-lg max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 font-sans">
-            
-            <div className="flex items-center gap-2.5 mb-4 text-cyan-400">
-              <div className="w-8 h-8 rounded-full bg-cyan-950 flex items-center justify-center border border-cyan-500/30">
-                <span className="text-base text-cyan-400">📍</span>
+          <div className="bg-[#0b0f19] border border-cyan-500/30 rounded-lg max-w-lg w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 font-sans">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5 text-cyan-400">
+                <div className="w-8 h-8 rounded-full bg-cyan-950 flex items-center justify-center border border-cyan-500/30">
+                  <span className="text-base text-cyan-400">📍</span>
+                </div>
+                <h3 className="text-md font-bold text-white leading-tight">
+                  Ubicación de la Auditoría
+                  <span className="block text-[10px] text-slate-500 font-mono font-normal uppercase tracking-wider mt-0.5">Trazabilidad de Verificación Portátil</span>
+                </h3>
               </div>
-              <h3 className="text-md font-bold text-white leading-tight">
-                Ubicación de la Auditoría
-                <span className="block text-[10px] text-slate-500 font-mono font-normal uppercase tracking-wider mt-0.5">Trazabilidad de Verificación Portátil</span>
-              </h3>
+              <button
+                onClick={() => setShowLocationModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-
             <p className="text-xs text-slate-300 mb-4 leading-relaxed">
-              Dado que este equipo se traslada a múltiples sedes u oficinas, por favor indique el nombre del sitio donde se encuentra para que aparezca en los reportes de red generados en formato PDF.
+              Dado que este equipo se traslada a múltiples sedes u oficinas, por favor indique el nombre del sitio donde se encuentra para que aparezca en los reportes de red generados en formato PDF y Excel.
             </p>
-
             <div className="space-y-4">
               <div>
                 <label className="block text-[10px] text-slate-400 font-mono font-bold uppercase tracking-wider mb-1.5">
-                  Nombre de la Ubicación / Sitio
+                  Nombre de la Ubicación / Sede / Sitio Físico
                 </label>
                 <input
                   type="text"
                   value={locationName}
                   onChange={(e) => setLocationName(e.target.value)}
-                  placeholder="Ej. Sede Norte - Servidores, Sucursal Centro, Bodega 4"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-sm px-3 py-2 text-xs text-slate-100 placeholder-slate-600 focus:outline-hidden"
+                  placeholder="Ej. Sede Norte - Servidores Piso 2, Sucursal Centro, Bodega 4"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-sm px-3 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-hidden"
                   autoFocus
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && locationName.trim()) {
-                      localStorage.setItem('netmonitor_current_location', locationName.trim());
+                    if (e.key === 'Enter') {
+                      const finalLocation = locationName.trim() || 'Sede Local';
+                      setLocationName(finalLocation);
+                      localStorage.setItem('netmonitor_current_location', finalLocation);
                       setShowLocationModal(false);
-                      addAlert(`📍 Ubicación de pruebas asignada a: "${locationName.trim()}"`, 'success');
+                      addAlert(`📍 Ubicación de pruebas asignada a: "${finalLocation}"`, 'success');
                     }
                   }}
                 />
               </div>
 
-              <div className="flex gap-2 justify-end pt-2">
+              {/* Sugerencias Rápidas */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                  Ubicaciones habituales:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Sede Principal - Datacenter',
+                    'Piso 1 - Recepción',
+                    'Piso 2 - Sistemas TI',
+                    'Piso 3 - Gerencia',
+                    'Sucursal Norte',
+                    'Sucursal Centro',
+                    'Bodega / Planta Industrial'
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setLocationName(preset)}
+                      className="text-[11px] bg-slate-900 hover:bg-cyan-950/40 hover:text-cyan-300 border border-slate-800 hover:border-cyan-500/40 text-slate-300 px-2.5 py-1 rounded transition-colors cursor-pointer"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2 border-t border-slate-850">
+                <button
+                  type="button"
+                  onClick={() => setShowLocationModal(false)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs py-2 px-4 rounded-xs cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -6429,6 +6478,128 @@ Generado por: RedMonitor Network Diagnostic Tool`;
                 >
                   Confirmar Ubicación
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL INMEDIATO POST-ESCANEO: ESCRIBIR / ASIGNAR UBICACIÓN */}
+      {showPostScanLocationModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-[#0b1120] border-2 border-amber-500/50 rounded-xl max-w-lg w-full p-6 shadow-2xl relative font-sans">
+            <div className="flex items-start justify-between gap-3 mb-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center border border-amber-500/40 shrink-0">
+                  <MapPin className="h-5 w-5 text-amber-400" />
+                </div>
+                <div>
+                  <div className="text-[10px] text-amber-400 font-mono uppercase font-bold tracking-wider">
+                    ⚡ Escaneo de Red Finalizado con Éxito
+                  </div>
+                  <h3 className="text-base font-bold text-white">
+                    Definir Ubicación Física del Escaneo
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPostScanLocationModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-3.5 leading-relaxed">
+              El barrido ARP e ICMP ha detectado los hosts activos. Indique la ubicación física exacta donde se realizaron las pruebas para que los informes oficiales (PDF y Excel) reflejen la sede correcta:
+            </p>
+
+            <div className="space-y-3.5">
+              <div>
+                <label className="block text-[10px] text-amber-300 font-mono font-bold uppercase tracking-wider mb-1.5">
+                  Ubicación Física de este Escaneo:
+                </label>
+                <input
+                  type="text"
+                  value={locationName}
+                  onChange={(e) => setLocationName(e.target.value)}
+                  placeholder="Ej. Datacenter Principal, Rack 2 - Piso 3, Sucursal Norte..."
+                  className="w-full bg-slate-950 border border-amber-500/60 focus:border-amber-400 rounded px-3 py-2.5 text-xs text-amber-200 placeholder-slate-600 focus:outline-hidden font-sans shadow-inner"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const finalLocation = locationName.trim() || 'Sede Local';
+                      setLocationName(finalLocation);
+                      localStorage.setItem('netmonitor_current_location', finalLocation);
+                      setShowPostScanLocationModal(false);
+                      addAlert(`📍 Ubicación de pruebas asignada a: "${finalLocation}"`, 'success');
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Quick Presets */}
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                  Sugerencias rápidas:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Sede Principal - Datacenter',
+                    'Piso 1 - Recepción',
+                    'Piso 2 - Servidores TI',
+                    'Piso 3 - Gerencia',
+                    'Gabinete de Comunicaciones A',
+                    'Sucursal Norte',
+                    'Sucursal Centro'
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setLocationName(preset)}
+                      className="text-[11px] bg-slate-900 hover:bg-amber-950/40 hover:text-amber-300 border border-slate-800 hover:border-amber-500/40 text-slate-300 px-2 py-1 rounded transition-colors cursor-pointer"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 justify-between pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPostScanLocationModal(false);
+                    setActiveView('auditorias_red');
+                  }}
+                  className="bg-slate-900 hover:bg-slate-850 text-cyan-400 border border-cyan-500/30 text-xs font-bold py-2 px-3 rounded flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span>Ir a Auditoría de Red</span>
+                </button>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowPostScanLocationModal(false)}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 px-3.5 rounded cursor-pointer transition-colors"
+                  >
+                    Mantener Actual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const finalLocation = locationName.trim() || 'Sede Local';
+                      setLocationName(finalLocation);
+                      localStorage.setItem('netmonitor_current_location', finalLocation);
+                      setShowPostScanLocationModal(false);
+                      addAlert(`📍 Ubicación de pruebas asignada a: "${finalLocation}"`, 'success');
+                    }}
+                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs py-2 px-4 rounded cursor-pointer transition-colors shadow-md flex items-center gap-1.5"
+                  >
+                    <Check className="h-4 w-4 stroke-[3]" />
+                    <span>Confirmar Ubicación</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

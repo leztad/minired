@@ -326,7 +326,7 @@ export async function exportOfflineLocationPDF(profile: LocationProfile): Promis
 
       // Location
       const rawLoc = device.ubicacion || profile.name || 'Sede Offline';
-      const deviceLoc = rawLoc.length > 20 ? rawLoc.substring(0, 18) + '...' : rawLoc;
+      const deviceLoc = rawLoc.length > 26 ? rawLoc.substring(0, 24) + '...' : rawLoc;
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(7.5);
       doc.setTextColor(217, 119, 6);
