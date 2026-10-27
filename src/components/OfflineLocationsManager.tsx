@@ -3,7 +3,8 @@ import {
   MapPin, Database, Save, Download, Upload, Trash2, Eye, Play, Check, Plus, 
   Search, Share2, FileText, Layers, Activity, Cpu, Server, Globe, Clock, 
   ArrowLeft, AlertTriangle, CheckCircle2, Info, FileCode, CheckSquare, PlusCircle, HelpCircle, Key, ChevronRight,
-  Filter, FileSpreadsheet, FileJson, Copy, RefreshCw, X, ShieldCheck, Printer, CheckCheck
+  Filter, FileSpreadsheet, FileJson, Copy, RefreshCw, X, ShieldCheck, Printer, CheckCheck,
+  Pencil, Square, Edit3, Tag
 } from 'lucide-react';
 import { Device, LocationProfile } from '../types';
 import { resolveDeviceNameByMac, resolveVendorByMac } from '../utils/macUtils';
@@ -35,6 +36,19 @@ interface OfflineLocationsManagerProps {
   onNavigateToAudit?: () => void;
   onNavigateToDetailedReport?: () => void;
 }
+
+const COMMON_LOCATION_PRESETS = [
+  'Rack Principal - Datacenter',
+  'Piso 1 - Recepción',
+  'Piso 2 - Oficinas TI',
+  'Piso 3 - Gerencia',
+  'Sala de Servidores',
+  'Gabinete de Comunicaciones A',
+  'Gabinete de Comunicaciones B',
+  'Zona CCTV / Seguridad',
+  'Punto de Venta / Caja',
+  'Área de Operaciones / Almacén'
+];
 
 export default function OfflineLocationsManager({
   currentLocationName,
@@ -275,6 +289,160 @@ export default function OfflineLocationsManager({
   const [isExporting, setIsExporting] = useState<'pdf' | 'excel' | 'formal-pdf' | 'csv' | 'json' | 'consolidated-pdf' | 'consolidated-excel' | null>(null);
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
   const [showConsolidatedModal, setShowConsolidatedModal] = useState(false);
+
+  // --- GESTIÓN MANUAL DE UBICACIONES FÍSICAS DE IPs ---
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [editingLocationText, setEditingLocationText] = useState<string>('');
+  const [showLocationAssignmentModal, setShowLocationAssignmentModal] = useState<boolean>(false);
+  const [showAddDeviceModal, setShowAddDeviceModal] = useState<boolean>(false);
+  const [selectedDevicesForBulk, setSelectedDevicesForBulk] = useState<string[]>([]);
+  const [bulkLocationInput, setBulkLocationInput] = useState<string>('');
+  const [modalSearchTerm, setModalSearchTerm] = useState<string>('');
+  const [newDeviceForm, setNewDeviceForm] = useState<{
+    ip: string;
+    host: string;
+    ubicacion: string;
+    mac: string;
+    vendor: string;
+    ping: number;
+    estado: 'OK' | 'Advertencia' | 'Caído';
+  }>({
+    ip: '',
+    host: '',
+    ubicacion: '',
+    mac: '',
+    vendor: '',
+    ping: 5,
+    estado: 'OK'
+  });
+
+  const handleStartEditingLocation = (device: Device) => {
+    setEditingDeviceId(device.id);
+    setEditingLocationText(device.ubicacion || '');
+  };
+
+  const handleSaveDeviceLocation = (deviceId: string, locationStr: string) => {
+    if (!selectedProfile) return;
+    const trimmedLoc = locationStr.trim();
+    const updatedDevices = (selectedProfile.devices || []).map(d => {
+      if (d.id === deviceId) {
+        return { ...d, ubicacion: trimmedLoc || undefined };
+      }
+      return d;
+    });
+
+    const updatedProfile: LocationProfile = {
+      ...selectedProfile,
+      devices: updatedDevices
+    };
+
+    const newProfiles = profiles.map(p => p.id === updatedProfile.id ? updatedProfile : p);
+    saveToStorage(newProfiles);
+
+    if (profileForReportModal && profileForReportModal.id === updatedProfile.id) {
+      setProfileForReportModal(updatedProfile);
+    }
+
+    setEditingDeviceId(null);
+    setEditingLocationText('');
+    onAddAlert(`Ubicación física actualizada: "${trimmedLoc || 'Sin asignar'}"`, 'success');
+    onAddLog(`📍 Ubicación física actualizada para dispositivo ${deviceId} en ${updatedProfile.name}: "${trimmedLoc || 'Default'}"`, 'info');
+  };
+
+  const handleBulkAssignLocations = (locationStr: string) => {
+    if (!selectedProfile || selectedDevicesForBulk.length === 0) return;
+    const trimmedLoc = locationStr.trim();
+
+    const updatedDevices = (selectedProfile.devices || []).map(d => {
+      if (selectedDevicesForBulk.includes(d.id)) {
+        return { ...d, ubicacion: trimmedLoc || undefined };
+      }
+      return d;
+    });
+
+    const updatedProfile: LocationProfile = {
+      ...selectedProfile,
+      devices: updatedDevices
+    };
+
+    const newProfiles = profiles.map(p => p.id === updatedProfile.id ? updatedProfile : p);
+    saveToStorage(newProfiles);
+
+    if (profileForReportModal && profileForReportModal.id === updatedProfile.id) {
+      setProfileForReportModal(updatedProfile);
+    }
+
+    onAddAlert(`Se asignó la ubicación "${trimmedLoc || 'Sin asignar'}" a ${selectedDevicesForBulk.length} dispositivos.`, 'success');
+    onAddLog(`📍 Ubicación asignada en lote (${selectedDevicesForBulk.length} dispositivos): "${trimmedLoc}"`, 'info');
+    setSelectedDevicesForBulk([]);
+    setBulkLocationInput('');
+  };
+
+  const handleAddNewManualDevice = () => {
+    if (!selectedProfile) return;
+    if (!newDeviceForm.ip.trim()) {
+      onAddAlert('Debe especificar al menos una dirección IP válida.', 'warning');
+      return;
+    }
+
+    const newDevice: Device = {
+      id: `dev-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      ip: newDeviceForm.ip.trim(),
+      host: newDeviceForm.host.trim() || `Host-${newDeviceForm.ip.trim().split('.').pop()}`,
+      ubicacion: newDeviceForm.ubicacion.trim() || undefined,
+      mac: newDeviceForm.mac.trim() || '00:00:00:00:00:00',
+      ping: Number.isFinite(newDeviceForm.ping) && newDeviceForm.ping >= 0 ? newDeviceForm.ping : 5,
+      estado: newDeviceForm.estado,
+      lastChecked: new Date().toLocaleTimeString(),
+      sensorPing: true,
+      segmento: selectedProfile.subnet,
+      vendor: newDeviceForm.vendor.trim() || 'Dispositivo Manual'
+    };
+
+    const updatedDevices = [...(selectedProfile.devices || []), newDevice];
+    const updatedProfile: LocationProfile = {
+      ...selectedProfile,
+      devices: updatedDevices
+    };
+
+    const newProfiles = profiles.map(p => p.id === updatedProfile.id ? updatedProfile : p);
+    saveToStorage(newProfiles);
+
+    if (profileForReportModal && profileForReportModal.id === updatedProfile.id) {
+      setProfileForReportModal(updatedProfile);
+    }
+
+    setNewDeviceForm({
+      ip: '',
+      host: '',
+      ubicacion: '',
+      mac: '',
+      vendor: '',
+      ping: 5,
+      estado: 'OK'
+    });
+    setShowAddDeviceModal(false);
+    onAddAlert(`Dispositivo ${newDevice.ip} (${newDevice.ubicacion || 'Sin ubicación'}) agregado a la sede.`, 'success');
+    onAddLog(`➕ Dispositivo manual agregado a ${updatedProfile.name}: ${newDevice.ip} en "${newDevice.ubicacion || 'Sin ubicación'}"`, 'info');
+  };
+
+  const handleDeleteDeviceFromProfile = (deviceId: string) => {
+    if (!selectedProfile) return;
+    const updatedDevices = (selectedProfile.devices || []).filter(d => d.id !== deviceId);
+    const updatedProfile: LocationProfile = {
+      ...selectedProfile,
+      devices: updatedDevices
+    };
+
+    const newProfiles = profiles.map(p => p.id === updatedProfile.id ? updatedProfile : p);
+    saveToStorage(newProfiles);
+
+    if (profileForReportModal && profileForReportModal.id === updatedProfile.id) {
+      setProfileForReportModal(updatedProfile);
+    }
+
+    onAddAlert('Dispositivo eliminado del inventario de esta sede.', 'info');
+  };
 
   const handleExportPDF = async (profile: LocationProfile) => {
     setIsExporting('pdf');
@@ -1618,10 +1786,32 @@ export default function OfflineLocationsManager({
                 <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-900">
                   Mostrando <strong className="text-cyan-400">{filteredDevices.length}</strong> de <strong className="text-slate-300">{selectedProfile.devices.length}</strong> hosts
                 </span>
+                <span className="text-[10px] font-mono text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/40 flex items-center gap-1">
+                  <MapPin className="h-3 w-3 text-amber-400" />
+                  <strong>{selectedProfile.devices.filter(d => !!d.ubicacion).length}</strong> con ubicación física
+                </span>
               </div>
 
-              {/* Quick Report Actions for this Table */}
+              {/* Action Buttons: Location Manager & Quick Reports */}
               <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => setShowLocationAssignmentModal(true)}
+                  className="text-[10px] text-amber-300 hover:text-white bg-amber-950/60 hover:bg-amber-900/80 px-2.5 py-1 rounded border border-amber-800/60 flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                  title="Asignar y gestionar manualmente las ubicaciones físicas de las IPs"
+                >
+                  <MapPin className="h-3 w-3 text-amber-400" />
+                  <span className="font-bold">Gestionar Ubicaciones Físicas</span>
+                </button>
+
+                <button
+                  onClick={() => setShowAddDeviceModal(true)}
+                  className="text-[10px] text-cyan-300 hover:text-white bg-cyan-950/50 hover:bg-cyan-900/70 px-2.5 py-1 rounded border border-cyan-800/50 flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Agregar manualmente un nuevo dispositivo o IP a esta sede física"
+                >
+                  <Plus className="h-3 w-3 text-cyan-400" />
+                  <span>+ Agregar IP</span>
+                </button>
+
                 <button
                   onClick={() => handleCopyMarkdown(selectedProfile)}
                   className="text-[10px] text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-850 px-2.5 py-1 rounded border border-slate-800 flex items-center gap-1 cursor-pointer transition-colors"
@@ -1665,16 +1855,18 @@ export default function OfflineLocationsManager({
                   <tr className="border-b border-slate-850 text-slate-500 font-mono uppercase text-[10px]">
                     <th className="py-2.5 px-3">IP Address</th>
                     <th className="py-2.5 px-3">Hostname</th>
+                    <th className="py-2.5 px-3">Ubicación Física</th>
                     <th className="py-2.5 px-3">MAC Address</th>
                     <th className="py-2.5 px-3">Fabricante</th>
                     <th className="py-2.5 px-3 text-center">Último Ping</th>
                     <th className="py-2.5 px-3 text-right">Estado</th>
+                    <th className="py-2.5 px-2 text-center w-14">Acción</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-900/60 font-mono text-[11px]">
                   {filteredDevices.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-slate-500 bg-slate-950/20">
+                      <td colSpan={8} className="py-8 text-center text-slate-500 bg-slate-950/20">
                         <p className="font-sans text-slate-400">Ningún dispositivo coincide con los filtros activos.</p>
                         <button
                           onClick={() => {
@@ -1691,27 +1883,95 @@ export default function OfflineLocationsManager({
                     filteredDevices.map(d => {
                       const hostName = resolveDeviceNameByMac(d.mac, d.host, d.ip);
                       const vendorName = d.vendor && d.vendor !== 'Desconocido' && d.vendor !== 'Dispositivo de Red Activo' ? d.vendor : resolveVendorByMac(d.mac, d.host, d.ip);
+                      const isEditing = editingDeviceId === d.id;
                       return (
-                        <tr key={d.id} className="hover:bg-slate-900/40">
+                        <tr key={d.id} className="hover:bg-slate-900/40 transition-colors">
                           <td className="py-2.5 px-3 font-bold text-slate-200">{d.ip}</td>
                           <td className="py-2.5 px-3 text-cyan-300 font-semibold font-sans">{hostName}</td>
-                          <td className="py-2.5 px-3 text-slate-400">{d.mac}</td>
+                          
+                          {/* Ubicación Física Column with Instant Inline Edit */}
+                          <td className="py-2 px-3 font-sans">
+                            {isEditing ? (
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={editingLocationText}
+                                  onChange={(e) => setEditingLocationText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveDeviceLocation(d.id, editingLocationText);
+                                    if (e.key === 'Escape') setEditingDeviceId(null);
+                                  }}
+                                  placeholder="Ej: Rack 1, Piso 2, Recepción..."
+                                  className="bg-slate-950 text-amber-300 border border-amber-500/60 rounded px-2 py-0.5 text-[11px] font-mono focus:outline-hidden focus:border-amber-400 w-44 shadow-inner"
+                                />
+                                <button
+                                  onClick={() => handleSaveDeviceLocation(d.id, editingLocationText)}
+                                  className="p-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded cursor-pointer transition-colors"
+                                  title="Guardar ubicación"
+                                >
+                                  <Check className="h-3 w-3 stroke-[3]" />
+                                </button>
+                                <button
+                                  onClick={() => setEditingDeviceId(null)}
+                                  className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded cursor-pointer transition-colors"
+                                  title="Cancelar"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 group">
+                                {d.ubicacion ? (
+                                  <span 
+                                    onClick={() => handleStartEditingLocation(d)}
+                                    className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded font-medium flex items-center gap-1 cursor-pointer hover:border-amber-400 transition-colors"
+                                    title="Haga clic para editar la ubicación física de esta IP"
+                                  >
+                                    <MapPin className="h-3 w-3 text-amber-400 shrink-0" />
+                                    <span className="truncate max-w-[130px]">{d.ubicacion}</span>
+                                    <Pencil className="h-2.5 w-2.5 text-amber-400/60 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5" />
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => handleStartEditingLocation(d)}
+                                    className="text-[10px] text-slate-500 hover:text-amber-400 italic flex items-center gap-1 py-0.5 px-2 rounded hover:bg-slate-900 border border-dashed border-slate-800 hover:border-amber-500/40 transition-colors cursor-pointer"
+                                    title="Asignar ubicación física a esta IP para que aparezca en el informe final"
+                                  >
+                                    <MapPin className="h-3 w-3 text-slate-600 group-hover:text-amber-400" />
+                                    <span>+ Asignar ubicación</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="py-2.5 px-3 text-slate-400 font-mono">{d.mac}</td>
                           <td className="py-2.5 px-3 text-slate-400 font-sans">{vendorName}</td>
-                          <td className="py-2.5 px-3 text-center text-slate-300">
+                          <td className="py-2.5 px-3 text-center text-slate-300 font-mono">
                             {d.ping !== null ? `${d.ping} ms` : '—'}
                           </td>
                           <td className="py-2.5 px-3 text-right">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold ${
-                            d.estado === 'OK' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                            d.estado === 'Advertencia' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                            'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                          }`}>
-                            {d.estado}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold ${
+                              d.estado === 'OK' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                              d.estado === 'Advertencia' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                              'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            }`}>
+                              {d.estado}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <button
+                              onClick={() => handleDeleteDeviceFromProfile(d.id)}
+                              className="p-1 text-slate-600 hover:text-rose-400 hover:bg-slate-900 rounded transition-colors cursor-pointer"
+                              title="Eliminar dispositivo de esta sede"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1779,6 +2039,47 @@ export default function OfflineLocationsManager({
                     <span className="text-[9px] text-slate-500 block font-mono">{profileForReportModal.dns || '1.1.1.1'}</span>
                   </div>
                 </div>
+
+                {/* Ubicaciones Físicas en el Informe - Estado y Gestión Rápida */}
+                {(() => {
+                  const withLocCount = (profileForReportModal.devices || []).filter(d => !!d.ubicacion && d.ubicacion.trim().length > 0).length;
+                  const totalDevs = (profileForReportModal.devices || []).length;
+                  return (
+                    <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-slate-900 border border-amber-500/30 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-inner">
+                      <div className="flex items-start gap-2.5">
+                        <div className="p-2 bg-amber-500/20 text-amber-400 rounded-md shrink-0 mt-0.5 sm:mt-0">
+                          <MapPin className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-amber-300">Ubicaciones Físicas de IPs en el Informe</span>
+                            <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono font-bold">
+                              {withLocCount} / {totalDevs} IPs asignadas
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            {withLocCount === totalDevs
+                              ? 'Todas las IPs tienen ubicación física asignada y se reflejarán fielmente en las columnas de los informes PDF y Excel.'
+                              : withLocCount > 0
+                              ? `Las IPs sin ubicación manual usarán "${profileForReportModal.name}" por defecto en el informe.`
+                              : `Ninguna IP tiene ubicación manual específica (se mostrarán con la sede "${profileForReportModal.name}").`}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedProfileId(profileForReportModal.id);
+                          setShowLocationAssignmentModal(true);
+                        }}
+                        className="shrink-0 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-xs hover:border-amber-400"
+                        title="Modificar o asignar ubicaciones físicas a las IPs antes de generar el informe"
+                      >
+                        <Edit3 className="h-3.5 w-3.5 text-amber-400" />
+                        <span>Gestionar Ubicaciones</span>
+                      </button>
+                    </div>
+                  );
+                })()}
 
                 {/* Export Format Cards */}
                 <div className="space-y-2.5">
@@ -2042,6 +2343,376 @@ export default function OfflineLocationsManager({
                 className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-1.5 px-4 rounded text-xs cursor-pointer transition-colors"
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 3: ASIGNACIÓN Y GESTIÓN DE UBICACIONES FÍSICAS DE IPs ================= */}
+      {showLocationAssignmentModal && selectedProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-[#0b1120] border border-amber-500/40 w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Modal Header */}
+            <div className="bg-[#0e1629] p-4 border-b border-slate-800 flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold tracking-wider uppercase">
+                    Configuración de Ubicaciones Físicas
+                  </span>
+                  <span className="text-slate-400 text-xs font-mono">{selectedProfile.subnet}</span>
+                </div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-amber-400" />
+                  Asignar Ubicaciones Físicas de IPs — {selectedProfile.name}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Especifique el lugar físico exacto (Rack, Piso, Oficina, Gabinete, Punto de Red) de cada dirección IP para que se vea reflejado en el informe final en PDF, Excel y CSV.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowLocationAssignmentModal(false)}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {/* Presets Bar */}
+              <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                    <Tag className="h-3.5 w-3.5 text-amber-400" /> Ubicaciones Frecuentes (Clic para rellenar rápido):
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {selectedProfile.devices.filter(d => !!d.ubicacion).length} de {selectedProfile.devices.length} IPs con ubicación asignada
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {COMMON_LOCATION_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => setBulkLocationInput(preset)}
+                      className="text-[11px] bg-slate-950 hover:bg-amber-950/40 hover:text-amber-300 border border-slate-800 hover:border-amber-600/50 text-slate-300 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <MapPin className="h-2.5 w-2.5 text-amber-400" />
+                      <span>{preset}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Bulk Assignment Bar */}
+              <div className="bg-[#080d19] p-3.5 rounded-lg border border-amber-500/20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (selectedDevicesForBulk.length === selectedProfile.devices.length) {
+                        setSelectedDevicesForBulk([]);
+                      } else {
+                        setSelectedDevicesForBulk(selectedProfile.devices.map(d => d.id));
+                      }
+                    }}
+                    className="text-xs text-slate-300 hover:text-white flex items-center gap-1.5 cursor-pointer bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800"
+                  >
+                    {selectedDevicesForBulk.length === selectedProfile.devices.length && selectedProfile.devices.length > 0 ? (
+                      <CheckSquare className="h-4 w-4 text-cyan-400" />
+                    ) : (
+                      <Square className="h-4 w-4 text-slate-500" />
+                    )}
+                    <span>{selectedDevicesForBulk.length === selectedProfile.devices.length ? 'Deseleccionar Todos' : 'Seleccionar Todos'} ({selectedDevicesForBulk.length})</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 flex-1 max-w-lg">
+                  <input
+                    type="text"
+                    value={bulkLocationInput}
+                    onChange={(e) => setBulkLocationInput(e.target.value)}
+                    placeholder="Ubicación a asignar a seleccionadas (ej: Piso 2 - Racks)"
+                    className="flex-1 bg-slate-950 text-amber-200 border border-slate-800 rounded px-3 py-1.5 text-xs focus:outline-hidden focus:border-amber-400 font-mono"
+                  />
+                  <button
+                    onClick={() => handleBulkAssignLocations(bulkLocationInput)}
+                    disabled={selectedDevicesForBulk.length === 0 || !bulkLocationInput.trim()}
+                    className="bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-bold px-3.5 py-1.5 rounded text-xs transition-colors cursor-pointer shrink-0"
+                  >
+                    Aplicar en Lote
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowAddDeviceModal(true)}
+                  className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>+ Agregar IP Manual</span>
+                </button>
+              </div>
+
+              {/* Search Filter for Device List */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-xs">
+                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-500" />
+                  <input
+                    type="text"
+                    value={modalSearchTerm}
+                    onChange={(e) => setModalSearchTerm(e.target.value)}
+                    placeholder="Filtrar por IP, host o ubicación..."
+                    className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded pl-8 pr-3 py-1.5 text-xs focus:outline-hidden focus:border-cyan-500"
+                  />
+                </div>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {selectedProfile.devices.length} IPs en inventario
+                </span>
+              </div>
+
+              {/* Detailed Device Location Rows */}
+              <div className="border border-slate-800 rounded-lg overflow-hidden max-h-[380px] overflow-y-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="sticky top-0 bg-[#0e1629] border-b border-slate-850 text-slate-400 font-mono uppercase text-[10px] z-10">
+                    <tr>
+                      <th className="py-2.5 px-3 w-10 text-center">Sel.</th>
+                      <th className="py-2.5 px-3">Dirección IP</th>
+                      <th className="py-2.5 px-3">Estación / Host</th>
+                      <th className="py-2.5 px-3">MAC / Fabricante</th>
+                      <th className="py-2.5 px-3">Ubicación Física Asignada</th>
+                      <th className="py-2.5 px-3 text-center">Estado</th>
+                      <th className="py-2.5 px-2 text-center w-12">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-850/60 font-mono text-[11px]">
+                    {selectedProfile.devices
+                      .filter(d => {
+                        const term = modalSearchTerm.toLowerCase().trim();
+                        if (!term) return true;
+                        return (
+                          d.ip.toLowerCase().includes(term) ||
+                          d.host.toLowerCase().includes(term) ||
+                          (d.ubicacion && d.ubicacion.toLowerCase().includes(term)) ||
+                          d.mac.toLowerCase().includes(term)
+                        );
+                      })
+                      .map((d) => {
+                        const isSelected = selectedDevicesForBulk.includes(d.id);
+                        return (
+                          <tr key={d.id} className={`hover:bg-slate-900/60 transition-colors ${isSelected ? 'bg-amber-950/20' : ''}`}>
+                            <td className="py-2 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedDevicesForBulk([...selectedDevicesForBulk, d.id]);
+                                  } else {
+                                    setSelectedDevicesForBulk(selectedDevicesForBulk.filter(id => id !== d.id));
+                                  }
+                                }}
+                                className="accent-amber-400 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-2 px-3 font-bold text-cyan-400">{d.ip}</td>
+                            <td className="py-2 px-3 text-slate-200 font-sans font-medium">{d.host}</td>
+                            <td className="py-2 px-3 text-slate-400 text-[10px]">
+                              <div>{d.mac}</div>
+                              <div className="text-slate-500 font-sans truncate max-w-[120px]">{d.vendor || 'Genérico'}</div>
+                            </td>
+                            <td className="py-2 px-3 font-sans">
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  defaultValue={d.ubicacion || ''}
+                                  placeholder="Ej: Rack 1, Piso 2, Oficina..."
+                                  onBlur={(e) => {
+                                    if (e.target.value !== (d.ubicacion || '')) {
+                                      handleSaveDeviceLocation(d.id, e.target.value);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleSaveDeviceLocation(d.id, (e.target as HTMLInputElement).value);
+                                    }
+                                  }}
+                                  className="w-full bg-slate-950 text-amber-200 border border-slate-800 hover:border-amber-500/50 focus:border-amber-400 rounded px-2.5 py-1 text-xs focus:outline-hidden"
+                                />
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                d.estado === 'OK' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                d.estado === 'Advertencia' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                              }`}>
+                                {d.estado}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 text-center">
+                              <button
+                                onClick={() => handleDeleteDeviceFromProfile(d.id)}
+                                className="p-1 text-slate-600 hover:text-rose-400 rounded cursor-pointer"
+                                title="Eliminar este dispositivo"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-[#0e1629] p-3.5 border-t border-slate-800 flex items-center justify-between text-xs">
+              <span className="text-slate-400">
+                Las ubicaciones físicas se guardan automáticamente y se incluirán en el informe final PDF, Excel y CSV.
+              </span>
+              <button
+                onClick={() => setShowLocationAssignmentModal(false)}
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-1.5 px-4 rounded text-xs cursor-pointer transition-colors"
+              >
+                Listo / Guardar Cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 4: AGREGAR NUEVO DISPOSITIVO / IP MANUALMENTE ================= */}
+      {showAddDeviceModal && selectedProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-[#0b1120] border border-cyan-500/40 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="bg-[#0e1629] p-4 border-b border-slate-800 flex items-start justify-between gap-4">
+              <div>
+                <span className="text-[9px] bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded font-mono font-bold tracking-wider uppercase">
+                  Registro de Dispositivo
+                </span>
+                <h3 className="text-base font-bold text-white flex items-center gap-2 mt-0.5">
+                  <Plus className="h-4 w-4 text-cyan-400" />
+                  Agregar Dispositivo / IP a {selectedProfile.name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowAddDeviceModal(false)}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5 text-xs">
+              <div>
+                <label className="text-slate-300 font-bold block mb-1">Dirección IP *</label>
+                <input
+                  type="text"
+                  value={newDeviceForm.ip}
+                  onChange={(e) => setNewDeviceForm({ ...newDeviceForm, ip: e.target.value })}
+                  placeholder="Ej: 192.168.1.75"
+                  className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded px-3 py-1.5 font-mono focus:outline-hidden focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-bold block mb-1">Nombre de Host / Estación *</label>
+                <input
+                  type="text"
+                  value={newDeviceForm.host}
+                  onChange={(e) => setNewDeviceForm({ ...newDeviceForm, host: e.target.value })}
+                  placeholder="Ej: SWITCH-CORE-02 o CAM-ACCESO-NORTE"
+                  className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded px-3 py-1.5 font-mono focus:outline-hidden focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-bold block mb-1">Ubicación Física *</label>
+                <input
+                  type="text"
+                  value={newDeviceForm.ubicacion}
+                  onChange={(e) => setNewDeviceForm({ ...newDeviceForm, ubicacion: e.target.value })}
+                  placeholder="Ej: Rack 2 - Gabinete Principal, Piso 1"
+                  className="w-full bg-slate-950 text-amber-200 border border-slate-800 rounded px-3 py-1.5 font-mono focus:outline-hidden focus:border-amber-400 mb-1.5"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {COMMON_LOCATION_PRESETS.slice(0, 5).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setNewDeviceForm({ ...newDeviceForm, ubicacion: preset })}
+                      className="text-[10px] bg-slate-900 hover:bg-slate-850 text-slate-300 px-2 py-0.5 rounded border border-slate-800 cursor-pointer"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">Dirección MAC (Opcional)</label>
+                  <input
+                    type="text"
+                    value={newDeviceForm.mac}
+                    onChange={(e) => setNewDeviceForm({ ...newDeviceForm, mac: e.target.value })}
+                    placeholder="Ej: 00:1E:13:44:55:66"
+                    className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded px-3 py-1.5 font-mono focus:outline-hidden focus:border-cyan-500 text-[11px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">Fabricante (Opcional)</label>
+                  <input
+                    type="text"
+                    value={newDeviceForm.vendor}
+                    onChange={(e) => setNewDeviceForm({ ...newDeviceForm, vendor: e.target.value })}
+                    placeholder="Ej: Cisco Systems, HP, Ubiquiti"
+                    className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded px-3 py-1.5 font-sans focus:outline-hidden focus:border-cyan-500 text-[11px]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">Estado de Conectividad</label>
+                  <select
+                    value={newDeviceForm.estado}
+                    onChange={(e) => setNewDeviceForm({ ...newDeviceForm, estado: e.target.value as any })}
+                    className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded px-3 py-1.5 focus:outline-hidden focus:border-cyan-500"
+                  >
+                    <option value="OK">Conectado (OK)</option>
+                    <option value="Advertencia">Advertencia (Latencia alta)</option>
+                    <option value="Caído">Caído (Fuera de línea)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 font-bold block mb-1">Latencia Ping (ms)</label>
+                  <input
+                    type="number"
+                    value={newDeviceForm.ping}
+                    onChange={(e) => setNewDeviceForm({ ...newDeviceForm, ping: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded px-3 py-1.5 font-mono focus:outline-hidden focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#0e1629] p-3.5 border-t border-slate-800 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddDeviceModal(false)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-1.5 px-3.5 rounded text-xs cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAddNewManualDevice}
+                className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-1.5 px-4 rounded text-xs cursor-pointer transition-colors"
+              >
+                Guardar Dispositivo
               </button>
             </div>
           </div>
